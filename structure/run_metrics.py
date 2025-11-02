@@ -2,20 +2,21 @@
 from __future__ import annotations
 from typing import Iterable, Optional, Dict, Any, List, Tuple, Set
 import pandas as pd
-from .metrics_core import Context, load_structure
+from .structure_context import Context, load_structure, load_structure_with_id, metric_names, metrics_with_tag, _REGISTRY
 
 def compute_all(pdb_or_array, *, metrics: Optional[Iterable[str]] = None, tags: Optional[Iterable[str]] = None,
-                model: Optional[int] = 1, altloc_policy: str = "occupancy", **shared_kwargs) -> pd.DataFrame:
+                model: Optional[int] = 1, **shared_kwargs) -> pd.DataFrame:
     """
     Run many metrics and outer-merge by residue keys.
     - metrics: explicit list; if None, use all registered (or filtered by tags).
     - tags: include metrics that have ANY of these tags.
     """
+    pdb_id = None
     if not hasattr(pdb_or_array, "coord"):
-        arr = load_structure(pdb_or_array, model=model, altloc_policy=altloc_policy)
+        arr, pdb_id = load_structure_with_id(pdb_or_array, model=model)
     else:
         arr = pdb_or_array
-    ctx = Context(arr)
+    ctx = Context(arr, pdb_id=pdb_id)
 
     wanted: List[str]
     if metrics:
