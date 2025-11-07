@@ -72,8 +72,6 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# --------------------------- Utils ---------------------------
-
 def ensure_dir(path: str | Path):
     Path(path).mkdir(parents=True, exist_ok=True)
 
@@ -101,8 +99,6 @@ def savefig(path: Path, dpi: int):
     plt.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close()
 
-
-# --------------------------- I/O ---------------------------
 
 def load_packing_tables(csv_glob: str,
                         pdb_name_from: str,
@@ -155,28 +151,6 @@ def load_clusters(clusters_csv: str,
     return df[["PDB_Name", "Cluster"]]
 
 
-# --------------------------- Defaults ---------------------------
-
-def default_resi_clusters() -> Dict[int, List[int]]:
-    # Built-in mapping from your snippet
-    return {
-        1: [104, 105, 103],
-        2: [157, 162, 165],
-        3: [29, 30, 31],
-        4: [36, 78, 79, 80, 81, 82, 83, 93, 109, 110, 114, 115, 116, 117, 118, 119, 142, 143],
-        5: [37, 39, 45, 59, 60, 62, 94, 95],
-        6: [13, 15, 16, 114, 146, 147, 148, 149, 151, 152],
-    }
-
-
-def resi_cluster_df_from_mapping(mapping: Dict[int, List[int]]) -> pd.DataFrame:
-    rows = []
-    for cid, residues in mapping.items():
-        for r in residues:
-            rows.append({"resi": r, "resi_cluster": cid})
-    return pd.DataFrame(rows)
-
-
 # --------------------------- Main workflow ---------------------------
 
 def main():
@@ -224,7 +198,6 @@ def main():
 
     if merged.empty:
         print("No merged rows between packing data and clusters. Exiting after writing initial outputs.")
-        print(f"Done. Outputs written to: {Path(args.output_dir).resolve()}")
         return
 
     # Order clusters by median packing
@@ -382,8 +355,6 @@ def main():
         g.fig.suptitle("Hierarchically Clustered Packing Statistics", y=1.02)
         g.savefig(out("residue_cluster_x_hbd_cluster_clustermap.png"), dpi=args.fig_dpi)
         plt.close(g.fig)
-
-    print(f"\nDone. Outputs written to: {Path(args.output_dir).resolve()}")
 
 
 if __name__ == "__main__":
