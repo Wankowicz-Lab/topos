@@ -1,8 +1,17 @@
 # biogenesis
 
-A toolkit for computing and analyzing sequence/structure metrics in proteins.
+A toolkit for computing and analyzing sequence and structure metrics.
 
 ## Quick Start
+Given a PDB or FASTA file, users can use the scripts within here to calculate all or select sequence and/or structural metrics for downstream use. All functions produce an output CSV file containing PDB, chain, residue number, and residue name, along with calculated metrics. If PDBs include alternative conformers, metrics can be averaged across the multiple conformers, or each metric can be provided individually for each altloc.  
+
+Metrics included:
+Secondary structure
+Solvent exposure
+Hydrogen bonding patterns
+Residue packing
+
+Analysis scripts provide ways to look at and compare multiple structures. Outputs include 
 
 ### Basic Usage
 
@@ -29,14 +38,5 @@ results = compute_all("path/to/file.pdb")
 print(results.head())
 ```
 
-### Running Examples
 
-Run the example script:
 
-```bash
-# With a local PDB file
-python examples/structure_example.py /path/to/file.pdb
-
-# Without arguments (will download example PDB)
-python examples/structure_example.py
-```
