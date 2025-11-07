@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import argparse
-import csv
 import math
 import os
 from collections import defaultdict, Counter, namedtuple
 
 import numpy as np
+import pandas as pd
 import networkx as nx
 
 from biotite.structure import AtomArray, filter_amino_acids
@@ -63,7 +63,6 @@ def norm_alt(a):
     return s.upper() if s else ''
 
 def altloc_compatible(d_alt, a_alt):
-'''Only A altloc can match with other A altlocs or B altlocs match with other B altlocs'''
     d = norm_alt(d_alt)
     a = norm_alt(a_alt)
     if d == '' or a == '':
@@ -281,16 +280,14 @@ def detect_hbonds(donors, acceptors):
                 + ("backbone" if a.is_backbone else "sidechain")
             )
             hbonds.append({
-                "donor_res": d.res_uid,
-                "donor_resname": d.resname,
                 "donor_chain": d.chain,
                 "donor_resi": d.resi,
+                "donor_resname": d.resname,
                 "donor_atom": d.atom_name,
                 "donor_altloc": norm_alt(d.altloc),
-                "acceptor_res": a.res_uid,
-                "acceptor_resname": a.resname,
                 "acceptor_chain": a.chain,
                 "acceptor_resi": a.resi,
+                "acceptor_resname": a.resname,
                 "acceptor_atom": a.atom_name,
                 "acceptor_altloc": norm_alt(a.altloc),
                 "DA_dist": round(DA,3),
@@ -300,7 +297,7 @@ def detect_hbonds(donors, acceptors):
     return hbonds
 
 
-# ------------------------- Graph & I/O -------------------------
+# ------------------------- Graph -------------------------
 
 def build_graph(hbonds):
     G = nx.Graph()
@@ -320,30 +317,44 @@ def build_graph(hbonds):
         G[u][v]['altloc_pairs'][(h["donor_altloc"],h["acceptor_altloc"])] += 1
     return G
 
-def write_hbond_csv(hbonds, outpath):
-    fields=["donor_chain","donor_resi","donor_resname","donor_atom","donor_altloc",
+
+# ------------------------- Pandas I/O -------------------------
+
+def write_hbond_csv_pandas(hbonds, outpath):
+    cols = ["donor_chain","donor_resi","donor_resname","donor_atom","donor_altloc",
             "acceptor_chain","acceptor_resi","acceptor_resname","acceptor_atom","acceptor_altloc",
             "DA_dist","angle","category"]
-    with open(outpath,"w",newline="") as f:
-        w=csv.DictWriter(f,fieldnames=fields)
-        w.writeheader()
-        for h in hbonds:
-            w.writerow({k:h.get(k,"") for k in fields})
+    df = pd.DataFrame(hbonds)
+    # ensure all expected columns exist even if list is empty
+    for c in cols:
+        if c not in df.columns:
+            df[c] = []
+    df = df[cols]
+    df.to_csv(outpath, index=False)
 
-def write_residue_summary(G,outpath):
-    deg=dict(G.degree())
-    bc=nx.betweenness_centrality(G) if G.number_of_nodes()>0 else {}
-    with open(outpath,"w",newline="") as f:
-        w=csv.writer(f)
-        w.writerow(["chain","resi","resname","degree","betweenness","donor_count_est","acceptor_count_est"])
-        for n,data in G.nodes(data=True):
-            dcount=acount=0
-            for nbr in G.neighbors(n):
-                e=G[nbr][n]
-                dcount+=e.get("count",0)//2
-                acount+=e.get("count",0)//2
-            w.writerow([data["chain"],data["resi"],data["resname"],
-                        deg.get(n,0),round(bc.get(n,0.0),4),dcount,acount])
+def write_residue_summary_pandas(G, outpath):
+    if G.number_of_nodes() == 0:
+        pd.DataFrame(columns=["chain","resi","resname","degree","betweenness","donor_count_est","acceptor_count_est"]).to_csv(outpath, index=False)
+        return
+    deg = dict(G.degree())
+    bc = nx.betweenness_centrality(G)
+    rows = []
+    for n, data in G.nodes(data=True):
+        dcount = acount = 0
+        for nbr in G.neighbors(n):
+            e = G[nbr][n]
+            dcount += e.get("count", 0)//2
+            acount += e.get("count", 0)//2
+        rows.append({
+            "chain": data["chain"],
+            "resi": int(data["resi"]),
+            "resname": data["resname"],
+            "degree": deg.get(n, 0),
+            "betweenness": round(bc.get(n, 0.0), 4),
+            "donor_count_est": dcount,
+            "acceptor_count_est": acount
+        })
+    pd.DataFrame(rows).sort_values(["chain","resi"]).to_csv(outpath, index=False)
 
 
 # -------------------------- Main --------------------------
@@ -354,17 +365,17 @@ def analyze_single_pdb(pdb_path, outdir):
     hb = detect_hbonds(donors, acceptors)
     G = build_graph(hb)
     os.makedirs(outdir, exist_ok=True)
-    base=os.path.basename(pdb_path)
-    write_hbond_csv(hb, os.path.join(outdir,f"{base}_hbonds.csv"))
-    write_residue_summary(G, os.path.join(outdir,f"{base}_residue_summary.csv"))
+    base = os.path.basename(pdb_path)
+    write_hbond_csv_pandas(hb, os.path.join(outdir, f"{base}_hbonds.csv"))
+    write_residue_summary_pandas(G, os.path.join(outdir, f"{base}_residue_summary.csv"))
     print(f"[OK] {pdb_path}: {len(hb)} H-bonds; nodes={G.number_of_nodes()} edges={G.number_of_edges()}")
 
 def main():
-    ap=argparse.ArgumentParser(description="Altloc-aware hydrogen-bond network analysis for a single PDB/mmCIF (Biotite).")
-    ap.add_argument("--pdb",required=True,help="Path to PDB/mmCIF file.")
-    ap.add_argument("--outdir",default="hbond_out",help="Output directory.")
-    args=ap.parse_args()
-    analyze_single_pdb(args.pdb,args.outdir)
+    ap = argparse.ArgumentParser(description="Altloc-aware hydrogen-bond network analysis for a single PDB/mmCIF (Biotite).")
+    ap.add_argument("--pdb", required=True, help="Path to PDB/mmCIF file.")
+    ap.add_argument("--outdir", default="hbond_out", help="Output directory.")
+    args = ap.parse_args()
+    analyze_single_pdb(args.pdb, args.outdir)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
