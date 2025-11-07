@@ -33,7 +33,7 @@ def main():
         "--model",
         type=int,
         default=1,
-        help="Model number to load (default: 1)"
+        help="Model number to load if PDB is an ensemble model (default: 1)"
     )
     
     args = parser.parse_args()
