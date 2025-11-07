@@ -3,21 +3,15 @@
 A toolkit for computing and analyzing sequence and structure metrics.
 
 ## Quick Start
-Given a PDB or FASTA file, users can use the scripts within here to calculate all or select sequence and/or structural metrics for downstream use. All functions produce an output CSV file containing PDB, chain, residue number, and residue name, along with calculated metrics. If PDBs include alternative conformers, metrics can be averaged across the multiple conformers, or each metric can be provided individually for each altloc.  
+Given a PDBs and/or FASTAs, users can use the scripts within here to calculate sequence and/or structural metrics for downstream use. All functions produce an output CSV file containing PDB, chain, residue number, and residue name, along with calculated metrics. If PDBs include alternative conformers, metrics can be averaged across the multiple conformers, or each metric can be provided individually for each altloc.  
 
-Metrics included:
+All metrics will also output individual metrics for each PDB and/or FASTA.
 
-Secondary structure
-
-Solvent exposure
-
-Hydrogen bonding patterns
-
-Residue packing
+Structure metrics included: secondary structure, solvent exposure, hydrogen bonding patterns, residue packing
 
 
+We also provide grouped analysis scripts that look at and compare multiple structures. All scripts depend on input metrics. 
 
-Analysis scripts provide ways to look at and compare multiple structures. Outputs include 
 
 ### Basic Usage
 
