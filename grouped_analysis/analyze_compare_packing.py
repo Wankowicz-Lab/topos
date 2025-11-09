@@ -35,6 +35,22 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+# Set font and figure params
+plt.rcParams.update({
+    'font.size': 24,
+    'axes.labelsize': 24,
+    'axes.labelweight': 'bold',
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
+    'legend.fontsize': 18
+})
+
+boxprops = {'edgecolor': 'k', 'linewidth': 2}
+lineprops = {'color': 'k', 'linewidth': 2}
+
+boxplot_kwargs = dict({'boxprops': boxprops, 'medianprops': lineprops,
+                       'whiskerprops': lineprops, 'capprops': lineprops,
+                       'width': 0.75})
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Packing Analysis among PDBs")
@@ -68,7 +84,6 @@ def parse_args() -> argparse.Namespace:
                    help="Whether to generate and save figures. [default: True]")
 
     # Figure options
-    p.add_argument("--fig-dpi", type=int, default=300, help="DPI for saved figures. [default: 300]")
     p.add_argument("--bins", type=int, default=30, help="Histogram bins. [default: 30]")
 
     return p.parse_args()
@@ -121,10 +136,9 @@ def main():
     if args.make_figures:
         plt.figure(figsize=(12, 8))
         plt.hist(avg_by_pdb["avg_packing"], bins=args.bins, alpha=0.5, edgecolor="black")
-        plt.title("Distribution of Average Packing Scores by Residue", fontsize=16)
-        plt.xlabel("Average Packing Score", fontsize=14)
-        plt.ylabel("Frequency", fontsize=14)
-        savefig(out("average_packing_scores_distribution.png"), dpi=args.fig_dpi, make_figures=args.make_figures)
+        plt.xlabel("Packing Score")
+        plt.ylabel("Frequency")
+        savefig(out("average_packing_scores_distribution.png"), dpi=300, make_figures=args.make_figures)
 
     # Load clusters
     clusters_df = pd.read_csv(args.clusters_csv)
@@ -142,14 +156,12 @@ def main():
         plt.figure(figsize=(14, 10))
         sns.boxplot(data=merged, x="Cluster", y="avg_packing",
                     order=merged.groupby("Cluster")["avg_packing"].median().sort_values().index)
-        plt.xlabel("Cluster", fontsize=22)
-        plt.ylabel("Average Packing Score", fontsize=22)
-        plt.xticks(rotation=45, fontsize=20)
-        plt.yticks(fontsize=20)
-        savefig(out("average_packing_scores_by_cluster.png"), dpi=args.fig_dpi, make_figures=args.make_figures)
+        plt.xlabel("Cluster")
+        plt.ylabel("Packing Score")
+        plt.xticks(rotation=45)
+        plt.yticks()
+        savefig(out("average_packing_scores_by_cluster.png"), dpi=300, make_figures=args.make_figures)
 
-    print(f"\nAnalysis complete. Outputs written to {args.output_dir}")
-    print(f"Figures generated: {args.make_figures}")
 
 
 if __name__ == "__main__":
