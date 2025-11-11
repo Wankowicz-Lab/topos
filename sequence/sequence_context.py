@@ -131,7 +131,7 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     """
 
     # Extract residue information from context
-    res_table = ctx.res_keys
+    res_table = ctx.res_keys.copy()
 
     # test merge to make sure sequence is aligned with structure
     res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
@@ -158,9 +158,11 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
 
     merged_df.loc[merged_df['struct_info'].isna(), 'struct_info'] = False
     merged_df.loc[merged_df['seq_info'].isna(), 'seq_info'] = False
+    merged_df['chain'] = chain
 
     # Remove previous rows from residue table and update with merged data
     res_table = res_table[res_table['chain'] != chain]
+    res_table['seq_info'] = False
     res_table = pd.concat([res_table, merged_df], axis=0).reset_index(drop=True)
 
     ctx.res_keys = res_table
