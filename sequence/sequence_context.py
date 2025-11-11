@@ -48,6 +48,7 @@ def convert_amino_acid(code):
         else:
             warnings.warn(f"Unknown 3 letter code: {code}")
             return code
+
     warnings.warn(f"Unexpected amino acid code length: {code}")
     return code
 
@@ -108,3 +109,60 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
     return df
 
 
+def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd.DataFrame:
+    """
+    Merge DMS scores with structural context based on residue positions.
+
+    Parameters:
+    -----------
+    dms_scores : pd.DataFrame
+        DataFrame containing DMS scores with 'resi' and 'resn' columns.
+
+    ctx : Context
+        Structural context containing residue information.
+
+    chain : str
+        Chain identifier to filter structural context.
+
+    Returns:
+    --------
+    pd.DataFrame
+        Merged DataFrame with DMS scores and structural features.
+    """
+
+    # Extract residue information from context
+    res_table = ctx.res_keys
+
+    # test merge to make sure sequence is aligned with structure
+    res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
+    dms_test = dms_scores[['resn', 'resi']].drop_duplicates().reset_index(drop=True)
+
+    merge_test = pd.merge(res_test, dms_test,
+                              left_on=['resi', 'resn'],
+                              right_on=['resi', 'resn'],
+                              how='outer')
+
+    if len(merge_test) > len(set(res_test.resi + dms_test.resi)):
+        raise ValueError(f"Mismatch between DMS scores and structure residues for chain {chain}. "
+                      f"Check that the sequence used for DMS matches the structure.")
+
+    res_table['struct_info'] = True
+    res_table_chain = res_table[res_table['chain'] == chain].reset_index(drop=True)
+    dms_scores['seq_info'] = True
+
+    # Merge DMS scores with structural residue table
+    merged_df = pd.merge(dms_scores, res_table_chain,
+                         left_on=['resi', 'resn'],
+                         right_on=['resi', 'resn'],
+                         how='outer')
+
+    merged_df.loc[merged_df['struct_info'].isna(), 'struct_info'] = False
+    merged_df.loc[merged_df['seq_info'].isna(), 'seq_info'] = False
+
+    # Remove previous rows from residue table and update with merged data
+    res_table = res_table[res_table['chain'] != chain]
+    res_table = pd.concat([res_table, merged_df], axis=0).reset_index(drop=True)
+
+    ctx.res_keys = res_table
+
+    return res_table
