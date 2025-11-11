@@ -1,6 +1,12 @@
 import pandas as pd
 import numpy as np
 
+import blosum as bl
+
+
+from working_file import plot_scores_combined
+
+
 def calculate_position_effect_quartiles(scores: pd.DataFrame, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
@@ -79,3 +85,37 @@ def calculate_aaindex_scores(scores: pd.DataFrame, aaindex_data: pd.DataFrame) -
 
     return aaindex_scores
 
+def calculate_blosum_score(scores: pd.DataFrame, blosum_threshold: int = 90) -> pd.DataFrame:
+    """
+    Calculate BLOSUM scores for each mutation in the scores DataFrame.
+
+    Parameters:
+    -----------
+    scores : pd.DataFrame
+        DataFrame containing mutation data with 'wildtype' and 'mutation' columns.
+
+    blosum_threshold : int
+        BLOSUM matrix threshold to use (default: 90).
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with additional BLOSUM score column.
+    """
+
+    blosum_scores = scores.copy()
+    b_matrix = bl.BLOSUM(blosum_threshold)
+
+    def get_blosum_score(row):
+        wt = row['wildtype']
+        mut = row['mutation']
+        return b_matrix[wt][mut]
+
+    blosum_scores[f'blosum{blosum_threshold}'] = blosum_scores.apply(get_blosum_score, axis=1)
+
+    return blosum_scores
+
+
+new_output = plot_scores_combined.apply(lambda x: f'{x.wildtype}' + f'{x.mutation}', axis=1)
+b90_matrix = bl.BLOSUM(90)
+# plot_scores_combined.at[index, 'blosum90'] = b90_matrix[wt][mut]
