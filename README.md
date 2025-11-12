@@ -2,6 +2,30 @@
 
 A toolkit for computing and analyzing sequence and structure metrics.
 
+## Installation
+
+### Dependencies
+
+To install the required dependencies:
+
+```bash
+pip install biotite numpy pandas scipy matplotlib
+```
+
+### Development and Testing
+
+To run tests locally, install the testing dependencies:
+
+```bash
+pip install -r requirements-test.txt
+```
+
+Then run the test suite:
+
+```bash
+pytest tests/ -v
+```
+
 ## Quick Start
 Given a PDBs and/or FASTAs, users can use the scripts within here to calculate sequence and/or structural metrics for downstream use. All functions produce an output CSV file containing PDB, chain, residue number, and residue name, along with calculated metrics. If PDBs include alternative conformers, metrics can be averaged across the multiple conformers, or each metric can be provided individually for each altloc.  
 
