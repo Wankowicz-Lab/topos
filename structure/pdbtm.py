@@ -65,6 +65,30 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
     return regions, chain_map
 
 
+def describe_pdbtm_region(region_code: str) -> str:
+    """
+    Convert a single-letter PDBTM region type into a descriptive string.
+
+    Parameters
+    ----------
+    region_code : str
+        Single-letter code for the region (e.g., 'H', '1', '2', 'U')
+
+    Returns
+    -------
+    description : str
+        Full-word description of the region.
+    """
+    mapping = {
+        "H": "transmembrane_domain",
+        "1": "cytoplasmic_loop",
+        "2": "extracellular_loop",
+        "U": "unknown_or_unresolved"
+    }
+    # Return mapping if found, otherwise the initial code
+    return mapping.get(region_code.upper(), region_code)
+
+
 def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame, Dict[str, List[dict]]]:
     """
     Fetch PDBTM annotation in XML format from pdbtm.unitmp.org.
@@ -101,31 +125,50 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
         raise RuntimeError(f"No regions found in XML for {pdb_id}")
 
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
+    regions_df.type = regions_df.type.apply(describe_pdbtm_region)
     return regions_df, chain_map
 
 
-def describe_pdbtm_region(region_code: str) -> str:
+def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
     """
-    Convert a single-letter PDBTM region type into a descriptive string.
+    Add detailed PDBTM region annotations to the pdbtm_regions DataFrame.
 
     Parameters
     ----------
-    region_code : str
-        Single-letter code for the region (e.g., 'H', '1', '2', 'U')
+    pdbtm_regions : pd.DataFrame
+        DataFrame with PDBTM region annotations extracted from .xml file
 
     Returns
     -------
-    description : str
-        Full-word description of the region.
+    annotated_df : pd.DataFrame
+        Input pdbtm_regions augmented with a 'detailed_type' column indicating detailed region type.
     """
-    mapping = {
-        "H": "transmembrane_domain",
-        "1": "cytoplasmic_loop",
-        "2": "extracellular_loop",
-        "U": "unknown_or_unresolved"
-    }
-    # Return mapping if found, otherwise 'unknown'
-    return mapping.get(region_code.upper(), "unknown")
+
+    # Add a counter for each type within each chain
+    pdbtm_regions = pdbtm_regions.copy()
+    pdbtm_regions['type_idx'] = pdbtm_regions.groupby(['chain', 'type']).cumcount() + 1
+
+    # Create a default detailed label with sequential numbering
+    pdbtm_regions['detailed_type'] = pdbtm_regions['type'] + '_' + pdbtm_regions['type_idx'].astype(str)
+
+    # Label first and last instance of unknown regions in each chain
+    for chain_id, group in pdbtm_regions.groupby('chain'):
+
+            # Annotate first and last instance of unknown regions as protein_start and protein_end
+            unknown_regions = group[group['type'] == 'unknown_or_unresolved']
+            if len(unknown_regions) > 1:
+                first_idx = unknown_regions['type_idx'].idxmin()
+                last_idx = unknown_regions['type_idx'].idxmax()
+                pdbtm_regions.at[first_idx, 'detailed_type'] = 'protein_start'
+                pdbtm_regions.at[last_idx, 'detailed_type'] = 'protein_end'
+
+            # Label sequential transmembrane and loop regions
+            other_regions = group[group['type'] != 'unknown_or_unresolved']
+            if len(other_regions) > 0:
+                for idx in other_regions.index:
+                    pdbtm_regions.at[idx, 'detailed_type'] = f"{pdbtm_regions.at[idx, 'type']}_{pdbtm_regions.at[idx, 'type_idx']}"
+
+    return pdbtm_regions
 
 
 def merge_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFrame) -> pd.DataFrame:
@@ -145,21 +188,24 @@ def merge_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFra
         Input residue_table augmented with a 'pdbtm_region' column indicating the region type.
     """
 
+    # Annotate detailed region types
+    pdbtm_regions = annotate_pdbtm_detailed(pdbtm_regions)
+
     # Initialize the new column with NAs
     residue_table = residue_table.copy()
     residue_table['pdbtm_region'] = pd.NA
+    residue_table['pdbtm_region_detailed'] = pd.NA
 
     # Iterate over each region and assign the region type to matching residues
     for _, region in pdbtm_regions.iterrows():
         mask = (
             (residue_table['chain'] == region['chain']) &
-            (residue_table['residue_number'] >= region['seq_beg']) &
-            (residue_table['residue_number'] <= region['seq_end'])
+            (residue_table['resi'] >= region['pdb_beg']) &
+            (residue_table['resi'] <= region['pdb_end'])
         )
 
         # Assign descriptive region type instead of 1 letter code
-        residue_table.loc[mask, 'pdbtm_region'] = describe_pdbtm_region(region['type'])
+        residue_table.loc[mask, 'pdbtm_region'] = region['type']
+        residue_table.loc[mask, 'pdbtm_region_detailed'] = region['detailed_type']
 
     return residue_table
-
-
