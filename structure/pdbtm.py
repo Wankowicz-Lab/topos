@@ -1,7 +1,10 @@
+import numpy as np
 import requests
 import pandas as pd
 from lxml import etree
 from typing import Tuple, Dict, List
+from itertools import groupby
+
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
@@ -80,9 +83,9 @@ def describe_pdbtm_region(region_code: str) -> str:
         Full-word description of the region.
     """
     mapping = {
-        "H": "transmembrane_domain",
-        "1": "cytoplasmic_loop",
-        "2": "extracellular_loop",
+        "H": "membrane_spanning",
+        "1": "cytoplasmic",
+        "2": "extracellular",
         "U": "unknown_or_unresolved"
     }
     # Return mapping if found, otherwise the initial code
@@ -171,9 +174,9 @@ def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
     return pdbtm_regions
 
 
-def merge_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFrame) -> pd.DataFrame:
+def add_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFrame) -> pd.DataFrame:
     """
-    Merge PDBTM region annotations with residue_table.
+    Add PDBTM region annotations to the residue_table.
 
     Parameters
     ----------
@@ -185,7 +188,7 @@ def merge_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFra
     Returns
     -------
     merged_df : pd.DataFrame
-        Input residue_table augmented with a 'pdbtm_region' column indicating the region type.
+        Input residue_table augmented with 'pdbtm_region' and 'pdbtm_region_detailed' columns
     """
 
     # Annotate detailed region types
@@ -207,5 +210,108 @@ def merge_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFra
         # Assign descriptive region type instead of 1 letter code
         residue_table.loc[mask, 'pdbtm_region'] = region['type']
         residue_table.loc[mask, 'pdbtm_region_detailed'] = region['detailed_type']
+
+    return residue_table
+
+
+def make_contiguous_group_labels(lst):
+    """
+    Given a list of values, return a new list where contiguous identical values
+    are labeled with a suffix indicating their group number.
+
+    Parameters
+    ----------
+
+    lst : List[str]
+        Input list of values.
+
+    Returns
+    -------
+
+    result : List[str]
+        List with contiguous group labels.
+    """
+    result = []
+    counters = {}
+
+    # Group by contiguous identical values
+    for val, group in groupby(lst):
+        counters[val] = counters.get(val, 0) + 1
+
+        # Create label with group number
+        label = f"{val}{counters[val]}"
+        result.extend([label] * len(list(group)))
+
+    return result
+
+
+def define_secondary_structure(residue_table : pd.DataFrame, ss_annotation : List[str]) -> pd.DataFrame:
+    """
+    Identify discrete secondary structure domains and add to the residue_table.
+
+    Parameters
+    ----------
+    residue_table : pd.DataFrame
+        DataFrame containing residue metadata
+    ss_annotation : List[str]
+        List of secondary structure assignments for each residue
+
+    Returns
+    -------
+    annotated_df : pd.DataFrame
+        Input residue_table augmented with 'secondary_structure' column
+    """
+
+    residue_table = residue_table.copy()
+
+    # Ensure the length of ss_annotation matches the number of residues
+    if len(ss_annotation) != len(residue_table):
+        raise ValueError("Length of ss_annotation does not match number of residues in residue_table.")
+
+    residue_table['ss_group'] = make_contiguous_group_labels(ss_annotation)
+    residue_table['ss_domains'] = pd.NA
+
+    membrane_spanning = residue_table.loc[residue_table.pdbtm_region == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
+
+    # Loop through each membrane spanning region
+    for region in membrane_spanning:
+        # Get all secondary structure elements that overlap with this region
+        region_count = region.split('membrane_spanning_')[-1]
+        mask = residue_table['pdbtm_region_detailed'] == region
+        ss_in_region = residue_table.loc[mask, 'ss_group'].unique()
+
+        for ss in ss_in_region:
+            # helices that overlap at all with the membrane region are part of TMD
+            if ss.startswith('a'):
+                residue_table.loc[residue_table['ss_group'] == ss, 'ss_domains'] = 'TMD_' + region_count
+
+            # loops or beta sheets that are completely contained within the membrane are part of TMD
+            else:
+                ss_mask = residue_table['ss_group'] == ss
+                if (np.where(ss_mask)[0][0] >= np.where(mask)[0][0] and
+                        np.where(ss_mask)[0][-1] <= np.where(mask)[0][-1]):
+                    residue_table.loc[ss_mask, 'ss_domains'] = 'TMD_' + region_count
+
+    non_membrane_mask = residue_table.pdbtm_region.isin(['cytoplasmic', 'extracellular'])
+    non_membrane = residue_table.loc[non_membrane_mask, 'pdbtm_region_detailed'].unique()
+
+    # loop through each non-membrane region
+    for region in non_membrane:
+        # Get all secondary structure elements that overlap with this region
+        region_name, region_count = region.split('_')
+        mask = residue_table['pdbtm_region_detailed'] == region
+        ss_in_region = residue_table.loc[mask, 'ss_group'].unique()
+
+        # loop through each secondary structure element in this region
+        for ss in ss_in_region:
+            # Get parts of this element that haven't been assigned to a TMD
+            ss_mask = residue_table['ss_group'] == ss
+            unassigned_mask = residue_table.loc[ss_mask, 'ss_domains'].isna()
+            ss_mask = ss_mask & unassigned_mask
+
+            # unassigned regions are part of the loop
+            if np.sum(ss_mask) > 0:
+                residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
+
 
     return residue_table
