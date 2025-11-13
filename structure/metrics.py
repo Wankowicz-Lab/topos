@@ -79,4 +79,29 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
     return kd_per_res
 
 
+def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: float = 15) -> np.ndarray:
+    """
+    Calculate distance of each residue from the edge of the membrane along the z-axis.
 
+    Parameters:
+    -----------
+    array : AtomArray
+        Structure array (amino acids only recommended)
+    membrane_thickness : float
+        Half-thickness of the membrane in Angstroms (default: 15 Å)
+
+    Returns:
+    --------
+    np.ndarray
+        Per-residue distance from the membrane edge in Angstroms.
+        Negative values indicate positions inside the membrane.
+    """
+
+    # Calculate z-coordinate of each residue (mean of atom z-coordinates)
+    atom_z = array.coord[:, 2]
+    res_z = struc.apply_residue_wise(array, atom_z, np.mean())
+
+    # Calculate distance from membrane edge
+    distance_from_edge = np.abs(res_z) - membrane_thickness
+
+    return distance_from_edge
