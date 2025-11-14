@@ -26,10 +26,6 @@ def calculate_position_effect_quartiles(residue_table: pd.DataFrame, percentiles
     pd.DataFrame
         DataFrame with quartile column and residue information
     """
-
-    if 'resm' not in residue_table.columns:
-        raise ValueError("Input DataFrame must contain DMS data in order to calculate position effects.")
-
     # subset to only include positions with DMS data
     seq_data = residue_table.loc[residue_table.seq_info, :]
 
@@ -44,7 +40,7 @@ def calculate_position_effect_quartiles(residue_table: pd.DataFrame, percentiles
         # compute position effects from individual mutation effects, removing synonymous mutations
         pos_counts = seq_data[['resi', 'effect', 'type']]
         pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi', 'effect']]
-        pos_scores = pos_counts.groupby('position')['effect'].mean().reset_index()
+        pos_scores = pos_counts.groupby('resi')['effect'].mean().reset_index()
         pos_scores.rename(columns={'effect': 'pos_effect'}, inplace=True)
 
     # define cutoffs for position effects
