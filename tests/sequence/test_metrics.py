@@ -1,9 +1,9 @@
-
 import numpy as np
 import pandas as pd
 import random
 
 from sequence import metrics
+from sequence.utils import convert_amino_acid
 
 from tests.test_utils import _random_AA_seq, _make_residue_table
 
@@ -114,3 +114,19 @@ def test_calculate_aaindex_scores_with_muts(aaindex_data=aaindex_data):
             else:
                 assert aaindex_df.at[idx, f'AAIndex_{acc}_diff'] == expected_diff
 
+
+def test_calculate_blosum_score():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+
+    # calculate blosum scores
+    blosum_df = metrics.calculate_blosum_score(residue_table, blosum_threshold=90)
+
+    # check that blosum score column is added
+    assert 'blosum90' in blosum_df.columns
+
+    # verify that values are correct
+    b_matrix = metrics.bl.BLOSUM(90)
+    for idx, row in blosum_df.iterrows():
+        expected_score = b_matrix[convert_amino_acid(row['resn'])][convert_amino_acid(row['resm'])]
+        assert blosum_df.at[idx, 'blosum90'] == expected_score
