@@ -58,7 +58,8 @@ aaindex_data = pd.DataFrame({
     'THR': [15.5, 16.0],
     'VAL': [16.5, 17.0],
     'TRP': [17.5, 18.0],
-    'TYR': [18.5, 19.0]
+    'TYR': [18.5, 19.0],
+    'ARG': [19.5, 20.0],
 })
 
 def test_calculate_aaindex_scores_no_muts(aaindex_data=aaindex_data):
@@ -99,8 +100,9 @@ def test_calculate_aaindex_scores_with_muts(aaindex_data=aaindex_data):
 
     # verify that values are correct for wildtype, mutant, and diff
     for acc in aaindex_data['accession']:
-        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[2:]
+        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[1:]
         for idx, row in aaindex_df.iterrows():
+            print(row)
             expected_wt = feature_values.get(row['resn'], np.nan)
             expected_mut = feature_values.get(row['resm'], np.nan)
             expected_diff = expected_mut - expected_wt if not (np.isnan(expected_wt) or np.isnan(expected_mut)) else np.nan

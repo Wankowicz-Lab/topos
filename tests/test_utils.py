@@ -4,15 +4,16 @@ import numpy as np
 import pandas as pd
 import random
 
+AA_LIST = ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS',
+           'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'SER', 'THR', 'VAL', 'TRP', 'TYR']
+
 
 def _random_AA_seq(length=1):
-    amino_acids = ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS',
-                   'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'SER', 'THR', 'VAL', 'TRP', 'TYR']
     if length == 1:
-        return random.choice(amino_acids)
+        return random.choice(AA_LIST)
     else:
         # return a list of length=length, each a random amino acid
-        return random.choices(amino_acids, k=length)
+        return random.choices(AA_LIST, k=length)
 
 
 def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=True):
@@ -72,7 +73,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
             chain_list = [chain_id] * num_residue * 20
             resi_list = np.repeat(range(start_resi, start_resi + num_residue), 20)
             resn_list = np.repeat([_random_AA_seq(num_residue)], 20)
-            resm_list = [x for x in 'ACDEFGHIKLMNPQRSTVWY'] * num_residue
+            resm_list = AA_LIST * num_residue
             eff_list = np.random.normal(loc=0.0, scale=1.0, size=num_residue * 20)
             type_list = ['missense'] * num_residue * 20
 
