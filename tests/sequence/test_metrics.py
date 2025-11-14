@@ -1,4 +1,3 @@
-from string import ascii_uppercase
 
 import numpy as np
 import pandas as pd
@@ -6,104 +5,7 @@ import random
 
 from sequence import metrics
 
-
-def _random_AA_seq(length=1):
-    amino_acids = list('ACDEFGHIKLMNPQRSTVWY')
-    if length == 1:
-        return random.choice(amino_acids)
-    else:
-        # return a list of length=length, each a random amino acid
-        return random.choices(amino_acids, k=length)
-
-
-def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=True):
-    """Main helper function to create a residue table for testing.
-
-    Parameters:
-    -----------
-    num_residues : int or list of int
-        Number of residues per chain. If a list, must be of length `num_chains`.
-    num_chains : int
-        Number of chains to include.
-    start_resis : int or list of int
-        Starting residue index per chain. If a list, must be of length `num_chains`.
-    make_muts : bool or list of bool
-        Whether to make mutations per chain. If a list, must be of length `num_chains`.
-
-    Returns:
-    --------
-    pd.DataFrame
-        Residue table dataframe
-    """
-
-    # validate input
-    if isinstance(num_residues, int):
-        num_residues = [num_residues] * num_chains
-    elif isinstance(num_residues, list):
-        if len(num_residues) != num_chains:
-            raise ValueError("If num_residues is a list, it must be of length num_chains.")
-    else:
-        raise TypeError("num_residues must be an int or a list of int.")
-
-    if isinstance(start_resis, int):
-        start_resis = [start_resis] * num_chains
-    elif isinstance(start_resis, list):
-        if len(start_resis) != num_chains:
-            raise ValueError("If start_resi is a list, it must be of length num_chains.")
-    else:
-        raise TypeError("start_resi must be an int or a list of int.")
-
-    if isinstance(make_muts, bool):
-        make_muts = [make_muts] * num_chains
-    elif isinstance(make_muts, list):
-        if len(make_muts) != num_chains:
-            raise ValueError("If make_muts is a list, it must be of length num_chains.")
-    else:
-        raise TypeError("make_muts must be a bool or a list of bool.")
-
-    data = []
-    for chain_idx in range(num_chains):
-        # get chain-specific parameters
-        chain_id = ascii_uppercase[chain_idx]
-        num_residue = num_residues[chain_idx]
-        start_resi = start_resis[chain_idx]
-        make_mut = make_muts[chain_idx]
-
-        if make_mut:
-            chain_list = [chain_id] * num_residue * 20
-            resi_list = np.repeat(range(start_resi, start_resi + num_residue), 20)
-            resn_list = np.repeat([_random_AA_seq(num_residue)], 20)
-            resm_list = [x for x in 'ACDEFGHIKLMNPQRSTVWY'] * num_residue
-            eff_list = np.random.normal(loc=0.0, scale=1.0, size=num_residue * 20)
-            type_list = ['missense'] * num_residue * 20
-
-            chain_df = pd.DataFrame({
-                'chain': chain_list,
-                'resi': resi_list,
-                'resn': resn_list,
-                'resm': resm_list,
-                'effect': eff_list,
-                'type': type_list,
-                'struct_info': True,
-                'seq_info': True
-            })
-        else:
-            chain_list = [chain_id] * num_residue
-            resi_list = range(start_resi, start_resi + num_residue)
-            resn_list = _random_AA_seq(num_residue)
-
-            chain_df = pd.DataFrame({
-                'chain': chain_list,
-                'resi': resi_list,
-                'resn': resn_list,
-                'struct_info': True,
-                'seq_info': False
-            })
-        data.append(chain_df)
-
-    residue_table = pd.concat(data, ignore_index=True)
-    return residue_table
-
+from tests.test_utils import _random_AA_seq, _make_residue_table
 
 def test_calculate_position_effect_quartiles_with_pos_effect():
     # create test residue table with pos_effect column
@@ -134,4 +36,79 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
 
 
+# create test aaindex data
+aaindex_data = pd.DataFrame({
+    'accession': ['ANDN920101', 'ARGP820101'],
+    'description': ['Hydrophobicity', 'Volume'],
+    'ALA': [0.5, 1.0],
+    'CYS': [1.5, 2.0],
+    'ASP': [2.5, 3.0],
+    'GLU': [3.5, 4.0],
+    'PHE': [4.5, 5.0],
+    'GLY': [5.5, 6.0],
+    'HIS': [6.5, 7.0],
+    'ILE': [7.5, 8.0],
+    'LYS': [8.5, 9.0],
+    'LEU': [9.5, 10.0],
+    'MET': [10.5, 11.0],
+    'ASN': [11.5, 12.0],
+    'PRO': [12.5, 13.0],
+    'GLN': [13.5, 14.0],
+    'SER': [14.5, 15.0],
+    'THR': [15.5, 16.0],
+    'VAL': [16.5, 17.0],
+    'TRP': [17.5, 18.0],
+    'TYR': [18.5, 19.0]
+})
+
+def test_calculate_aaindex_scores_no_muts(aaindex_data=aaindex_data):
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
+
+    # calculate aaindex scores
+    aaindex_df = metrics.calculate_aaindex_scores(residue_table, aaindex_data)
+
+    # check that aaindex scores are added
+    output_cols = [f'AAIndex_{acc}_wt' for acc in aaindex_data['accession']]
+
+    for col in output_cols:
+        assert col in aaindex_df.columns
+
+    # verify that values are correct for wildtype
+    for acc in aaindex_data['accession']:
+        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[2:]
+        for idx, row in aaindex_df.iterrows():
+            expected_value = feature_values.get(row['resn'], np.nan)
+            assert aaindex_df.at[idx, f'AAIndex_{acc}_wt'] == expected_value
+
+
+def test_calculate_aaindex_scores_with_muts(aaindex_data=aaindex_data):
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+
+    # calculate aaindex scores
+    aaindex_df = metrics.calculate_aaindex_scores(residue_table, aaindex_data)
+
+    # check that aaindex scores are added
+    output_cols = []
+    for acc in aaindex_data['accession']:
+        output_cols.extend([f'AAIndex_{acc}_wt', f'AAIndex_{acc}_mut', f'AAIndex_{acc}_diff'])
+
+    for col in output_cols:
+        assert col in aaindex_df.columns
+
+    # verify that values are correct for wildtype, mutant, and diff
+    for acc in aaindex_data['accession']:
+        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[2:]
+        for idx, row in aaindex_df.iterrows():
+            expected_wt = feature_values.get(row['resn'], np.nan)
+            expected_mut = feature_values.get(row['resm'], np.nan)
+            expected_diff = expected_mut - expected_wt if not (np.isnan(expected_wt) or np.isnan(expected_mut)) else np.nan
+
+            assert aaindex_df.at[idx, f'AAIndex_{acc}_wt'] == expected_wt
+            assert aaindex_df.at[idx, f'AAIndex_{acc}_mut'] == expected_mut
+            if np.isnan(expected_diff):
+                assert np.isnan(aaindex_df.at[idx, f'AAIndex_{acc}_diff'])
+            else:
+                assert aaindex_df.at[idx, f'AAIndex_{acc}_diff'] == expected_diff
 
