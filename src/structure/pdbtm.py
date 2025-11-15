@@ -214,7 +214,7 @@ def add_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFrame
     return residue_table
 
 
-def make_contiguous_group_labels(lst):
+def make_contiguous_group_labels(lst : List[str]) -> List[str]:
     """
     Given a list of values, return a new list where contiguous identical values
     are labeled with a suffix indicating their group number.
