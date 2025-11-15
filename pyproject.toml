@@ -15,5 +15,5 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy"]
+test = ["pytest", "pytest-cov", "coveralls", "ruff", "mypy"]
 
