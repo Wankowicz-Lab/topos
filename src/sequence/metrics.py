@@ -3,7 +3,7 @@ import numpy as np
 
 import blosum as bl
 
-from sequence.sequence_context import convert_amino_acid
+from src.sequence.sequence_context import convert_amino_acid
 
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi', 'resn', 'resm']

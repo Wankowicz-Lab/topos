@@ -1,7 +1,7 @@
 """Unit tests for example_function.py"""
 
 import pytest
-from structure.example_function import process_integers
+from src.structure.example_function import process_integers
 
 
 def test_process_integers_basic():

@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import pytest
 
-from sequence.sequence_context import load_dms_scores, merge_dms_scores
+from src.sequence.sequence_context import load_dms_scores, merge_dms_scores
 
 
 def test_load_dms_scores(tmp_path):

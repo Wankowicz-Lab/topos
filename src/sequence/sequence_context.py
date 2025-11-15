@@ -1,7 +1,7 @@
 import warnings
 
 import pandas as pd
-from sequence.utils import convert_amino_acid
+from src.sequence.utils import convert_amino_acid
 
 
 def load_dms_scores(path: str, residue_col_name: str = "wildtype",

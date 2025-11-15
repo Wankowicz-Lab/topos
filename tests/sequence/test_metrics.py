@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import random
 
-from sequence import metrics
-from sequence.utils import convert_amino_acid
+from src.sequence import metrics
+from src.sequence.utils import convert_amino_acid
 
 from tests.test_utils import _random_AA_seq, _make_residue_table
 
