@@ -1,10 +1,13 @@
+import warnings
+
 import pandas as pd
 from sequence.utils import convert_amino_acid
 
 
 def load_dms_scores(path: str, residue_col_name: str = "wildtype",
-                    residue_idx_name : str = "position",
+                    residue_idx_name: str = "position",
                     mutation_col_name: str = "mutation",
+                    mutation_type_col_name: str = "type",
                     score_col_name: str = "effect") -> pd.DataFrame:
     """
     Load DMS scores from a CSV file and standardize column names.
@@ -23,6 +26,9 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
     mutation_col_name : str
         Name of the column containing mutant residues (default: "mutation").
 
+    mutation_type_col_name : str
+        Name of the column containing mutation types (default: "type").
+
     score_col_name : str
         Name of the column containing mutation effect scores (default: "effect").
 
@@ -37,6 +43,7 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
         residue_col_name: "resn",
         residue_idx_name: "resi",
         mutation_col_name: "resm",
+        mutation_type_col_name: "type",
         score_col_name: "effect"
     })
 
@@ -54,6 +61,11 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
 
     if 1 in mutation_lens:
         df['resm'] = df['resm'].apply(convert_amino_acid)
+
+    # check that mutation types are named in a standard way
+    valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins'}
+    if not set(df['type'].unique()).issubset(valid_types):
+        warnings.warn("Mutation types contain unexpected values. Expected types include: ") + ", ".join(valid_types)
 
     return df
 
@@ -114,6 +126,9 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     res_table['seq_info'] = False
     res_table = pd.concat([res_table, merged_df], axis=0).reset_index(drop=True)
 
+    # drop extra columns if present
+    res_table = res_table[['chain', 'resi', 'resn', 'resm', 'type', 'effect', 'seq_info', 'struct_info']]
+
     ctx.res_keys = res_table
 
-    return res_table
+    return ctx

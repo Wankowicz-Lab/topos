@@ -77,7 +77,7 @@ def test_calculate_aaindex_scores_no_muts(aaindex_data=aaindex_data):
 
     # verify that values are correct for wildtype
     for acc in aaindex_data['accession']:
-        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[2:]
+        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[1:]
         for idx, row in aaindex_df.iterrows():
             expected_value = feature_values.get(row['resn'], np.nan)
             assert aaindex_df.at[idx, f'AAIndex_{acc}_wt'] == expected_value

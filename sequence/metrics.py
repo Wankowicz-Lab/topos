@@ -54,6 +54,7 @@ def calculate_position_effect_quartiles(residue_table: pd.DataFrame, percentiles
     )
 
     # map quartile labels and raw effect scores back to original residues
+    # TODO: decide whether this should be per residue or per mutation, drop duplicates as needed
     pos_scores = pd.merge(seq_data[['resi', 'resn']], pos_scores, on='resi', how='left')
 
     return pos_scores
