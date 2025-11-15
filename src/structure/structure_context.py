@@ -44,11 +44,11 @@ def metrics_with_tag(tag: str) -> List[str]:
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack
     aa: Optional[struc.AtomArray] = None        # amino-acid only
-    res_keys: Optional[pd.DataFrame] = None     # (chain, resi, ins, resn)
+    res_keys: Optional[pd.DataFrame] = None     # (chain, resi, resn)
     kdtree: Any = None                          # built on demand
-    neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff -> neighbor lists
-    extras: Dict[str, Any] = None               # room for DSSP, graphs, etc.
-
+    neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff 
+    extras: Dict[str, Any] = None               # add metrics
+    
     def __post_init__(self):
         self.neighbor_cache = {}
         self.extras = {} if self.extras is None else self.extras
