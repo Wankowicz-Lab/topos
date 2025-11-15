@@ -86,7 +86,7 @@ def describe_pdbtm_region(region_code: str) -> str:
         "H": "membrane_spanning",
         "1": "cytoplasmic",
         "2": "extracellular",
-        "U": "unknown_or_unresolved"
+        "U": "unknown"
     }
     # Return mapping if found, otherwise the initial code
     return mapping.get(region_code.upper(), region_code)
@@ -158,7 +158,7 @@ def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
     for chain_id, group in pdbtm_regions.groupby('chain'):
 
             # Annotate first and last instance of unknown regions as protein_start and protein_end
-            unknown_regions = group[group['type'] == 'unknown_or_unresolved']
+            unknown_regions = group[group['type'] == 'unknown']
             if len(unknown_regions) > 1:
                 first_idx = unknown_regions['type_idx'].idxmin()
                 last_idx = unknown_regions['type_idx'].idxmax()
@@ -166,7 +166,7 @@ def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
                 pdbtm_regions.at[last_idx, 'detailed_type'] = 'protein_end'
 
             # Label sequential transmembrane and loop regions
-            other_regions = group[group['type'] != 'unknown_or_unresolved']
+            other_regions = group[group['type'] != 'unknown']
             if len(other_regions) > 0:
                 for idx in other_regions.index:
                     pdbtm_regions.at[idx, 'detailed_type'] = f"{pdbtm_regions.at[idx, 'type']}_{pdbtm_regions.at[idx, 'type_idx']}"
@@ -271,7 +271,7 @@ def define_secondary_structure(residue_table : pd.DataFrame, ss_annotation : Lis
     residue_table['ss_group'] = make_contiguous_group_labels(ss_annotation)
     residue_table['ss_domains'] = pd.NA
 
-    membrane_spanning = residue_table.loc[residue_table.pdbtm_region == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
+    membrane_spanning = residue_table.loc[residue_table['pdbtm_region'] == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
 
     # Loop through each membrane spanning region
     for region in membrane_spanning:
@@ -288,11 +288,14 @@ def define_secondary_structure(residue_table : pd.DataFrame, ss_annotation : Lis
             # loops or beta sheets that are completely contained within the membrane are part of TMD
             else:
                 ss_mask = residue_table['ss_group'] == ss
-                if (np.where(ss_mask)[0][0] >= np.where(mask)[0][0] and
-                        np.where(ss_mask)[0][-1] <= np.where(mask)[0][-1]):
+                ss_indices = np.where(ss_mask)[0]
+                mask_indices = np.where(mask)[0]
+
+                # check if ss is fully contained within the membrane region, ends inclusive
+                if ss_indices[0] >= mask_indices[0] and ss_indices[-1] <= mask_indices[-1]:
                     residue_table.loc[ss_mask, 'ss_domains'] = 'TMD_' + region_count
 
-    non_membrane_mask = residue_table.pdbtm_region.isin(['cytoplasmic', 'extracellular'])
+    non_membrane_mask = residue_table['pdbtm_region'].isin(['cytoplasmic', 'extracellular'])
     non_membrane = residue_table.loc[non_membrane_mask, 'pdbtm_region_detailed'].unique()
 
     # loop through each non-membrane region

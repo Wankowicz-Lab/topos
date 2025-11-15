@@ -7,7 +7,7 @@ from tests.test_utils import _make_residue_table
 
 def test_describe_pdbtm_region():
     inputs = ['H', '1', '2', 'U', 'not_defined']
-    expected = ['membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown_or_unresolved', 'not_defined']
+    expected = ['membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown', 'not_defined']
 
     for inp, exp in zip(inputs, expected):
         assert pdbtm.describe_pdbtm_region(inp) == exp
@@ -23,17 +23,17 @@ def test_fetch_pdbtm_annotation():
     for col in expected_cols:
         assert col in df.columns
 
-    assert set(df.type.unique()).issubset({'membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown_or_unresolved'})
+    assert set(df.type.unique()).issubset({'membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown'})
 
 
 def test_annotate_pdbtm_detailed():
     input_chains = ['A'] * 10 + ['B'] * 2
-    input_types1 = (['unknown_or_unresolved', 'typeA', 'typeB', 'typeA', 'typeC', 'typeA','typeB',
-                     'unknown_or_unresolved', 'typeB', 'unknown_or_unresolved'])
-    input_types2 = ['unknown_or_unresolved', 'typeD']
+    input_types1 = (['unknown', 'typeA', 'typeB', 'typeA', 'typeC', 'typeA','typeB',
+                     'unknown', 'typeB', 'unknown'])
+    input_types2 = ['unknown', 'typeD']
     expected1 = (['protein_start', 'typeA_1', 'typeB_1', 'typeA_2', 'typeC_1', 'typeA_3', 'typeB_2',
-                  'unknown_or_unresolved_2', 'typeB_3', 'protein_end'])
-    expected2 = ['unknown_or_unresolved_1', 'typeD_1']
+                  'unknown_2', 'typeB_3', 'protein_end'])
+    expected2 = ['unknown_1', 'typeD_1']
 
     input_df = pd.DataFrame({
         'chain': input_chains,
