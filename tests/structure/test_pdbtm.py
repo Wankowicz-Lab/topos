@@ -62,3 +62,40 @@ def test_add_pdbtm_regions():
 
     assert merged['pdbtm_region'].tolist() == expected_region
     assert merged['pdbtm_region_detailed'].tolist() == expected_region_detail
+
+
+def test_make_contiguous_group_labels():
+    input = ['A', 'A', 'B', 'B', 'A', 'A', 'A', 'C', 'C', 'B']
+    expected_output = ['A_1', 'A_1', 'B_1', 'B_1', 'A_2', 'A_2', 'A_2', 'C_1', 'C_1', 'B_2']
+
+    output = pdbtm.make_contiguous_group_labels(input)
+
+    assert output == expected_output
+
+
+def test_define_secondary_structure():
+    # Create a mock residue table with the following topology:
+    # Extracellular length 4, membrane length 5, cytoplasmic length 4, membrane length 6, extracellular length 6.
+    # There is a single alphahelix in the first membrane region that overlaps with the extracellular region by 1,
+    # and terminates 2 before the end of membrane
+    # The second membrane region has a beta sheet of len 2 in the middle of alpha helices
+
+    pdbtm_region = (['extracellular'] * 4 + ['membrane_spanning'] * 5 + ['cytoplasmic'] * 4 +
+                    ['membrane_spanning'] * 6 + ['extracellular'] * 6)
+    pdbtm_region_detailed = (pdbtm.make_contiguous_group_labels(pdbtm_region))
+
+    ss_annotation = (['c'] * 3 + ['a'] * 4 + ['c'] * 6 + ['a'] * 2 + ['b'] * 2 + ['a'] * 3 + ['c'] * 5)
+
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * len(pdbtm_region),
+        'resi': list(range(1, len(pdbtm_region) + 1)),
+        'pdbtm_region': pdbtm_region,
+        'pdbtm_region_detailed': pdbtm_region_detailed
+    })
+
+    expected_annotation = (['extracellular_loop_1'] * 3 + ['TMD_1'] * 4 + ['cytoplasmic_loop_1'] * 6 +
+                           ['TMD_2'] * 7 + ['extracellular_loop_2'] * 5)
+
+    output_df = pdbtm.define_secondary_structure(residue_table, ss_annotation)
+
+    assert output_df['ss_domains'].tolist() == expected_annotation

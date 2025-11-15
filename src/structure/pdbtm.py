@@ -239,7 +239,7 @@ def make_contiguous_group_labels(lst : List[str]) -> List[str]:
         counters[val] = counters.get(val, 0) + 1
 
         # Create label with group number
-        label = f"{val}{counters[val]}"
+        label = f"{val}_{counters[val]}"
         result.extend([label] * len(list(group)))
 
     return result
