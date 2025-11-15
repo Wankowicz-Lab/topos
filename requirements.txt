@@ -1,6 +1,0 @@
-biotite
-numpy
-pandas
-scipy
-matplotlib
-networkx
