@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from .structure_context import Context, register_metric
+from src.structure.analyze_hbonds import is_backbone_atom, angle_deg
+
 
 def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
     """
@@ -91,7 +93,7 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: floa
         Half-thickness of the membrane in Angstroms (default: 15 Å)
 
     Returns:
-    --------
+    ---------
     np.ndarray
         Per-residue distance from the membrane edge in Angstroms.
         Negative values indicate positions inside the membrane.
@@ -106,9 +108,6 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: floa
 
     return distance_from_edge
 
-
-
-from structure.analyze_hbonds import is_backbone_atom, angle_deg
 
 def calculate_sidechain_angle_from_center(array: struc.AtomArray) -> np.ndarray:
     """

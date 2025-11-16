@@ -10,7 +10,7 @@ import networkx as nx
 
 from biotite.structure import AtomArray, filter_amino_acids
 from biotite.structure.io.pdb import PDBFile
-from biotite.structure.io.mmcif import MMCIFFile
+# from biotite.structure.io.mmcif import MMCIFFile
 
 
 # ----------------------------- Tunables --------------------------------------
