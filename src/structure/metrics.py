@@ -156,6 +156,9 @@ def calculate_sidechain_angle_from_center(array: struc.AtomArray) -> np.ndarray:
 
             # get sidechain atoms and define centroid
             sidechain_atoms = res_atoms[~backbone_mask]
+            if len(sidechain_atoms) == 0:
+                continue  # skip residues without sidechains
+            
             sidechain_centroid = struc.centroid(sidechain_atoms)
 
             # vector from backbone centroid to sidechain centroid
