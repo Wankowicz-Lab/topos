@@ -3,7 +3,7 @@ name = "biogenesis"
 version = "0.1.0"
 description = "A toolkit for computing and analyzing sequence/structure metrics in proteins"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Stephanie Wankowicz, Noah Greenwald"}]
 dependencies = [
@@ -12,7 +12,8 @@ dependencies = [
   "pandas>=2.0",
   "scipy>=1.11",
   "matplotlib>=3.8",
-  "blosum"
+  "blosum",
+  "lxml"
 ]
 
 [project.optional-dependencies]
