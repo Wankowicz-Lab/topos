@@ -79,6 +79,40 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
     return kd_per_res
 
 def calculate_hbond_degree(array: struc.AtomArray) -> np.ndarray:
+    """
+    Compute per-residue hydrogen-bond degree (number of distinct H-bond
+    partners per residue) using an altloc-aware donor/acceptor model.
+
+    Parameters
+    ----------
+    array : AtomArray
+        Structure array with at least coordinates, chain_id, res_id,
+        res_name, atom_name, and altloc_id.
+
+    Returns
+    -------
+    np.ndarray
+        Per-residue H-bond degree, aligned with residue order from
+        `struc.get_residue_starts(array)`.
+    """
+    donors, acceptors = _build_sites_biotite(array)
+    hbonds = _detect_hbonds(donors, acceptors)
+    G = _build_hbond_graph(hbonds)
+
+    # Map residue nodes back to index in residue list
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    res_ids = array.res_id[res_starts]
+    resnames = array.res_name[res_starts]
+
+    degree_arr = np.zeros(len(res_starts), dtype=float)
+    deg_dict = dict(G.degree())
+
+    for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames)):
+        key = f"{ch}:{int(ri)}:{rn}"
+        degree_arr[i] = float(deg_dict.get(key, 0))
+
+    return degree_arr
     
 
 
