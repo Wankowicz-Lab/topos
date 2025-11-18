@@ -74,7 +74,7 @@ class Runner:
         if self.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
             pdbtm_df, _ = fetch_pdbtm_annotation(self.pdb_id)
-            self.context.residue_table = add_pdbtm_regions(residue_table=self.context.res_keys, pdbtm_regions=pdbtm_df)
+            self.context.residue_table = add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
 
         if self.mutation_data_path is not None:
             # TODO: change function names to be more general (not DMS-specific)
@@ -101,7 +101,7 @@ class Runner:
         })
 
         if self.membrane_protein:
-            self.context.res_keys = define_secondary_structure(self.context.res_keys, ss_df)
+            self.context.residue_table = define_secondary_structure(self.context.residue_table, ss_df)
         else:
             pass
             # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
