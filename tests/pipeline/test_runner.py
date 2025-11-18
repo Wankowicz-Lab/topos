@@ -1,0 +1,63 @@
+import pandas as pd
+import pytest
+
+from tests.test_utils import _make_residue_table
+from src.pipeline import runner
+
+
+def test_runner_initialization(tmp_path):
+
+    # Create a mock mutation dataset
+    residue_table = _make_residue_table(
+        num_chains=1,
+        num_residues=10,
+        start_resis=1,
+        make_muts=True
+    )
+    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = mut_dataset.rename(columns={
+        'resn': 'wildtype',
+        'resi': 'position',
+        'resm': 'mutation',
+        'effect': 'effect',
+        'type': 'type'
+    })
+
+    mut_data_path = tmp_path / 'mut_data.csv'
+    mut_dataset.to_csv(mut_data_path, index=False)
+
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None,
+        mutation_data_chain=None
+    )
+
+    assert myrunner.pdb_path is not None
+    assert myrunner.pdb_ext == 'cif'
+    assert myrunner.array is not None
+
+    myrunner_membrane = runner.Runner(
+        pdb_id=pdb_id,
+        pdb_path=None,
+        membrane_protein=True,
+        mutation_data_path=None,
+        mutation_data_chain=None
+    )
+
+    assert 'pdbtm_region' in myrunner_membrane.context.residue_table.columns.tolist()
+    assert 'pdbtm_region_detailed' in myrunner_membrane.context.residue_table.columns.tolist()
+
+    myrunner_mut = runner.Runner(
+        pdb_id=pdb_id,
+        pdb_path=None,
+        membrane_protein=True,
+        mutation_data_path=mut_data_path,
+        mutation_data_chain='A'
+    )
+
+    assert 'effect' in myrunner_mut.context.residue_table.columns.tolist()
+

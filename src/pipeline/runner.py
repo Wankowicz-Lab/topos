@@ -13,28 +13,28 @@ from src.sequence import sequence_context
 
 from src.structure.pdbtm import add_pdbtm_regions, define_secondary_structure
 
-pdb_id = "8smv"
-file_path = rcsb.fetch(pdb_id, format="cif")  # or format="mmtf", "cif"
-
-pdb_file = PDBFile.read(file_path)
-array = pdb_file.get_structure(model=1)
-struc.get_residue_starts(array)
-
-
-pdb_file = CIFFile.read(file_path)
-array = get_structure(pdb_file)
-count = get_model_count(pdb_file)
-struc.get_residue_starts(array)
-
-
-myrunner = Runner(pdb_id='8smv', pdb_path=None, membrane_protein=True,
-                  mutation_data_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/metadata/GPR161_processed_scores.csv',
-                  mutation_data_chain='R')
-myrunner.define_secondary_structure()
-
-myrunner = Runner(pdb_id='8smv', pdb_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/structural/example/data/pdb/GPR161_8SMV.pdb')
-
-merged = myrunner.context.res_keys
+# pdb_id = "8smv"
+# file_path = rcsb.fetch(pdb_id, format="cif")  # or format="mmtf", "cif"
+#
+# pdb_file = PDBFile.read(file_path)
+# array = pdb_file.get_structure(model=1)
+# struc.get_residue_starts(array)
+#
+#
+# pdb_file = CIFFile.read(file_path)
+# array = get_structure(pdb_file)
+# count = get_model_count(pdb_file)
+# struc.get_residue_starts(array)
+#
+#
+# myrunner = Runner(pdb_id='8smv', pdb_path=None, membrane_protein=True,
+#                   mutation_data_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/metadata/GPR161_processed_scores.csv',
+#                   mutation_data_chain='R')
+# myrunner.define_secondary_structure()
+#
+# myrunner = Runner(pdb_id='8smv', pdb_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/structural/example/data/pdb/GPR161_8SMV.pdb')
+#
+# merged = myrunner.context.res_keys
 
 
 
@@ -78,7 +78,7 @@ class Runner:
 
         if self.mutation_data_path is not None:
             # TODO: change function names to be more general (not DMS-specific)
-            self.mutation_data = load_dms_scores(self.mutation_data_path)
+            self.mutation_data = sequence_context.load_dms_scores(self.mutation_data_path)
             self.context = sequence_context.merge_dms_scores(
                 dms_scores=self.mutation_data,
                 ctx=self.context,
