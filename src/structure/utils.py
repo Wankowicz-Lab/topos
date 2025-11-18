@@ -1,4 +1,4 @@
-# hbond_utils.py
+# utils.py
 from __future__ import annotations
 import math
 from collections import defaultdict, namedtuple
@@ -368,3 +368,18 @@ def detect_hbonds(
                 }
             )
     return hbonds
+
+#_________________________________PACKING_________________________
+def is_heavy(atom_name: str) -> bool:
+    """
+    Return True if the atom is considered heavy (non-hydrogen).
+    """
+    n = atom_name.strip()
+    return not (n.startswith("H") or n.startswith("D"))
+
+
+def residue_key(chain_id, res_id) -> str:
+    """
+    Build a unique residue identifier (chain:resi).
+    """
+    return f"{chain_id}:{int(res_id)}"
