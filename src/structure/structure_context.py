@@ -64,10 +64,8 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
-    ins    = getattr(array, "ins_code", None)
-    ins    = ins[res_starts] if ins is not None else np.array([None]*len(res_starts), dtype=object)
     resn   = array.res_name[res_starts]
-    return pd.DataFrame({"chain": chains, "resi": resi, "ins": ins, "resn": resn})
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
 
 def load_structure(path: str | Path,
                    model: Optional[int] = 1,
