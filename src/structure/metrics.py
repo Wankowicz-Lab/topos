@@ -78,5 +78,8 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
     kd_per_res = struc.apply_residue_wise(array, atom_vals, func=lambda x: np.nanmean(x))
     return kd_per_res
 
+def calculate_hbond_degree(array: struc.AtomArray) -> np.ndarray:
+    
+
 
 
