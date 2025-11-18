@@ -50,7 +50,7 @@ We also provide grouped analysis scripts that look at and compare multiple struc
 ```python
 from structure.structure_context import Context, load_structure_with_id
 from structure.run_metrics import compute_all
-import structure.metrics  # Register all metrics
+import structure.metrics
 
 # Load a PDB file
 arr, pdb_id = load_structure_with_id("path/to/file.pdb")
