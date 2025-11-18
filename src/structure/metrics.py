@@ -162,6 +162,106 @@ def calculate_hbond_metrics(array: struc.AtomArray) -> dict[str, np.ndarray]:
         "weighted_degree": weighted_degree,
     }
 
+def calculate_residue_packing(
+    array: struc.AtomArray,
+    cutoff: float = 5.0,
+) -> dict[str, np.ndarray]:
+    """
+    Compute residue packing metrics using Biotite.
+
+    Metric definition:
+      For each residue, count the number of *distinct neighboring residues*
+      that have at least one heavy atom within `cutoff` Å of any heavy atom
+      in the residue (excluding self).
+
+    Parameters
+    ----------
+    array : AtomArray
+        Full structure array (may include solvent/ligands; they are ignored).
+    cutoff : float
+        Distance cutoff in Å (default: 5.0).
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Dictionary of per-residue arrays aligned to
+        `struc.get_residue_starts(array)`:
+          - "packing_n_atoms"
+          - "packing_n_neighbor_residues"
+          - "packing_contact_density"
+        Non-amino-acid residues receive zeros/NaN.
+    """
+    # Residue indexing for original array
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    res_ids = array.res_id[res_starts]
+    n_res = len(res_starts)
+
+    # Initialize output arrays
+    n_atoms = np.zeros(n_res, dtype=int)
+    n_neighbors = np.zeros(n_res, dtype=int)
+    contact_density = np.full(n_res, np.nan, dtype=float)
+
+    full_keys = np.array(
+        [residue_key(ch, ri) for ch, ri in zip(chains, res_ids)],
+        dtype=object,
+    )
+    key_to_idx = {k: i for i, k in enumerate(full_keys)}
+
+    # Filter to heavy amino-acid atoms
+    aa_mask = struc.filter_amino_acids(array)
+    heavy_mask = np.array([is_heavy(n) for n in array.atom_name], dtype=bool)
+    mask = aa_mask & heavy_mask
+    arr = array[mask]
+
+    if arr.array_length() == 0:
+        return {
+            "packing_n_atoms": n_atoms,
+            "packing_n_neighbor_residues": n_neighbors,
+            "packing_contact_density": contact_density,
+        }
+
+    # Residue keys for filtered array
+    residue_ids = np.array(
+        [residue_key(c, r) for c, r in zip(arr.chain_id, arr.res_id)],
+        dtype=object,
+    )
+    unique_res = np.unique(residue_ids)
+
+    coords = arr.coord.astype(float)
+    cutoff2 = cutoff * cutoff
+
+    # Compute per-residue packing
+    for res_uid in unique_res:
+        idxs = np.where(residue_ids == res_uid)[0]
+        if len(idxs) == 0:
+            continue
+
+        res_atoms = arr[idxs]
+        res_n_atoms = len(res_atoms)
+
+        # Neighbor detection
+        rcoords = res_atoms.coord  # (k, 3)
+        diff = rcoords[:, None, :] - coords[None, :, :]  
+        d2 = np.einsum("ijk,ijk->ij", diff, diff)         
+        within_cutoff = d2 <= cutoff2
+
+        close_atom_idxs = np.where(within_cutoff.any(axis=0))[0]
+        neighbor_res_keys = set(residue_ids[close_atom_idxs].tolist())
+        neighbor_res_keys.discard(res_uid)  # remove self
+
+        # record metrics
+        idx = key_to_idx.get(res_uid)
+        if idx is not None:
+            n_atoms[idx] = res_n_atoms
+            n_neighbors[idx] = len(neighbor_res_keys)
+            contact_density[idx] = len(neighbor_res_keys) / max(1, res_n_atoms)
+
+    return {
+        "packing_n_atoms": n_atoms,
+        "packing_n_neighbor_residues": n_neighbors,
+        "packing_contact_density": contact_density,
+    }
     
 
 
