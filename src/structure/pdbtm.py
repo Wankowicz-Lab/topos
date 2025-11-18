@@ -174,7 +174,7 @@ def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
     return pdbtm_regions
 
 
-def add_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFrame) -> pd.DataFrame:
+def add_pdbtm_regions(residue_table: pd.DataFrame, pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
     """
     Add PDBTM region annotations to the residue_table.
 
@@ -214,7 +214,7 @@ def add_pdbtm_regions(residue_table : pd.DataFrame, pdbtm_regions : pd.DataFrame
     return residue_table
 
 
-def make_contiguous_group_labels(lst : List[str]) -> List[str]:
+def make_contiguous_group_labels(lst: List[str]) -> List[str]:
     """
     Given a list of values, return a new list where contiguous identical values
     are labeled with a suffix indicating their group number.
@@ -245,7 +245,7 @@ def make_contiguous_group_labels(lst : List[str]) -> List[str]:
     return result
 
 
-def define_secondary_structure(residue_table : pd.DataFrame, ss_annotation : List[str]) -> pd.DataFrame:
+def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame) -> pd.DataFrame:
     """
     Identify discrete secondary structure domains and add to the residue_table.
 
@@ -253,8 +253,8 @@ def define_secondary_structure(residue_table : pd.DataFrame, ss_annotation : Lis
     ----------
     residue_table : pd.DataFrame
         DataFrame containing residue metadata
-    ss_annotation : List[str]
-        List of secondary structure assignments for each residue
+    ss_annotation : pd.DataFrame
+        DataFrame containing secondary structure assignments for each residue
 
     Returns
     -------
@@ -264,12 +264,10 @@ def define_secondary_structure(residue_table : pd.DataFrame, ss_annotation : Lis
 
     residue_table = residue_table.copy()
 
-    # Ensure the length of ss_annotation matches the number of residues
-    if len(ss_annotation) != len(residue_table):
-        raise ValueError("Length of ss_annotation does not match number of residues in residue_table.")
+    ss_df['ss_group'] = make_contiguous_group_labels(ss_df['sse'].tolist())
 
-    residue_table['ss_group'] = make_contiguous_group_labels(ss_annotation)
     residue_table['ss_domains'] = pd.NA
+    residue_table = residue_table.merge(ss_df[['chain', 'resi', 'ss_group']], on=['chain', 'resi'], how='left')
 
     membrane_spanning = residue_table.loc[residue_table['pdbtm_region'] == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
 

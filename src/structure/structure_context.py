@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
+from biotite.structure.io.pdbx import CIFFile, get_structure, get_model_count
 
 # ---------------- Registry ----------------
 @dataclass(frozen=True)
@@ -71,7 +72,10 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
 
 def load_structure(path: str | Path,
                    model: Optional[int] = 1,
-                   altloc_policy: Literal["occupancy","first","all"] = "occupancy"):
+                   altloc_policy: Literal["occupancy","first","all"] = "occupancy",
+                   pdb_ext: str = "pdb") -> struc.AtomArray:
+
+
     pdb = PDBFile.read(str(path))
     models = pdb.get_model_count()
     arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)

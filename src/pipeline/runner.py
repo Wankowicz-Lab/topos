@@ -7,11 +7,11 @@ from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile, get_structure, get_model_count
 
-from src.structure import structure_context
-from src.structure.pdbtm_annotation import fetch_pdbtm_annotation, annotate_pdbtm_detailed, merge_pdbtm_regions
+from src.structure import structure_context, metrics
+from src.structure.pdbtm import fetch_pdbtm_annotation, add_pdbtm_regions
 from src.sequence import sequence_context
 
-from src.structure.pdbtm import add_pdbtm_regions
+from src.structure.pdbtm import add_pdbtm_regions, define_secondary_structure
 
 pdb_id = "8smv"
 file_path = rcsb.fetch(pdb_id, format="cif")  # or format="mmtf", "cif"
@@ -27,8 +27,15 @@ count = get_model_count(pdb_file)
 struc.get_residue_starts(array)
 
 
-myrunner = Runner(pdb_id='8smv', pdb_path=None, mutation_data_path=Path('/data/mutation_data'))
+myrunner = Runner(pdb_id='8smv', pdb_path=None, membrane_protein=True,
+                  mutation_data_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/metadata/GPR161_processed_scores.csv',
+                  mutation_data_chain='R')
+myrunner.define_secondary_structure()
+
 myrunner = Runner(pdb_id='8smv', pdb_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/structural/example/data/pdb/GPR161_8SMV.pdb')
+
+merged = myrunner.context.res_keys
+
 
 
 @dataclass
@@ -67,17 +74,45 @@ class Runner:
         if self.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
             pdbtm_df, _ = fetch_pdbtm_annotation(self.pdb_id)
-            self.context.residue_table = add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
+            self.context.residue_table = add_pdbtm_regions(residue_table=self.context.res_keys, pdbtm_regions=pdbtm_df)
 
         if self.mutation_data_path is not None:
-            self.mutation_data = sequence_context.load_dms_scores(self.mutation_data_path)
+            # TODO: change function names to be more general (not DMS-specific)
+            self.mutation_data = load_dms_scores(self.mutation_data_path)
             self.context = sequence_context.merge_dms_scores(
                 dms_scores=self.mutation_data,
                 ctx=self.context,
                 chain=self.mutation_data_chain
             )
 
+    # TODO: should this be a metric instead?
     def define_secondary_structure(self):
+        """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
+
+        ss_vals = metrics.calculate_secondary_structure(self.context.array)
+        res_starts = struc.get_residue_starts(self.context.array)
+        chains = array.chain_id[res_starts]
+        resi = array.res_id[res_starts]
+
+        ss_df = pd.DataFrame({
+            "chain": chains,
+            "resi": resi,
+            "sse": ss_vals
+        })
+
+        if self.membrane_protein:
+            self.context.res_keys = define_secondary_structure(self.context.res_keys, ss_df)
+        else:
+            pass
+            # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
+            # TODO: implement basic sequential numbering + renaming of ss_df objects for non-membrane proteins
+
+
+
+
+
+
+
 
 
 
