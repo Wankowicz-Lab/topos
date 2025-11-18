@@ -69,7 +69,7 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
 
 def load_structure(path: str | Path,
                    model: Optional[int] = 1,
-                   altloc_policy: Literal["occupancy","first","all"] = "occupancy"):
+                   altloc_policy: Literal["occupancy","all"] = "occupancy"):
     pdb = PDBFile.read(str(path))
     models = pdb.get_model_count()
     arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
@@ -89,8 +89,3 @@ def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
         keep[idx[int(np.argmax(occ))]] = True
     return keep
 
-def _keep_first_altloc_per_atom(array: struc.AtomArray) -> np.ndarray:
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id","res_id","atom_name","altloc_id"]):
-        keep[idx[0]] = True
-    return keep
