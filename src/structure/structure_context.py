@@ -6,9 +6,10 @@ from typing import Callable, Dict, Iterable, List, Optional, Set, Any, Protocol,
 import inspect
 import numpy as np
 import pandas as pd
+
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
-
+from biotite.structure.io.pdbx import CIFFile, get_structure as pdbx_get_structure
 # ---------------- Registry ----------------
 @dataclass(frozen=True)
 class MetricMeta:
@@ -44,7 +45,7 @@ def metrics_with_tag(tag: str) -> List[str]:
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack
     aa: Optional[struc.AtomArray] = None        # amino-acid only
-    res_keys: Optional[pd.DataFrame] = None     # (chain, resi, ins, resn)
+    res_keys: Optional[pd.DataFrame] = None     # (chain, resi, resn)
     kdtree: Any = None                          # built on demand
     neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff -> neighbor lists
     extras: Dict[str, Any] = None               # room for DSSP, graphs, etc.
@@ -64,35 +65,8 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
-    ins    = getattr(array, "ins_code", None)
-    ins    = ins[res_starts] if ins is not None else np.array([None]*len(res_starts), dtype=object)
     resn   = array.res_name[res_starts]
-    return pd.DataFrame({"chain": chains, "resi": resi, "ins": ins, "resn": resn})
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
 
-def load_structure(path: str | Path,
-                   model: Optional[int] = 1,
-                   altloc_policy: Literal["occupancy","first","all"] = "occupancy"):
-    pdb = PDBFile.read(str(path))
-    models = pdb.get_model_count()
-    arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
-    if isinstance(arr, struc.AtomArray) and altloc_policy != "all":
-        if "altloc_id" in arr.get_annotation_categories():
-            if altloc_policy == "occupancy" and "occupancy" in arr.get_annotation_categories():
-                keep = _keep_highest_occ_per_atom(arr)
-            else:
-                keep = _keep_first_altloc_per_atom(arr)
-            arr = arr[keep]
-    return arr
 
-def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id","res_id","atom_name"]):
-        occ = array.occupancy[idx]
-        keep[idx[int(np.argmax(occ))]] = True
-    return keep
 
-def _keep_first_altloc_per_atom(array: struc.AtomArray) -> np.ndarray:
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id","res_id","atom_name","altloc_id"]):
-        keep[idx[0]] = True
-    return keep
