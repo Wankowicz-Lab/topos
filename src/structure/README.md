@@ -1,3 +1,8 @@
+Notes:
+1) In all metrics, hydrogens are ignored.
+2) In all metrics, inserts are ignored. 
+
+
 Packing:
 - Hydrogens are ignored.
 - Waters and ligands are ignored.
