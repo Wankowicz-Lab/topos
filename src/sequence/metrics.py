@@ -9,7 +9,7 @@ from src.structure.structure_context import Context, register_metric
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
 
-@register_metric(name='position_effect_quartiles', provides='effect_quartile', tags={'sequence', 'dms'})
+@register_metric(name='position_effect_quartiles', provides=['effect_quartile'], tags={'sequence', 'dms'})
 def calculate_position_effect_quartiles(context: Context, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
