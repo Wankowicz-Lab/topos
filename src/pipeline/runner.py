@@ -16,31 +16,6 @@ from src.structure import pdbtm
 from typing import List
 from src.structure.structure_context import _REGISTRY
 import src.sequence.metrics
-print(_REGISTRY)  # now contains “sse”
-
-# pdb_id = "8smv"
-# file_path = rcsb.fetch(pdb_id, format="cif")  # or format="mmtf", "cif"
-#
-# pdb_file = PDBFile.read(file_path)
-# array = pdb_file.get_structure(model=1)
-# struc.get_residue_starts(array)
-#
-#
-# pdb_file = CIFFile.read(file_path)
-# array = get_structure(pdb_file)
-# count = get_model_count(pdb_file)
-# struc.get_residue_starts(array)
-#
-#
-# myrunner = Runner(pdb_id='8smv', pdb_path=None, membrane_protein=True,
-#                   mutation_data_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/metadata/GPR161_processed_scores.csv',
-#                   mutation_data_chain='R')
-# myrunner.define_secondary_structure()
-#
-# myrunner = Runner(pdb_id='8smv', pdb_path='/Users/ngreenwald/Library/CloudStorage/Box-Box/WCM Lab/Noah/biogenesis/structural/example/data/pdb/GPR161_8SMV.pdb')
-#
-# merged = myrunner.context.res_keys
-
 
 
 @dataclass
@@ -140,14 +115,3 @@ class Runner:
         # merge all results into one DataFrame (outer join by index)
         merged = pd.concat(result_frames, axis=1)
         return merged
-
-
-
-
-
-
-
-
-
-
-
