@@ -11,7 +11,12 @@ from src.structure import structure_context, metrics
 from src.structure.pdbtm import fetch_pdbtm_annotation, add_pdbtm_regions
 from src.sequence import sequence_context
 
-from src.structure.pdbtm import add_pdbtm_regions, define_secondary_structure
+from src.structure import pdbtm
+
+from typing import List
+from src.structure.structure_context import _REGISTRY
+import src.sequence.metrics
+print(_REGISTRY)  # now contains “sse”
 
 # pdb_id = "8smv"
 # file_path = rcsb.fetch(pdb_id, format="cif")  # or format="mmtf", "cif"
@@ -74,7 +79,7 @@ class Runner:
         if self.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
             pdbtm_df, _ = fetch_pdbtm_annotation(self.pdb_id)
-            self.context.residue_table = add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
+            self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
 
         if self.mutation_data_path is not None:
             # TODO: change function names to be more general (not DMS-specific)
@@ -91,8 +96,8 @@ class Runner:
 
         ss_vals = metrics.calculate_secondary_structure(self.context.array)
         res_starts = struc.get_residue_starts(self.context.array)
-        chains = array.chain_id[res_starts]
-        resi = array.res_id[res_starts]
+        chains = self.context.array.chain_id[res_starts]
+        resi = self.context.array.res_id[res_starts]
 
         ss_df = pd.DataFrame({
             "chain": chains,
@@ -101,13 +106,40 @@ class Runner:
         })
 
         if self.membrane_protein:
-            self.context.residue_table = define_secondary_structure(self.context.residue_table, ss_df)
+            self.context.residue_table = pdbtm.define_secondary_structure(self.context.residue_table, ss_df)
         else:
             pass
             # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
             # TODO: implement basic sequential numbering + renaming of ss_df objects for non-membrane proteins
 
 
+    def run(self, metrics: List[str]) -> pd.DataFrame:
+        """Compute specified metrics and return as a merged DataFrame.
+
+        Parameters
+        ----------
+        metrics : List[str]
+            List of metric names to compute.
+        """
+
+        # filter unknown metrics
+        metrics = [m for m in metrics if m in _REGISTRY]
+        # TODO: resolve dependencies
+        #order = _topological_order(metrics)
+        order = metrics.copy()
+        result_frames = []
+        for m in order:
+            meta, func = _REGISTRY[m]
+            # metrics may require columns from ctx.extras or previous frames:
+            df = func(self.context.residue_table)
+            # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)
+            result_frames.append(df)
+            # Optionally store in extras by name
+            self.context.extras[m] = df
+
+        # merge all results into one DataFrame (outer join by index)
+        merged = pd.concat(result_frames, axis=1)
+        return merged
 
 
 
