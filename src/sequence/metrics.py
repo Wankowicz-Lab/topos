@@ -9,7 +9,8 @@ from src.structure.structure_context import Context, register_metric
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
 
-@register_metric(name='position_effect_quartiles', provides=['effect_quartile'], tags={'sequence', 'dms'})
+@register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
+                 requires={'resm'}, tags={'sequence', 'dms'})
 def calculate_position_effect_quartiles(context: Context, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
@@ -29,6 +30,10 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
     """
     # subset to only include positions with DMS data
     seq_data = context.residue_table.loc[context.residue_table.seq_info, :]
+
+    # ensure that only a single chain is provided
+    if len(seq_data.chain.unique()) > 1:
+        raise ValueError("calculate_position_effect_quartiles only supports single chain mutation data.")
 
     # Determine if position effects are already calculated or need to be computed from data
     if 'pos_effect' in seq_data.columns:
@@ -55,8 +60,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
     )
 
     # map quartile labels and raw effect scores back to original residues
-    # TODO: decide whether this should be per residue or per mutation, drop duplicates as needed
-    pos_scores = pd.merge(seq_data[['resi', 'resn']], pos_scores, on='resi', how='left')
+    pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi', how='left')
 
     return pos_scores
 

@@ -12,6 +12,12 @@ def test_calculate_position_effect_quartiles_with_pos_effect():
     # create test residue table with pos_effect column
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
 
+    # remove mutation data for last residue to test handling of missing data
+    residue_table = residue_table[residue_table['resi'] != 10]
+    new_row = pd.DataFrame({'chain': ['A'], 'resi': [10], 'resn': ['ALA'], 'resm': [np.nan],
+                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'seq_info': [False]})
+    residue_table = pd.concat([residue_table, new_row], ignore_index=True)
+
     # compute position effects
     pos_effects = residue_table.groupby('resi')['effect'].mean().reset_index()
     pos_effects.rename(columns={'effect': 'pos_effect'}, inplace=True)
@@ -29,11 +35,18 @@ def test_calculate_position_effect_quartiles_with_pos_effect():
     # check that quartile labels are correct
     assert 'effect_quartile' in quartile_df.columns
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
+    assert 10 not in quartile_df.resi.values
 
 
 def test_calculate_position_effect_quartiles_without_pos_effect():
     # create test residue table without pos_effect column
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+
+    # remove mutation data for last residue to test handling of missing data
+    residue_table = residue_table[residue_table['resi'] != 10]
+    new_row = pd.DataFrame({'chain': ['A'], 'resi': [10], 'resn': ['ALA'], 'resm': [np.nan],
+                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'seq_info': [False]})
+    residue_table = pd.concat([residue_table, new_row], ignore_index=True)
 
     # create mock context
     class MockContext:
@@ -48,6 +61,7 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     # check that quartile labels are correct
     assert 'effect_quartile' in quartile_df.columns
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
+    assert 10 not in quartile_df.resi.values
 
 
 # create test aaindex data

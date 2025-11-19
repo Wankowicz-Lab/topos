@@ -114,11 +114,13 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(context.array)
     chains = context.array.chain_id[res_starts]
     resi = context.array.res_id[res_starts]
+    resn = context.array.res_name[res_starts]
     sse_vals = calculate_secondary_structure(context.array)
 
     ss_df = pd.DataFrame({
         "chain": chains,
         "resi": resi,
+        "resn": resn,
         "sse": sse_vals
     })
 

@@ -4,6 +4,11 @@ import pytest
 from tests.test_utils import _make_residue_table, _write_mmcif_file
 from src.pipeline import runner
 
+# import files containing metrics to register them in _REGISTRY
+import src.sequence.metrics
+import src.structure.metrics
+from src.structure.structure_context import _REGISTRY
+
 
 def test_runner_initialization(tmp_path):
 
@@ -66,7 +71,7 @@ def test_runner_initialization(tmp_path):
     assert 'effect' in myrunner_mut.context.residue_table.columns.tolist()
 
 
-def test_runner_run(tmp_path):
+def test_runner_run_metric_provides(tmp_path):
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
         num_chains=1,
@@ -74,6 +79,10 @@ def test_runner_run(tmp_path):
         start_resis=1,
         make_muts=True
     )
+    # add membrane region columns so that we don't need to integrate with PDBTM to test
+    residue_table['pdbtm_region'] = 'membrane_spanning'
+    residue_table['pdbtm_region_detailed'] = 'TM1'
+
     mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
         'resn': 'wildtype',
@@ -99,15 +108,26 @@ def test_runner_run(tmp_path):
         mutation_data_chain='A'
     )
 
-    # TODO: more systematic testing of all metrics and expected outputs
-    # test individual metrics
-    metrics = myrunner.run(metrics=['position_effect_quartiles'])
-    assert 'effect_quartile' in metrics.columns.tolist()
+    # modify arguments for downstream metrics
+    myrunner.context.membrane_protein = True
+    myrunner.context.residue_table = residue_table
 
-    metrics1 = myrunner.run(metrics=['define_secondary_structure'])
-    assert 'ss_group' in metrics1.columns.tolist()
+    # get metrics that are registered
+    metrics = _REGISTRY.keys()
 
-    # test multiple metrics
-    metrics2 = myrunner.run(metrics=['position_effect_quartiles', 'define_secondary_structure'])
-    assert 'effect_quartile' in metrics2.columns.tolist()
-    assert 'ss_group' in metrics2.columns.tolist()
+    # run each metric individually to ensure 'provides' columns are present
+    for metric in metrics:
+        meta, func = _REGISTRY[metric]
+        provides, requires = meta.provides, meta.requires
+        result = myrunner.run(metrics=[metric])
+
+        returned_cols = result.columns.tolist()
+        expected_cols = provides + ['chain', 'resi', 'resn']
+        if 'resm' in requires:
+            expected_cols.append('resm')
+        assert set(expected_cols) == set(returned_cols)
+
+    # run all metrics
+    all_result = myrunner.run(metrics=list(metrics))
+
+

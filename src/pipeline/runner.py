@@ -19,10 +19,10 @@ import src.sequence.metrics
 class Runner:
     # TODO: read inputs from a single config file
     pdb_id: str
-    pdb_path: Optional(Path) = None
+    pdb_path: Optional[Path] = None
     membrane_protein: bool = False
-    mutation_data_path: Optional(Path) = None
-    mutation_data_chain: Optional(str) = None
+    mutation_data_path: Optional[Path] = None
+    mutation_data_chain: Optional[str] = None
 
     def __post_init__(self):
 
