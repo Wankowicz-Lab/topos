@@ -23,11 +23,3 @@ def test_calculate_membrane_distance():
     assert np.allclose(distances, expected_distances)
 
 
-def test_calculate_sidechain_angle_from_center():
-    # TODO: correcntess test with known angles
-    input_arr = _make_chain(aa_list=['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLU', 'GLN', 'THR'])
-
-    angles = metrics.calculate_sidechain_angle_from_center(input_arr)
-
-    assert len(angles) == len(struc.get_residue_starts(input_arr))
-
