@@ -99,6 +99,15 @@ def test_runner_run(tmp_path):
         mutation_data_chain='A'
     )
 
+    # TODO: more systematic testing of all metrics and expected outputs
+    # test individual metrics
     metrics = myrunner.run(metrics=['position_effect_quartiles'])
-
     assert 'effect_quartile' in metrics.columns.tolist()
+
+    metrics1 = myrunner.run(metrics=['define_secondary_structure'])
+    assert 'ss_group' in metrics1.columns.tolist()
+
+    # test multiple metrics
+    metrics2 = myrunner.run(metrics=['position_effect_quartiles', 'define_secondary_structure'])
+    assert 'effect_quartile' in metrics2.columns.tolist()
+    assert 'ss_group' in metrics2.columns.tolist()
