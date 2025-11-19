@@ -50,6 +50,7 @@ class Runner:
 
         # TODO: decide if we need to keep Context object, or if we can just merge attributes into Runner
         self.context = structure_context.Context(self.array)
+        self.context.membrane_protein = self.membrane_protein
 
         if self.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
@@ -64,29 +65,6 @@ class Runner:
                 ctx=self.context,
                 chain=self.mutation_data_chain
             )
-
-    # TODO: should this be a metric instead?
-    def define_secondary_structure(self):
-        """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
-
-        ss_vals = metrics.calculate_secondary_structure(self.context.array)
-        res_starts = struc.get_residue_starts(self.context.array)
-        chains = self.context.array.chain_id[res_starts]
-        resi = self.context.array.res_id[res_starts]
-
-        ss_df = pd.DataFrame({
-            "chain": chains,
-            "resi": resi,
-            "sse": ss_vals
-        })
-
-        if self.membrane_protein:
-            self.context.residue_table = pdbtm.define_secondary_structure(self.context.residue_table, ss_df)
-        else:
-            pass
-            # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
-            # TODO: implement basic sequential numbering + renaming of ss_df objects for non-membrane proteins
-
 
     def run(self, metrics: List[str]) -> pd.DataFrame:
         """Compute specified metrics and return as a merged DataFrame.
@@ -105,10 +83,13 @@ class Runner:
         result_frames = []
         for m in order:
             meta, func = _REGISTRY[m]
-            # metrics may require columns from ctx.extras or previous frames:
-            df = func(self.context.residue_table)
+
+            # TODO: update context to contain all fields needed by metrics, no others
+            df = func(self.context)
+
             # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)
             result_frames.append(df)
+
             # Optionally store in extras by name
             self.context.extras[m] = df
 

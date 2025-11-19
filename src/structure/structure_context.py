@@ -49,6 +49,7 @@ class Context:
     kdtree: Any = None                          # built on demand
     neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff -> neighbor lists
     extras: Dict[str, Any] = None               # room for DSSP, graphs, etc.
+    membrane_protein: bool = False
 
     def __post_init__(self):
         self.neighbor_cache = {}

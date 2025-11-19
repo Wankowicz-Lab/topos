@@ -5,8 +5,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from .structure_context import Context, register_metric
-from src.structure.analyze_hbonds import is_backbone_atom, angle_deg
-
+from . import pdbtm
 
 def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
     """
@@ -107,3 +106,32 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: floa
     distance_from_edge = np.abs(res_z) - membrane_thickness
 
     return distance_from_edge
+
+@register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
+def define_secondary_structure(context: Context) -> pd.DataFrame:
+    """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
+
+    res_starts = struc.get_residue_starts(context.array)
+    chains = context.array.chain_id[res_starts]
+    resi = context.array.res_id[res_starts]
+    sse_vals = calculate_secondary_structure(context.array)
+
+    ss_df = pd.DataFrame({
+        "chain": chains,
+        "resi": resi,
+        "sse": sse_vals
+    })
+
+    if context.membrane_protein:
+        ss_output = pdbtm.define_secondary_structure(context.residue_table, ss_df)
+    else:
+        # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
+        ss_output = ss_df.copy()
+        ss_output['ss_group'] = pdbtm.make_contiguous_group_labels(ss_output['sse'].tolist())
+
+    return ss_output
+
+
+
+
+

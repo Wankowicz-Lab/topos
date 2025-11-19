@@ -66,23 +66,6 @@ def test_runner_initialization(tmp_path):
     assert 'effect' in myrunner_mut.context.residue_table.columns.tolist()
 
 
-def test_runner_define_secondary_structure(tmp_path):
-
-    pdb_id = '8smv'
-
-    myrunner = runner.Runner(
-        pdb_id=pdb_id,
-        pdb_path=None,
-        membrane_protein=True,
-        mutation_data_path=None,
-        mutation_data_chain=None
-    )
-
-    myrunner.define_secondary_structure()
-
-    assert 'ss_domains' in myrunner.context.residue_table.columns.tolist()
-
-
 def test_runner_run(tmp_path):
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
