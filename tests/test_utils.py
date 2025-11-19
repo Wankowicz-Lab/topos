@@ -107,7 +107,6 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
     return residue_table
 
 
-
 def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", element=None):
     """
     Create a small AtomArray with manually specified atom names & coordinates.
@@ -242,6 +241,7 @@ def _make_chain(aa_list, chain_id="A", coords=None):
 
     return struc.concatenate(residues)
 
+
 def _make_mmcif_file(pdb_id: str, chains: dict) -> str:
     """
     Create a synthetic mmCIF file content for testing.
@@ -322,4 +322,3 @@ def _write_mmcif_file(file_path: str, chains: dict, pdb_id: str) -> None:
     mmcif_content = _make_mmcif_file(pdb_id, chains)
     with open(file_path, "w") as f:
         f.write(mmcif_content)
-
