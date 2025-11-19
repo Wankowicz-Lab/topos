@@ -8,6 +8,7 @@ from src.sequence.utils import convert_amino_acid
 from tests.test_utils import _random_AA_seq, _make_residue_table
 
 def test_calculate_position_effect_quartiles_with_pos_effect():
+
     # create test residue table with pos_effect column
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
 
@@ -16,8 +17,14 @@ def test_calculate_position_effect_quartiles_with_pos_effect():
     pos_effects.rename(columns={'effect': 'pos_effect'}, inplace=True)
     residue_table = pd.merge(residue_table, pos_effects, on='resi', how='left')
 
+    # create mock context
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    context = MockContext(residue_table)
+
     # calculate quartiles
-    quartile_df = metrics.calculate_position_effect_quartiles(residue_table)
+    quartile_df = metrics.calculate_position_effect_quartiles(context)
 
     # check that quartile labels are correct
     assert 'effect_quartile' in quartile_df.columns
@@ -28,8 +35,15 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     # create test residue table without pos_effect column
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
 
+    # create mock context
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
     # calculate quartiles
-    quartile_df = metrics.calculate_position_effect_quartiles(residue_table)
+    quartile_df = metrics.calculate_position_effect_quartiles(context)
 
     # check that quartile labels are correct
     assert 'effect_quartile' in quartile_df.columns

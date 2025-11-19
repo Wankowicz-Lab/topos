@@ -4,19 +4,20 @@ import numpy as np
 import blosum as bl
 
 from src.sequence.sequence_context import convert_amino_acid
+from src.structure.structure_context import Context, register_metric
 
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
 
-
-def calculate_position_effect_quartiles(residue_table: pd.DataFrame, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
+@register_metric(name='position_effect_quartiles', provides='effect_quartile', tags={'sequence', 'dms'})
+def calculate_position_effect_quartiles(context: Context, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
 
     Parameters:
     -----------
-    residue_table : pd.DataFrame
-        DataFrame containing residue metadata
+    context : Context
+        Context object containing residue metadata and DMS scores
 
     percentiles : list
         List of percentiles to calculate (default: [25, 50, 75])
@@ -27,7 +28,7 @@ def calculate_position_effect_quartiles(residue_table: pd.DataFrame, percentiles
         DataFrame with quartile column and residue information
     """
     # subset to only include positions with DMS data
-    seq_data = residue_table.loc[residue_table.seq_info, :]
+    seq_data = context.residue_table.loc[context.residue_table.seq_info, :]
 
     # Determine if position effects are already calculated or need to be computed from data
     if 'pos_effect' in seq_data.columns:

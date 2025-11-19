@@ -57,10 +57,10 @@ def test_merge_dms_scores(tmp_path):
         'extra_col': [10, 20, 30, 40, 50, 60]
     })
 
-    # Create a mock sequence context with res_keys
+    # Create a mock sequence context with residue_table
     class MockSequenceContext:
         def __init__(self):
-            self.res_keys = pd.DataFrame({
+            self.residue_table = pd.DataFrame({
                 'chain': ['A', 'A', 'A'],
                 'resi': [1, 2, 3],
                 'resn': ['ARG', 'THR', 'GLU']
@@ -69,7 +69,7 @@ def test_merge_dms_scores(tmp_path):
     ctx = MockSequenceContext()
 
     # Merge using the function
-    merged_df = merge_dms_scores(dms_scores_df, ctx, chain='A').res_keys
+    merged_df = merge_dms_scores(dms_scores_df, ctx, chain='A').residue_table
 
     assert len(merged_df) == 6
     assert set(merged_df.columns) == {'resn', 'resi', 'resm', 'type', 'effect', 'chain', 'seq_info', 'struct_info'}

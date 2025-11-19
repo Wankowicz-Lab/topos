@@ -64,8 +64,11 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
 
     # check that mutation types are named in a standard way
     valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins'}
-    if not set(df['type'].unique()).issubset(valid_types):
-        warnings.warn("Mutation types contain unexpected values. Expected types include: ") + ", ".join(valid_types)
+    found_types = set(df['type'].unique())
+    if not found_types.issubset(valid_types):
+        invalid_types = found_types - valid_types
+        warnings.warn(f"Mutation types contain unexpected values. Expected types include {valid_types}. "
+                      f"Found invalid types: {invalid_types}.")
 
     return df
 
@@ -92,7 +95,7 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     """
 
     # Extract residue information from context
-    res_table = ctx.res_keys.copy()
+    res_table = ctx.residue_table.copy()
 
     # test merge to make sure sequence is aligned with structure
     res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
@@ -129,6 +132,6 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     # drop extra columns if present
     res_table = res_table[['chain', 'resi', 'resn', 'resm', 'type', 'effect', 'seq_info', 'struct_info']]
 
-    ctx.res_keys = res_table
+    ctx.residue_table = res_table
 
     return ctx

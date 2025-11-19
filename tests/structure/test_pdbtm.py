@@ -86,6 +86,12 @@ def test_define_secondary_structure():
 
     ss_annotation = (['c'] * 3 + ['a'] * 4 + ['c'] * 6 + ['a'] * 2 + ['b'] * 2 + ['a'] * 3 + ['c'] * 5)
 
+    ss_df = pd.DataFrame({
+        'chain': ['A'] * len(ss_annotation),
+        'resi': list(range(1, len(ss_annotation) + 1)),
+        'sse': ss_annotation
+    })
+
     residue_table = pd.DataFrame({
         'chain': ['A'] * len(pdbtm_region),
         'resi': list(range(1, len(pdbtm_region) + 1)),
@@ -96,6 +102,6 @@ def test_define_secondary_structure():
     expected_annotation = (['extracellular_loop_1'] * 3 + ['TMD_1'] * 4 + ['cytoplasmic_loop_1'] * 6 +
                            ['TMD_2'] * 7 + ['extracellular_loop_2'] * 5)
 
-    output_df = pdbtm.define_secondary_structure(residue_table, ss_annotation)
+    output_df = pdbtm.define_secondary_structure(residue_table, ss_df)
 
     assert output_df['ss_domains'].tolist() == expected_annotation

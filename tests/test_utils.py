@@ -107,7 +107,6 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
     return residue_table
 
 
-
 def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", element=None):
     """
     Create a small AtomArray with manually specified atom names & coordinates.
@@ -242,3 +241,84 @@ def _make_chain(aa_list, chain_id="A", coords=None):
 
     return struc.concatenate(residues)
 
+
+def _make_mmcif_file(pdb_id: str, chains: dict) -> str:
+    """
+    Create a synthetic mmCIF file content for testing.
+
+    Parameters:
+    -----------
+    pdb_id : str
+        PDB ID to use in the mmCIF file.
+    chains : dict
+        Dictionary where keys are chain IDs and values are lists of amino acid codes.
+
+    Returns:
+    --------
+    str
+        The content of the synthetic mmCIF file as a string.
+    """
+    mmcif_lines = [
+        f"data_{pdb_id}",
+        "_entry.id                   " + pdb_id,
+        "_struct.title               Synthetic structure for testing",
+        "_struct.pdbx_descriptor     Synthetic mmCIF file",
+        "",
+        "loop_",
+        "_atom_site.group_PDB",
+        "_atom_site.id",
+        "_atom_site.type_symbol",
+        "_atom_site.label_atom_id",
+        "_atom_site.label_alt_id",
+        "_atom_site.label_comp_id",
+        "_atom_site.label_asym_id",
+        "_atom_site.label_entity_id",
+        "_atom_site.label_seq_id",
+        "_atom_site.pdbx_PDB_ins_code",
+        "_atom_site.Cartn_x",
+        "_atom_site.Cartn_y",
+        "_atom_site.Cartn_z",
+        "_atom_site.occupancy",
+        "_atom_site.B_iso_or_equiv",
+        "_atom_site.pdbx_formal_charge",
+        "_atom_site.auth_seq_id",
+        "_atom_site.auth_comp_id",
+        "_atom_site.auth_asym_id",
+        "_atom_site.auth_atom_id",
+        "_atom_site.pdbx_PDB_model_num"
+    ]
+
+    atom_id = 1
+    for chain_id, aa_list in chains.items():
+        for res_idx, res_name in enumerate(aa_list, start=1):
+            residue = _make_residue(res_name, res_id=res_idx, chain_id=chain_id)
+            for i in range(len(residue)):
+                atom_name = residue.atom_name[i]
+                x, y, z = residue.coord[i]
+                mmcif_lines.append(
+                    f"ATOM  {atom_id:>5} {residue.element[i]:<2} {atom_name:<4} . {res_name:<3} "
+                    f"{chain_id} 1 {res_idx} . {x:>8.3f} {y:>8.3f} {z:>8.3f} 1.00 20.00 . "
+                    f"{res_idx} {res_name} {chain_id} {atom_name} 1"
+                )
+                atom_id += 1
+
+    mmcif_content = "\n".join(mmcif_lines)
+    return mmcif_content
+
+
+def _write_mmcif_file(file_path: str, chains: dict, pdb_id: str) -> None:
+    """
+    Write a synthetic mmCIF file to disk for testing.
+
+    Parameters:
+    -----------
+    file_path : str
+        Path to write the mmCIF file.
+    chains : dict
+        Dictionary where keys are chain IDs and values are lists of amino acid codes.
+    pdb_id : str
+        PDB ID to use in the mmCIF file.
+    """
+    mmcif_content = _make_mmcif_file(pdb_id, chains)
+    with open(file_path, "w") as f:
+        f.write(mmcif_content)

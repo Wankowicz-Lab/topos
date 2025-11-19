@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
+from biotite.structure.io.pdbx import CIFFile, get_structure, get_model_count
 
 # ---------------- Registry ----------------
 @dataclass(frozen=True)
@@ -44,10 +45,11 @@ def metrics_with_tag(tag: str) -> List[str]:
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack
     aa: Optional[struc.AtomArray] = None        # amino-acid only
-    res_keys: Optional[pd.DataFrame] = None     # (chain, resi, ins, resn)
+    residue_table: Optional[pd.DataFrame] = None     # (chain, resi, ins, resn)
     kdtree: Any = None                          # built on demand
     neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff -> neighbor lists
     extras: Dict[str, Any] = None               # room for DSSP, graphs, etc.
+    membrane_protein: bool = False
 
     def __post_init__(self):
         self.neighbor_cache = {}
@@ -58,7 +60,7 @@ class Context:
             aa0 = self.array[0]
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
-        self.res_keys = residue_table(aa)
+        self.residue_table = residue_table(aa)
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
@@ -71,7 +73,10 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
 
 def load_structure(path: str | Path,
                    model: Optional[int] = 1,
-                   altloc_policy: Literal["occupancy","first","all"] = "occupancy"):
+                   altloc_policy: Literal["occupancy","first","all"] = "occupancy",
+                   pdb_ext: str = "pdb") -> struc.AtomArray:
+
+
     pdb = PDBFile.read(str(path))
     models = pdb.get_model_count()
     arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
