@@ -8,14 +8,13 @@ from itertools import groupby
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
-def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]]]:
+def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     """
-    Parse PDBTM XML content into a list of regions and a chain→regions dictionary.
+    Parse PDBTM XML content into a list of regions and transformation matrix.
     """
     parser = etree.XMLParser(ns_clean=True, recover=True)
     root = etree.fromstring(xml_bytes, parser=parser)
     regions = []
-    chain_map = {}
 
     # Loop through <CHAIN> elements
     for chain_elem in root.xpath("//*[local-name() = 'CHAIN']"):
@@ -25,7 +24,6 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
         if not cid:
             continue
 
-        chain_regions = []
         # Loop through <REGION> elements inside each chain
         for region in chain_elem.xpath(".//*[local-name() = 'REGION']"):
             def get_int(attr_names):
@@ -61,9 +59,6 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
                 pdb_end=pdb_end,
             )
             regions.append(rec)
-            chain_regions.append(rec)
-
-        chain_map[cid] = chain_regions
 
     # find MEMBRANE node
     membrane_node = root.xpath("//*[local-name() = 'MEMBRANE']")
@@ -73,16 +68,16 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
     # use the first MEMBRANE block
     mem = membrane_node[0]
 
-    # Extract NORMAL
-    normal_node = mem.xpath(".//*[local-name() = 'NORMAL']")
-    if not normal_node:
-        raise RuntimeError("No <NORMAL> element found in <MEMBRANE>")
-
-    norm = normal_node[0]
-    nx = norm.get("X")
-    ny = norm.get("Y")
-    nz = norm.get("Z")
-    normal = np.array([nx, ny, nz], dtype=float)
+    # # Extract NORMAL
+    # normal_node = mem.xpath(".//*[local-name() = 'NORMAL']")
+    # if not normal_node:
+    #     raise RuntimeError("No <NORMAL> element found in <MEMBRANE>")
+    #
+    # norm = normal_node[0]
+    # nx = norm.get("X")
+    # ny = norm.get("Y")
+    # nz = norm.get("Z")
+    # normal = np.array([nx, ny, nz], dtype=float)
 
     # Extract TMATRIX rows
     tmatrix_node = mem.xpath(".//*[local-name() = 'TMATRIX']")
@@ -101,8 +96,7 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
         mat[i, 2] = row.get("Z")
         mat[i, 3] = row.get("T")
 
-
-    return mat, normal, regions, chain_map
+    return mat, regions
 
 
 def describe_pdbtm_region(region_code: str) -> str:
@@ -159,14 +153,18 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
         raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}")
 
     xml_bytes = r.content
-    mat, normal, regions, chain_map = _parse_pdbtm_xml(xml_bytes)
+    mat, regions = _parse_pdbtm_xml(xml_bytes)
 
     if not regions:
         raise RuntimeError(f"No regions found in XML for {pdb_id}")
 
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
     regions_df.type = regions_df.type.apply(describe_pdbtm_region)
-    return mat, normal, regions_df, chain_map
+
+    return mat, regions_df
+
+
+
 
 
 def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:

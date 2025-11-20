@@ -15,7 +15,7 @@ def test_describe_pdbtm_region():
 
 def test_fetch_pdbtm_annotation():
     pdb_id = "8smv"  # Example PDB ID known to be in PDBTM
-    _, _, df, cmap = pdbtm.fetch_pdbtm_annotation(pdb_id)
+    mat, df = pdbtm.fetch_pdbtm_annotation(pdb_id)
 
     # Basic checks
     expected_cols = ['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end']
@@ -24,6 +24,8 @@ def test_fetch_pdbtm_annotation():
         assert col in df.columns
 
     assert set(df.type.unique()).issubset({'membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown'})
+
+    assert mat.shape == (4, 4)  # Transformation matrix should be 4x4
 
 
 def test_annotate_pdbtm_detailed():
