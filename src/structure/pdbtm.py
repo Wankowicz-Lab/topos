@@ -164,7 +164,40 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     return mat, regions_df
 
 
+def transform_coordinates(coords: np.ndarray, tmatrix: np.ndarray) -> np.ndarray:
+    """
+    Apply the PDBTM transformation matrix to a set of 3D coordinates.
 
+    Parameters
+    ----------
+    coords : np.ndarray
+        Nx3 array of 3D coordinates
+    tmatrix : np.ndarray
+        4x4 transformation matrix from PDBTM
+
+    Returns
+    -------
+    transformed_coords : np.ndarray
+        Nx3 array of transformed 3D coordinates
+    """
+
+    if coords.shape[1] != 3:
+        raise ValueError("Coordinates must be of shape Nx3")
+
+    if tmatrix.shape != (4, 4):
+        raise ValueError("Transformation matrix must be of shape 4x4")
+
+    # Convert to homogeneous coordinates by adding a column of ones
+    num_coords = coords.shape[0]
+    homogeneous_coords = np.hstack([coords, np.ones((num_coords, 1))])
+
+    # Apply the transformation matrix
+    transformed_homogeneous = homogeneous_coords @ tmatrix.T
+
+    # Convert back to 3D coordinates by dropping the homogeneous coordinate
+    transformed_coords = transformed_homogeneous[:, :3]
+
+    return transformed_coords
 
 
 def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:

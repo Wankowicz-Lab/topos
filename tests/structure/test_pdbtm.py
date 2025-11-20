@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from numpy.f2py.crackfortran import expectbegin
+import pytest
 
 from src.structure import pdbtm
 from tests.test_utils import _make_residue_table
@@ -26,6 +26,37 @@ def test_fetch_pdbtm_annotation():
     assert set(df.type.unique()).issubset({'membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown'})
 
     assert mat.shape == (4, 4)  # Transformation matrix should be 4x4
+
+
+def test_transform_coordinates():
+    coords = np.array([[1.0, 2.0, 3.0],
+                       [4.0, 5.0, 6.0],
+                       [7.0, 8.0, 9.0]])
+
+    # Identity matrix should return the same coordinates
+    identity_matrix = np.eye(4)
+    transformed_identity = pdbtm.transform_coordinates(coords, identity_matrix)
+    assert np.allclose(transformed_identity, coords)
+
+    # Translation matrix
+    translation_matrix = np.array([[1, 0, 0, 10],
+                                   [0, 1, 0, 20],
+                                   [0, 0, 1, 30],
+                                   [0, 0, 0, 1]])
+    transformed_translation = pdbtm.transform_coordinates(coords, translation_matrix)
+    expected_translation = coords + np.array([10, 20, 30])
+    assert np.allclose(transformed_translation, expected_translation)
+
+    with pytest.raises(ValueError, match="Transformation matrix must be of shape 4x4"):
+        invalid_matrix = np.array([[1, 0, 0],
+                                    [0, 1, 0],
+                                    [0, 0, 1]])
+        pdbtm.transform_coordinates(coords, invalid_matrix)
+
+    with pytest.raises(ValueError, match="Coordinates must be of shape Nx3"):
+        invalid_coords = np.array([[1.0, 2.0],
+                                    [3.0, 4.0]])
+        pdbtm.transform_coordinates(invalid_coords, identity_matrix)
 
 
 def test_annotate_pdbtm_detailed():

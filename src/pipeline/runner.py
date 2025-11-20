@@ -55,6 +55,7 @@ class Runner:
         if self.membrane_protein:
             tmatrix, pdbtm_df = fetch_pdbtm_annotation(self.pdb_id)
             self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
+            self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
 
         if self.mutation_data_path is not None:
             # TODO: change function names to be more general (not DMS-specific)
