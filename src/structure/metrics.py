@@ -108,6 +108,7 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: floa
     return distance_from_edge
 
 @register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
+
 def define_secondary_structure(context: Context) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
@@ -130,6 +131,152 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
         ss_output['ss_group'] = pdbtm.make_contiguous_group_labels(ss_output['sse'].tolist())
 
     return ss_output
+
+def calculate_hbond_metrics(array: struc.AtomArray) -> dict[str, np.ndarray]:
+    """
+    Compute several per-residue hydrogen-bond metrics using an altloc-aware donor/acceptor model.     
+    Metrics (all per residue, aligned to `struc.get_residue_starts(array)`)
+    """
+    donors, acceptors = _build_sites_biotite(array)
+    hbonds = _detect_hbonds(donors, acceptors)
+    
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    res_ids = array.res_id[res_starts]
+    resnames = array.res_name[res_starts]
+    
+    n_res = len(res_starts)
+    bb_counts = np.zeros(n_res, dtype=float)
+    sc_counts = np.zeros(n_res, dtype=float)
+    total_counts = np.zeros(n_res, dtype=float)
+
+    # Map "chain:resi:resname" -> residue index
+    key_to_idx = {
+        f"{ch}:{int(ri)}:{rn}": i
+        for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames))
+    }
+
+    
+    def _is_backbone_for_role(category: str, role: str) -> bool:
+        donor_cat, acceptor_cat = category.split("-")
+        if role == "donor":
+            return donor_cat == "backbone"
+        else:
+            return acceptor_cat == "backbone"
+
+    # Accumulate counts per residue
+    for h in hbonds:
+        cat = h["category"]
+
+        # Donor
+        d_key = f"{h['donor_chain']}:{h['donor_resi']}:{h['donor_resname']}"
+        d_idx = key_to_idx.get(d_key, None)
+        if d_idx is not None:
+            total_counts[d_idx] += 1
+            if _is_backbone_for_role(cat, "donor"):
+                bb_counts[d_idx] += 1
+            else:
+                sc_counts[d_idx] += 1
+
+        # Acceptor
+        a_key = f"{h['acceptor_chain']}:{h['acceptor_resi']}:{h['acceptor_resname']}"
+        a_idx = key_to_idx.get(a_key, None)
+        if a_idx is not None:
+            total_counts[a_idx] += 1
+            if _is_backbone_for_role(cat, "acceptor"):
+                bb_counts[a_idx] += 1
+            else:
+                sc_counts[a_idx] += 1
+
+    return {
+        "bb_hbond_count": bb_counts,
+        "sc_hbond_count": sc_counts,
+        "total_hbond_count": total_counts,
+        "weighted_degree": weighted_degree,
+    }
+
+
+def calculate_residue_packing(
+    array: struc.AtomArray,
+    cutoff: float = 5.0,
+) -> dict[str, np.ndarray]:
+    """
+    Compute residue packing values.
+    """
+    
+    # Residue indexing for original array
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    res_ids = array.res_id[res_starts]
+    n_res = len(res_starts)
+
+    # Initialize output arrays
+    n_atoms = np.zeros(n_res, dtype=int)
+    n_neighbors = np.zeros(n_res, dtype=int)
+    contact_density = np.full(n_res, np.nan, dtype=float)
+
+    full_keys = np.array(
+        [residue_key(ch, ri) for ch, ri in zip(chains, res_ids)],
+        dtype=object,
+    )
+    key_to_idx = {k: i for i, k in enumerate(full_keys)}
+
+    # Filter to heavy amino-acid atoms
+    aa_mask = struc.filter_amino_acids(array)
+    heavy_mask = np.array([is_heavy(n) for n in array.atom_name], dtype=bool)
+    mask = aa_mask & heavy_mask
+    arr = array[mask]
+
+    if arr.array_length() == 0:
+        return {
+            "packing_n_atoms": n_atoms,
+            "packing_n_neighbor_residues": n_neighbors,
+            "packing_contact_density": contact_density,
+        }
+
+    # Residue keys for filtered array
+    residue_ids = np.array(
+        [residue_key(c, r) for c, r in zip(arr.chain_id, arr.res_id)],
+        dtype=object,
+    )
+    unique_res = np.unique(residue_ids)
+
+    coords = arr.coord.astype(float)
+    cutoff2 = cutoff * cutoff
+
+    # Compute per-residue packing
+    for res_uid in unique_res:
+        idxs = np.where(residue_ids == res_uid)[0]
+        if len(idxs) == 0:
+            continue
+
+        res_atoms = arr[idxs]
+        res_n_atoms = len(res_atoms)
+
+        # Neighbor detection
+        rcoords = res_atoms.coord  # (k, 3)
+        diff = rcoords[:, None, :] - coords[None, :, :]  
+        d2 = np.einsum("ijk,ijk->ij", diff, diff)         
+        within_cutoff = d2 <= cutoff2
+
+        close_atom_idxs = np.where(within_cutoff.any(axis=0))[0]
+        neighbor_res_keys = set(residue_ids[close_atom_idxs].tolist())
+        neighbor_res_keys.discard(res_uid)  # remove self
+
+        # record metrics
+        idx = key_to_idx.get(res_uid)
+        if idx is not None:
+            n_atoms[idx] = res_n_atoms
+            n_neighbors[idx] = len(neighbor_res_keys)
+            contact_density[idx] = len(neighbor_res_keys) / max(1, res_n_atoms)
+
+    return {
+        "packing_n_atoms": n_atoms,
+        "packing_n_neighbor_residues": n_neighbors,
+        "packing_contact_density": contact_density,
+    }
+    
+    
 
 
 
