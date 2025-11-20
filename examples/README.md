@@ -1,4 +1,4 @@
-# Structure files only 
+# Structure Only
 
   ### Single PDB/mmCIF
   
