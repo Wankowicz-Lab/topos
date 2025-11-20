@@ -9,6 +9,25 @@ from . import pdbtm
 from src.sequence import utils
 
 
+# TODO: move helper functions to separate file so only @registered_metric functions remain here
+def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
+    """
+    Calculate secondary structure assignment per residue.
+
+    Parameters:
+    -----------
+    array : AtomArray
+        Structure array (amino acids only recommended)
+
+    Returns:
+    --------
+    np.ndarray
+        Per-residue secondary structure assignment.
+        'a' = alpha-helix, 'b' = beta-sheet, 'c' = coil
+    """
+    return struc.annotate_sse(array)
+
+
 @register_metric(name='sasa', provides=['sasa'], tags={'structure'})
 def calculate_sasa(context: Context) -> pd.DataFrame:
     """
@@ -38,44 +57,25 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     metadata_df = utils.get_metadata_cols(array)
     metadata_df['sasa'] = res_sasa
 
-    # TODO: main test function
-
     return metadata_df
 
 
-def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
-    """
-    Calculate secondary structure assignment per residue.
-    
-    Parameters:
-    -----------
-    array : AtomArray
-        Structure array (amino acids only recommended)
-    
-    Returns:
-    --------
-    np.ndarray
-        Per-residue secondary structure assignment.
-        'a' = alpha-helix, 'b' = beta-sheet, 'c' = coil
-    """
-    return struc.annotate_sse(array)
-    
-
-def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
+@register_metric(name='kyte_doolittle', provides=['kyte_doolittle'], tags={'structure'})
+def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
     """
     Calculate Kyte–Doolittle hydropathy per residue.
 
     Parameters
     ----------
-    array : AtomArray
+    context.array : AtomArray
         Structure array (amino acids recommended). Non-standard residues
         receive NaN.
 
     Returns
     -------
-    np.ndarray
-        Per-residue Kyte–Doolittle hydropathy values in the residue order
-        implied by `struc.apply_residue_wise`.
+    pd.DataFrame
+        DataFrame with a column 'kyte_doolittle' containing per-residue
+        Kyte–Doolittle hydropathy scores.
     """
     kd_scale = {
         "ILE": 4.5, "VAL": 4.2, "LEU": 3.8, "PHE": 2.8, "CYS": 2.5,
@@ -83,13 +83,19 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
         "TRP": -0.9, "TYR": -1.3, "PRO": -1.6, "HIS": -3.2, "GLU": -3.5,
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
+    array = context.array
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
 
     # Collapse to per-residue (mean of identical values == the same value)
-    kd_per_res = struc.apply_residue_wise(array, atom_vals, func=lambda x: np.nanmean(x))
-    return kd_per_res
+    kd_per_res = struc.apply_residue_wise(array, atom_vals, np.nanmean)
+
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['kyte_doolittle'] = kd_per_res
+
+    return metadata_df
+
 
 @register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
 def calculate_membrane_distance(context: Context) -> pd.DataFrame:
@@ -122,6 +128,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     metadata_df['distance_from_membrane_edge'] = distance_from_edge
 
     return metadata_df
+
 
 @register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
 def define_secondary_structure(context: Context) -> pd.DataFrame:

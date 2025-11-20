@@ -9,6 +9,18 @@ import biotite.structure as struc
 
 np.random.seed(42)
 
+
+def test_calculate_secondary_structure():
+    # Create a test chain with random coordinates
+    aa_list = random.choices(AA_LIST, k=10)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+
+    sse = metrics.calculate_secondary_structure(arr)
+
+    assert len(sse) == len(aa_list)
+    assert all(ss in {'a', 'b', 'c'} for ss in sse)
+
+
 def test_calculate_sasa():
     # Create a test chain with random coordinates
     aa_list = random.choices(AA_LIST, k=10)
@@ -24,6 +36,17 @@ def test_calculate_sasa():
     assert all(output['sasa'] >= 0)
 
 
+def test_calculate_kyte_doolittle():
+    # Create a test chain with random coordinates
+    aa_list = random.choices(AA_LIST, k=10)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+
+    context = metrics.Context(array=arr)
+
+    output = metrics.calculate_kyte_doolittle(context)
+
+    assert 'kyte_doolittle' in output.columns.tolist()
+    assert len(output) == len(aa_list)
 
 
 def test_calculate_membrane_distance():
