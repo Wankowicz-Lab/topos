@@ -49,6 +49,10 @@ class Runner:
         self.context = structure_context.Context(self.array)
         self.context.membrane_protein = self.membrane_protein
 
+        # load amino acid index data
+        aa_index = pd.read_csv('data/aaindex_parsed_small.csv')
+        self.context.aa_index = aa_index
+
         if self.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
             pdbtm_df, _ = pdbtm.fetch_pdbtm_annotation(self.pdb_id)

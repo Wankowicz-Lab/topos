@@ -10,7 +10,7 @@ from src.structure.structure_context import Context, register_metric
 KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
 
 @register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
-                 requires={'resm'}, tags={'sequence', 'dms'})
+                 requires={'resm'}, tags={'sequence'})
 def calculate_position_effect_quartiles(context: Context, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
@@ -64,26 +64,26 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
 
     return pos_scores
 
-
-def calculate_aaindex_scores(residue_table: pd.DataFrame, aaindex_data: pd.DataFrame) -> pd.DataFrame:
+@register_metric(name='aa_index_scores', provides=['effect_quartile', 'pos_effect'],
+                 requires={'resm'}, tags={'sequence'})
+def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
     Calculate AAIndex scores for each mutation in the scores DataFrame.
 
     Parameters:
     -----------
-    residue_table : pd.DataFrame
-        DataFrame containing residue metadata
-
-    aaindex_data : pd.DataFrame
-        DataFrame containing AAIndex values with amino acids columns and scores as rows.
+    context : Context
+        Context object containing residue metadata and amino acide indices
 
     Returns:
     --------
     pd.DataFrame
-        DataFrame with additional AAIndex score columns for wildtype and mutant amino acids.
+        DataFrame with AAIndex score columns for wildtype and mutant amino acids.
     """
+    # extract params
+    residue_table, aaindex_data = context.residue_table, context.aaindex_data
 
-    # subset to relevant columns for output
+    # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table[keep_cols].copy()
 

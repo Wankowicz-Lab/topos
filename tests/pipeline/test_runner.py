@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from tests.test_utils import _make_residue_table, _write_mmcif_file
+from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data
 from src.pipeline import runner
 
 # import files containing metrics to register them in _REGISTRY
@@ -111,6 +111,7 @@ def test_runner_run_metric_provides(tmp_path):
     # modify arguments for downstream metrics
     myrunner.context.membrane_protein = True
     myrunner.context.residue_table = residue_table
+    myrunner.context.aaindex_data = _make_aaindex_data(accessions=['AA1', 'AA2'])
 
     # get metrics that are registered
     metrics = _REGISTRY.keys()
@@ -122,9 +123,16 @@ def test_runner_run_metric_provides(tmp_path):
         result = myrunner.run(metrics=[metric])
 
         returned_cols = result.columns.tolist()
-        expected_cols = provides + ['chain', 'resi', 'resn']
-        if 'resm' in requires:
-            expected_cols.append('resm')
+        if metric == 'aa_index_scores':
+            # aaindex scores add columns for each index
+            expected_cols = ['chain', 'resi', 'resn', 'resm']
+            for acc in ['AA1', 'AA2']:
+                expected_cols.extend([f'AAIndex_{acc}_wt', f'AAIndex_{acc}_mut', f'AAIndex_{acc}_diff'])
+        else:
+            expected_cols = provides + ['chain', 'resi', 'resn']
+            if 'resm' in requires:
+                expected_cols.append('resm')
+
         assert set(expected_cols) == set(returned_cols)
 
     # run all metrics
