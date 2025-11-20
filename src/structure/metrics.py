@@ -155,8 +155,3 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
         ss_output['ss_group'] = pdbtm.make_contiguous_group_labels(ss_output['sse'].tolist())
 
     return ss_output
-
-
-
-
-
