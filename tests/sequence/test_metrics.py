@@ -138,8 +138,14 @@ def test_calculate_blosum_score():
     # create test residue table
     residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
 
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
     # calculate blosum scores
-    blosum_df = metrics.calculate_blosum_score(residue_table, blosum_threshold=90)
+    blosum_df = metrics.calculate_blosum_score(context)
 
     # check that blosum score column is added
     assert 'blosum90' in blosum_df.columns

@@ -64,8 +64,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
 
     return pos_scores
 
-@register_metric(name='aa_index_scores', provides=['effect_quartile', 'pos_effect'],
-                 requires={'resm'}, tags={'sequence'})
+@register_metric(name='aa_index_scores', provides=['effect_quartile', 'pos_effect'], tags={'sequence'})
 def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
     Calculate AAIndex scores for each mutation in the scores DataFrame.
@@ -103,24 +102,23 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
 
     return aaindex_scores
 
-def calculate_blosum_score(residue_table: pd.DataFrame, blosum_threshold: int = 90) -> pd.DataFrame:
+
+@register_metric(name='blosum_score', provides=['blosum90'], requires={'resm'}, tags={'sequence'})
+def calculate_blosum_score(context: Context) -> pd.DataFrame:
     """
     Calculate BLOSUM scores for each mutation in the scores DataFrame.
 
     Parameters:
     -----------
-    residue_table : pd.DataFrame
-        DataFrame containing residue metadata
-
-    blosum_threshold : int
-        BLOSUM matrix threshold to use (default: 90).
+    context : Context
+        Context object containing residue metadata
 
     Returns:
     --------
     pd.DataFrame
         DataFrame with additional BLOSUM score column.
     """
-
+    residue_table, blosum_threshold = context.residue_table, 90
     blosum_scores = residue_table.loc[residue_table.seq_info, KEEP_COLS].copy()
     b_matrix = bl.BLOSUM(blosum_threshold)
 
