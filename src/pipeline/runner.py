@@ -54,7 +54,7 @@ class Runner:
 
         if self.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
-            pdbtm_df, _ = fetch_pdbtm_annotation(self.pdb_id)
+            _, _, pdbtm_df, _ = fetch_pdbtm_annotation(self.pdb_id)
             self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
 
         if self.mutation_data_path is not None:

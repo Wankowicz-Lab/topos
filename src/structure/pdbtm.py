@@ -65,7 +65,44 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
 
         chain_map[cid] = chain_regions
 
-    return regions, chain_map
+    # find MEMBRANE node
+    membrane_node = root.xpath("//*[local-name() = 'MEMBRANE']")
+    if not membrane_node:
+        raise RuntimeError("No <MEMBRANE> element found in XML")
+
+    # use the first MEMBRANE block
+    mem = membrane_node[0]
+
+    # Extract NORMAL
+    normal_node = mem.xpath(".//*[local-name() = 'NORMAL']")
+    if not normal_node:
+        raise RuntimeError("No <NORMAL> element found in <MEMBRANE>")
+
+    norm = normal_node[0]
+    nx = norm.get("X")
+    ny = norm.get("Y")
+    nz = norm.get("Z")
+    normal = np.array([nx, ny, nz], dtype=float)
+
+    # Extract TMATRIX rows
+    tmatrix_node = mem.xpath(".//*[local-name() = 'TMATRIX']")
+    if not tmatrix_node:
+        raise RuntimeError("No <TMATRIX> element found in <MEMBRANE>")
+
+    tn = tmatrix_node[0]
+
+    # Parse numeric values from each row
+    mat = np.eye(4, dtype=float)
+    for i, key in enumerate(["ROWX", "ROWY", "ROWZ"]):
+        row = tn.xpath(".//*[local-name() = '%s']" % key)[0]
+
+        mat[i, 0] = row.get("X")
+        mat[i, 1] = row.get("Y")
+        mat[i, 2] = row.get("Z")
+        mat[i, 3] = row.get("T")
+
+
+    return mat, normal, regions, chain_map
 
 
 def describe_pdbtm_region(region_code: str) -> str:
@@ -122,14 +159,14 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
         raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}")
 
     xml_bytes = r.content
-    regions, chain_map = _parse_pdbtm_xml(xml_bytes)
+    mat, normal, regions, chain_map = _parse_pdbtm_xml(xml_bytes)
 
     if not regions:
         raise RuntimeError(f"No regions found in XML for {pdb_id}")
 
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
     regions_df.type = regions_df.type.apply(describe_pdbtm_region)
-    return regions_df, chain_map
+    return mat, normal, regions_df, chain_map
 
 
 def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
