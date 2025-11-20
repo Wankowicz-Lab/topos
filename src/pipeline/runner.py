@@ -48,6 +48,7 @@ class Runner:
         # TODO: decide if we need to keep Context object, or if we can just merge attributes into Runner
         self.context = structure_context.Context(self.array)
         self.context.membrane_protein = self.membrane_protein
+        self.context.membrane_thickness = 15.0
 
         # load amino acid index data
         aa_index = pd.read_csv('data/aaindex_parsed_small.csv')

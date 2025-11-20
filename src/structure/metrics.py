@@ -6,6 +6,7 @@ import pandas as pd
 import biotite.structure as struc
 from .structure_context import Context, register_metric
 from . import pdbtm
+from src.sequence import utils
 
 def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
     """
@@ -79,33 +80,37 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
     kd_per_res = struc.apply_residue_wise(array, atom_vals, func=lambda x: np.nanmean(x))
     return kd_per_res
 
-
-def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: float = 15) -> np.ndarray:
+@register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
+def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     """
     Calculate distance of each residue from the edge of the membrane along the z-axis.
 
     Parameters:
     -----------
-    array : AtomArray
+    context.array : AtomArray
         Structure array (amino acids only recommended)
-    membrane_thickness : float
-        Half-thickness of the membrane in Angstroms (default: 15 Å)
+    context.membrane_thickness : float
+        Half-thickness of the membrane in Angstroms
 
     Returns:
     ---------
-    np.ndarray
-        Per-residue distance from the membrane edge in Angstroms.
-        Negative values indicate positions inside the membrane.
+    pd.DataFrame
+        DataFrame with a column 'distance_from_membrane_edge' containing
+        per-residue distances in Angstroms.
     """
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
+    array, membrane_thickness = context.array, context.membrane_thickness
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
 
     # Calculate distance from membrane edge
     distance_from_edge = np.abs(res_z) - membrane_thickness
 
-    return distance_from_edge
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['distance_from_membrane_edge'] = distance_from_edge
+
+    return metadata_df
 
 @register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
 def define_secondary_structure(context: Context) -> pd.DataFrame:

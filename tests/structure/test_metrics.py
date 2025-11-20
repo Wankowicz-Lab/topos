@@ -15,12 +15,20 @@ def test_calculate_membrane_distance():
     coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
     aa_list = random.choices(AA_LIST, k=len(z_values))
     arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A')
-    distances = metrics.calculate_membrane_distance(arr, membrane_thickness=15.0)
+
+    class MockContext:
+        def __init__(self, array):
+            self.array = array
+            self.membrane_thickness = 15.0
+
+    context = MockContext(array=arr)
+
+    distances = metrics.calculate_membrane_distance(context)
 
     # Expected distance is absolute z minus membrane thickness
     expected_distances = np.abs(np.array(z_values)) - 15.0
 
-    assert np.allclose(distances, expected_distances)
+    assert np.allclose(distances['distance_from_membrane_edge'], expected_distances)
 
 
 def test_define_secondary_structure():
