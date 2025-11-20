@@ -23,6 +23,7 @@ class Runner:
     membrane_protein: bool = False
     mutation_data_path: Optional[Path] = None
     mutation_data_chain: Optional[str] = None
+    aa_index_path: Path = 'data/aaindex_parsed_small.csv'
 
     def __post_init__(self):
 
@@ -52,7 +53,7 @@ class Runner:
         self.context.vdw_radii = "ProtOr"
 
         # load amino acid index data
-        aa_index = pd.read_csv('data/aaindex_parsed_small.csv')
+        aa_index = pd.read_csv(self.aa_index_path)
         self.context.aa_index = aa_index
 
         if self.membrane_protein:

@@ -64,7 +64,8 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
 
     return pos_scores
 
-@register_metric(name='aa_index_scores', provides=['effect_quartile', 'pos_effect'], tags={'sequence'})
+@register_metric(name='aa_index_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
+                 tags={'sequence'})
 def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
     Calculate AAIndex scores for each mutation in the scores DataFrame.
@@ -72,7 +73,7 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     Parameters:
     -----------
     context : Context
-        Context object containing residue metadata and amino acide indices
+        Context object containing residue metadata and amino acid indices
 
     Returns:
     --------
