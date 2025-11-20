@@ -1,15 +1,15 @@
-## Structure files only 
+# Structure files only 
 
-  # Single PDB/mmCIF
+  ### Single PDB/mmCIF
   
-  # Fold of PDB/mmCIF files
+  ### Fold of PDB/mmCIF files
 
 
-## Deep Mutational Scanning (DMS)
+# Deep Mutational Scanning (DMS)
   
-  # PDBs provided
+  ### PDBs provided
   
 
-## Patient Sequence Data
+# Patient Sequence Data
 
-  # PDBs provided
+  ### PDBs provided
