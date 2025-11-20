@@ -45,7 +45,7 @@ def metrics_with_tag(tag: str) -> List[str]:
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack
     aa: Optional[struc.AtomArray] = None        # amino-acid only
-    res_keys: Optional[pd.DataFrame] = None     # (chain, resi,resn)
+    residue_table: Optional[pd.DataFrame] = None     # (chain, resi,resn)
     kdtree: Any = None                          # built on demand
     neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff
     extras: Dict[str, Any] = None               
@@ -60,7 +60,7 @@ class Context:
             aa0 = self.array[0]
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
-        self.res_keys = residue_table(aa)
+        self.residue_table = residue_table(aa)
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
