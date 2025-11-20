@@ -8,28 +8,39 @@ from .structure_context import Context, register_metric
 from . import pdbtm
 from src.sequence import utils
 
-def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
+
+@register_metric(name='sasa', provides=['sasa'], tags={'structure'})
+def calculate_sasa(context: Context) -> pd.DataFrame:
     """
     Calculate solvent accessible surface area (SASA) per residue.
     
     Parameters:
     -----------
-    array : AtomArray
+    context.array : AtomArray
         Structure array (amino acids only recommended)
-    vdw_radii : str
+    context.vdw_radii : str
         Van der Waals radii set. Use "ProtOr" (default) for structures without hydrogens,
         or "Single" for structures with hydrogen atoms resolved.
     
     Returns:
     --------
-    np.ndarray
-        Per-residue SASA values in Angstroms squared
+    pd.DataFrame
+        DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    atom_sasa = struc.sasa(array, vdw_radii=vdw_radii)
+    array, vdw_radii = context.array, context.vdw_radii
+    atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
+
     # Sum up SASA for each residue
     res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
-    return res_sasa
+
+    # Attach to metadata DataFrame
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['sasa'] = res_sasa
+
+    # TODO: main test function
+
+    return metadata_df
 
 
 def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:

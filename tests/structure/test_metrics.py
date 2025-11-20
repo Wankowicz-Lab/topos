@@ -9,6 +9,23 @@ import biotite.structure as struc
 
 np.random.seed(42)
 
+def test_calculate_sasa():
+    # Create a test chain with random coordinates
+    aa_list = random.choices(AA_LIST, k=10)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+
+    context = metrics.Context(array=arr)
+    context.vdw_radii = "ProtOr"
+
+    output = metrics.calculate_sasa(context)
+
+    assert 'sasa' in output.columns.tolist()
+    assert len(output) == len(aa_list)
+    assert all(output['sasa'] >= 0)
+
+
+
+
 def test_calculate_membrane_distance():
     # Create a test chain with varying z-coordinates
     z_values = list(range(-25, 25, 5))
