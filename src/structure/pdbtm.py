@@ -383,4 +383,4 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
                 residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
 
 
-    return residue_table[['chain', 'resi', 'ss_group', 'ss_domains']]
+    return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']]

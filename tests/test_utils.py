@@ -322,3 +322,33 @@ def _write_mmcif_file(file_path: str, chains: dict, pdb_id: str) -> None:
     mmcif_content = _make_mmcif_file(pdb_id, chains)
     with open(file_path, "w") as f:
         f.write(mmcif_content)
+
+
+def _make_aaindex_data(accessions):
+    """Create a small AAindex DataFrame for testing."""
+    aaindex_data = pd.DataFrame({
+        'accession': accessions,
+        'description': ['Hydrophobicity', 'Volume'],
+        'ALA': [0.5, 1.0],
+        'CYS': [1.5, 2.0],
+        'ASP': [2.5, 3.0],
+        'GLU': [3.5, 4.0],
+        'PHE': [4.5, 5.0],
+        'GLY': [5.5, 6.0],
+        'HIS': [6.5, 7.0],
+        'ILE': [7.5, 8.0],
+        'LYS': [8.5, 9.0],
+        'LEU': [9.5, 10.0],
+        'MET': [10.5, 11.0],
+        'ASN': [11.5, 12.0],
+        'PRO': [12.5, 13.0],
+        'GLN': [13.5, 14.0],
+        'SER': [14.5, 15.0],
+        'THR': [15.5, 16.0],
+        'VAL': [16.5, 17.0],
+        'TRP': [17.5, 18.0],
+        'TYR': [18.5, 19.0],
+        'ARG': [19.5, 20.0],
+    })
+
+    return aaindex_data
