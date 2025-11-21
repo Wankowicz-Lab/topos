@@ -47,6 +47,19 @@ def test_transform_coordinates():
     expected_translation = coords + np.array([10, 20, 30])
     assert np.allclose(transformed_translation, expected_translation)
 
+    # Rotation matrix (90 degrees around z-axis, x = -y, y = x)
+    theta = np.pi / 2  # 90 degrees
+    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0, 0],
+                                    [np.sin(theta), np.cos(theta), 0, 0],
+                                    [0, 0, 1, 0],
+                                    [0, 0, 0, 1]])
+    transformed_rotation = pdbtm.transform_coordinates(coords, rotation_matrix)
+    expected_rotation = np.array([[-2.0, 1.0, 3.0],
+                                  [-5.0, 4.0, 6.0],
+                                  [-8.0, 7.0, 9.0]])
+
+    assert np.allclose(transformed_rotation, expected_rotation)
+
     with pytest.raises(ValueError, match="Transformation matrix must be of shape 4x4"):
         invalid_matrix = np.array([[1, 0, 0],
                                     [0, 1, 0],

@@ -68,17 +68,6 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     # use the first MEMBRANE block
     mem = membrane_node[0]
 
-    # # Extract NORMAL
-    # normal_node = mem.xpath(".//*[local-name() = 'NORMAL']")
-    # if not normal_node:
-    #     raise RuntimeError("No <NORMAL> element found in <MEMBRANE>")
-    #
-    # norm = normal_node[0]
-    # nx = norm.get("X")
-    # ny = norm.get("Y")
-    # nz = norm.get("Z")
-    # normal = np.array([nx, ny, nz], dtype=float)
-
     # Extract TMATRIX rows
     tmatrix_node = mem.xpath(".//*[local-name() = 'TMATRIX']")
     if not tmatrix_node:
@@ -89,12 +78,12 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     # Parse numeric values from each row
     mat = np.eye(4, dtype=float)
     for i, key in enumerate(["ROWX", "ROWY", "ROWZ"]):
-        row = tn.xpath(".//*[local-name() = '%s']" % key)[0]
+        row = tn.xpath(f".//*[local-name() = '{key}']")[0]
 
-        mat[i, 0] = row.get("X")
-        mat[i, 1] = row.get("Y")
-        mat[i, 2] = row.get("Z")
-        mat[i, 3] = row.get("T")
+        mat[i, 0] = float(row.get("X"))
+        mat[i, 1] = float(row.get("Y"))
+        mat[i, 2] = float(row.get("Z"))
+        mat[i, 3] = float(row.get("T"))
 
     return mat, regions
 
@@ -173,7 +162,7 @@ def transform_coordinates(coords: np.ndarray, tmatrix: np.ndarray) -> np.ndarray
     coords : np.ndarray
         Nx3 array of 3D coordinates
     tmatrix : np.ndarray
-        4x4 transformation matrix from PDBTM
+        4x4 transformation matrix from PDBTM with 3x3 rotation matrix and 4th column translation vector
 
     Returns
     -------
@@ -181,7 +170,7 @@ def transform_coordinates(coords: np.ndarray, tmatrix: np.ndarray) -> np.ndarray
         Nx3 array of transformed 3D coordinates
     """
 
-    if coords.shape[1] != 3:
+    if len(coords.shape) !=2 or coords.shape[1] != 3:
         raise ValueError("Coordinates must be of shape Nx3")
 
     if tmatrix.shape != (4, 4):
