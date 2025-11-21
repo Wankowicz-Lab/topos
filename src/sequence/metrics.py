@@ -9,7 +9,8 @@ from src.structure.structure_context import Context, register_metric
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
 
-@register_metric(name='position_effect_quartiles', provides='effect_quartile', tags={'sequence', 'dms'})
+@register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
+                 requires={'resm'}, tags={'sequence'})
 def calculate_position_effect_quartiles(context: Context, percentiles: list = [25, 50, 75]) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
@@ -29,6 +30,10 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
     """
     # subset to only include positions with DMS data
     seq_data = context.residue_table.loc[context.residue_table.seq_info, :]
+
+    # ensure that only a single chain is provided
+    if len(seq_data.chain.unique()) > 1:
+        raise ValueError("calculate_position_effect_quartiles only supports single chain mutation data.")
 
     # Determine if position effects are already calculated or need to be computed from data
     if 'pos_effect' in seq_data.columns:
@@ -55,31 +60,30 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
     )
 
     # map quartile labels and raw effect scores back to original residues
-    # TODO: decide whether this should be per residue or per mutation, drop duplicates as needed
-    pos_scores = pd.merge(seq_data[['resi', 'resn']], pos_scores, on='resi', how='left')
+    pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi', how='left')
 
     return pos_scores
 
-
-def calculate_aaindex_scores(residue_table: pd.DataFrame, aaindex_data: pd.DataFrame) -> pd.DataFrame:
+@register_metric(name='aa_index_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
+                 tags={'sequence'})
+def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
     Calculate AAIndex scores for each mutation in the scores DataFrame.
 
     Parameters:
     -----------
-    residue_table : pd.DataFrame
-        DataFrame containing residue metadata
-
-    aaindex_data : pd.DataFrame
-        DataFrame containing AAIndex values with amino acids columns and scores as rows.
+    context : Context
+        Context object containing residue metadata and amino acid indices
 
     Returns:
     --------
     pd.DataFrame
-        DataFrame with additional AAIndex score columns for wildtype and mutant amino acids.
+        DataFrame with AAIndex score columns for wildtype and mutant amino acids.
     """
+    # extract params
+    residue_table, aaindex_data = context.residue_table, context.aaindex_data
 
-    # subset to relevant columns for output
+    # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table[keep_cols].copy()
 
@@ -99,24 +103,23 @@ def calculate_aaindex_scores(residue_table: pd.DataFrame, aaindex_data: pd.DataF
 
     return aaindex_scores
 
-def calculate_blosum_score(residue_table: pd.DataFrame, blosum_threshold: int = 90) -> pd.DataFrame:
+
+@register_metric(name='blosum_score', provides=['blosum90'], requires={'resm'}, tags={'sequence'})
+def calculate_blosum_score(context: Context) -> pd.DataFrame:
     """
     Calculate BLOSUM scores for each mutation in the scores DataFrame.
 
     Parameters:
     -----------
-    residue_table : pd.DataFrame
-        DataFrame containing residue metadata
-
-    blosum_threshold : int
-        BLOSUM matrix threshold to use (default: 90).
+    context : Context
+        Context object containing residue metadata
 
     Returns:
     --------
     pd.DataFrame
         DataFrame with additional BLOSUM score column.
     """
-
+    residue_table, blosum_threshold = context.residue_table, 90
     blosum_scores = residue_table.loc[residue_table.seq_info, KEEP_COLS].copy()
     b_matrix = bl.BLOSUM(blosum_threshold)
 
