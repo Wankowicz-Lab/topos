@@ -1,8 +1,10 @@
+from pathlib import Path
 from string import ascii_uppercase
 
 import numpy as np
 import pandas as pd
 import random
+import tomli_w
 
 import biotite.structure as struc
 
@@ -352,3 +354,15 @@ def _make_aaindex_data(accessions):
     })
 
     return aaindex_data
+
+def _make_config_file(file_path: Path) -> None:
+    """Write a configuration file for testing in .toml format with the following defaults"""
+    defaults = {"pdb_id": "1abc",
+                "membrane_protein": True,
+                "mutation_data_path": "data/aaindex_parsed_small.csv",
+                "mutation_data_chain": "A",
+                "aa_index_path": "data/aaindex_parsed_small.csv"}
+
+    # write TOML
+    with file_path.open("wb") as f:
+        tomli_w.dump(defaults, f)

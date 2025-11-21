@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
+from pydantic import BaseModel
 from biotite.structure.io.pdbx import CIFFile, get_structure, get_model_count
 
 # ---------------- Registry ----------------
@@ -41,6 +42,35 @@ def metrics_with_tag(tag: str) -> List[str]:
     return sorted(m for m,(meta,_) in _REGISTRY.items() if tag in meta.tags)
 
 # --------------- Context ------------------
+class Config(BaseModel):
+    # Allow values to be changed after initialization
+    model_config = {"validate_assignment": True}
+
+    # structure data
+    pdb_id: str
+    pdb_path: Optional[Path] = None
+    membrane_protein: Optional[bool] = False
+
+    # mutagenesis data
+    mutation_data_path: Optional[Path] = None
+    mutation_data_chain: Optional[str] = None
+
+    # sequence features
+    aa_index_path: Path = 'data/aaindex_parsed_small.csv'
+
+    def model_post_init(self, __context):
+        if self.mutation_data_path is not None:
+            if not Path(self.mutation_data_path).is_file():
+                raise ValueError(f"Mutation data file not found at {self.mutation_data_path}")
+
+            if self.mutation_data_chain is None:
+                raise ValueError("If mutation_data_path is provided, "
+                                 "mutation_data_chain must also be provided.")
+
+        if not Path(self.aa_index_path).is_file():
+            raise ValueError(f"AA index data file not found at {self.aa_index_path}")
+
+
 @dataclass
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack

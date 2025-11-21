@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 import pandas as pd
+import tomli
+import warnings
+from dataclasses import asdict, fields
 
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
@@ -11,64 +14,96 @@ from src.sequence import sequence_context
 from src.structure import pdbtm
 
 from typing import List, Optional
-from src.structure.structure_context import _REGISTRY
+from src.structure.structure_context import _REGISTRY, Config
 import src.sequence.metrics
 
 
 @dataclass
 class Runner:
-    # TODO: read inputs from a single config file
-    pdb_id: str
+    pdb_id: Optional[str] = None
     pdb_path: Optional[Path] = None
-    membrane_protein: bool = False
+    membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
-    mutation_data_chain: Optional[str] = None
-    aa_index_path: Path = 'data/aaindex_parsed_small.csv'
+    config_path: Path = Path("data/example_runner_config.yaml")
 
     def __post_init__(self):
 
-        # Make sure paths and extensions are set correctly
-        if self.pdb_path is None:
-            self.pdb_path = rcsb.fetch(self.pdb_id, format="cif")
-            self.pdb_ext = "cif"
-        else:
-            self.pdb_path = Path(self.pdb_path)
-            self.pdb_ext = self.pdb_path.suffix.lstrip(".")
-
-        # Load structure using appropriate parser
-        # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
-        if self.pdb_ext in ("cif", "mmcif"):
-            mm = CIFFile.read(self.pdb_path)
-            arr = get_structure(mm, model=1, extra_fields=["b_factor", "occupancy"])
-        else:
-            pdb = PDBFile.read(self.pdb_path)
-            arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
-
-        self.array = arr
-
-        # TODO: move these to config file
-        self.context = structure_context.Context(self.array)
-        self.context.membrane_protein = self.membrane_protein
-        self.context.membrane_thickness = 15.0
-        self.context.vdw_radii = "ProtOr"
-
-        # load amino acid index data
-        aa_index = pd.read_csv(self.aa_index_path)
-        self.context.aa_index = aa_index
-
-        if self.membrane_protein:
-            # TODO: simplify this code to only return pdbtm_df
-            pdbtm_df, _ = pdbtm.fetch_pdbtm_annotation(self.pdb_id)
-            self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
-
+        # Create override dictionary from input parameters
+        overrides = {}
+        if self.pdb_id is not None:
+            overrides['pdb_id'] = self.pdb_id
+        if self.pdb_path is not None:
+            overrides['pdb_path'] = self.pdb_path
+        if self.membrane_protein is not None:
+            overrides['membrane_protein'] = self.membrane_protein
         if self.mutation_data_path is not None:
-            # TODO: change function names to be more general (not DMS-specific)
-            self.mutation_data = sequence_context.load_dms_scores(self.mutation_data_path)
-            self.context = sequence_context.merge_dms_scores(
-                dms_scores=self.mutation_data,
-                ctx=self.context,
-                chain=self.mutation_data_chain
-            )
+            overrides['mutation_data_path'] = self.mutation_data_path
+
+        # load and merge config with overrides
+        with self.config_path.open("rb") as f:
+            config = Config(**tomli.load(f))
+        self.config = self._merge_config(base=config, overrides=overrides)
+
+        # # Make sure paths and extensions are set correctly
+        # if config.pdb_path is None:
+        #     config.pdb_path = rcsb.fetch(config.pdb_id, format="cif")
+        #     config.pdb_ext = "cif"
+        # else:
+        #     config.pdb_path = Path(config.pdb_path)
+        #     config.pdb_ext = config.pdb_path.suffix.lstrip(".")
+        #
+        # # Load structure using appropriate parser
+        # # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
+        # if self.pdb_ext in ("cif", "mmcif"):
+        #     mm = CIFFile.read(self.pdb_path)
+        #     arr = get_structure(mm, model=1, extra_fields=["b_factor", "occupancy"])
+        # else:
+        #     pdb = PDBFile.read(self.pdb_path)
+        #     arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
+        #
+        # self.array = arr
+        #
+        # # TODO: move these to config file
+        # self.context = structure_context.Context(self.array)
+        # self.context.membrane_protein = self.membrane_protein
+        # self.context.membrane_thickness = 15.0
+        # self.context.vdw_radii = "ProtOr"
+        #
+        # # load amino acid index data
+        # aa_index = pd.read_csv(self.aa_index_path)
+        # self.context.aa_index = aa_index
+        #
+        # if self.membrane_protein:
+        #     # TODO: simplify this code to only return pdbtm_df
+        #     pdbtm_df, _ = pdbtm.fetch_pdbtm_annotation(self.pdb_id)
+        #     self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
+        #
+        # if self.mutation_data_path is not None:
+        #     # TODO: change function names to be more general (not DMS-specific)
+        #     self.mutation_data = sequence_context.load_dms_scores(self.mutation_data_path)
+        #     self.context = sequence_context.merge_dms_scores(
+        #         dms_scores=self.mutation_data,
+        #         ctx=self.context,
+        #         chain=self.mutation_data_chain
+        #     )
+
+
+    def _merge_config(base: Config, overrides: Dict[str, Any]) -> Config:
+        # only keep known fields
+        valid = {f.name for f in fields(Config)}
+        filtered = {k: v for k, v in overrides.items() if k in valid}
+        unknown = set(overrides.keys()) - set(filtered.keys())
+        if unknown:
+            warnings.warn(f"Unknown arguments ignored: {unknown}")
+        if not filtered:
+            return base
+
+        # construct new Config with overrides
+        base_dict = asdict(base)
+        base_dict.update(filtered)
+
+        return Config(**base_dict)
+
 
     def run(self, metrics: List[str]) -> pd.DataFrame:
         """Compute specified metrics and return as a merged DataFrame.
