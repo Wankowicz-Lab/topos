@@ -15,7 +15,7 @@ def test_describe_pdbtm_region():
 
 def test_fetch_pdbtm_annotation():
     pdb_id = "8smv"  # Example PDB ID known to be in PDBTM
-    mat, df = pdbtm.fetch_pdbtm_annotation(pdb_id)
+    df, mat = pdbtm.fetch_pdbtm_annotation(pdb_id)
 
     # Basic checks
     expected_cols = ['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end']

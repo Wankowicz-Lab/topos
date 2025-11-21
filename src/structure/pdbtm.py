@@ -129,17 +129,17 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
 
     Parameters:
     -----------
-        pdb_id : str
+        pdb_id: str
             4-character PDB identifier (case-insensitive)
-        timeout : int
+        timeout: int
             Request timeout in seconds (default: 15)
 
     Returns:
     ---------
-        regions_df : pd.DataFrame
-            Dataframe with information on regions in each chain
-        chain_map : dict
-            mapping chain ID -> list of region dicts
+        regions_df: pd.DataFrame
+            DataFrame with PDBTM region annotations
+        mat: np.ndarray
+            4x4 transformation matrix from PDBTM
     """
 
     pdb = pdb_id.lower()
@@ -161,7 +161,7 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
     regions_df.type = regions_df.type.apply(describe_pdbtm_region)
 
-    return mat, regions_df
+    return regions_df, mat
 
 
 def transform_coordinates(coords: np.ndarray, tmatrix: np.ndarray) -> np.ndarray:
