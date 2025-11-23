@@ -6,40 +6,19 @@ import pandas as pd
 import biotite.structure as struc
 from .structure_context import Context, register_metric
 from . import pdbtm
-
-def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
-    """
-    Calculate solvent accessible surface area (SASA) per residue.
-    
-    Parameters:
-    -----------
-    array : AtomArray
-        Structure array (amino acids only recommended)
-    vdw_radii : str
-        Van der Waals radii set. Use "ProtOr" (default) for structures without hydrogens,
-        or "Single" for structures with hydrogen atoms resolved.
-    
-    Returns:
-    --------
-    np.ndarray
-        Per-residue SASA values in Angstroms squared
-    """
-    # Calculate atom-wise SASA
-    atom_sasa = struc.sasa(array, vdw_radii=vdw_radii)
-    # Sum up SASA for each residue
-    res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
-    return res_sasa
+from src.sequence import utils
 
 
+# TODO: move helper functions to separate file so only @registered_metric functions remain here
 def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
     """
     Calculate secondary structure assignment per residue.
-    
+
     Parameters:
     -----------
     array : AtomArray
         Structure array (amino acids only recommended)
-    
+
     Returns:
     --------
     np.ndarray
@@ -47,23 +26,56 @@ def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
         'a' = alpha-helix, 'b' = beta-sheet, 'c' = coil
     """
     return struc.annotate_sse(array)
-    
 
-def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
+
+@register_metric(name='sasa', provides=['sasa'], tags={'structure'})
+def calculate_sasa(context: Context) -> pd.DataFrame:
+    """
+    Calculate solvent accessible surface area (SASA) per residue.
+    
+    Parameters:
+    -----------
+    context.array : AtomArray
+        Structure array (amino acids only recommended)
+    context.vdw_radii : str
+        Van der Waals radii set. Use "ProtOr" (default) for structures without hydrogens,
+        or "Single" for structures with hydrogen atoms resolved.
+    
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with a column 'sasa' containing per-residue SASA values in Å².
+    """
+    # Calculate atom-wise SASA
+    array, vdw_radii = context.array, context.vdw_radii
+    atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
+
+    # Sum up SASA for each residue
+    res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
+
+    # Attach to metadata DataFrame
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['sasa'] = res_sasa
+
+    return metadata_df
+
+
+@register_metric(name='kyte_doolittle', provides=['kyte_doolittle'], tags={'structure'})
+def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
     """
     Calculate Kyte–Doolittle hydropathy per residue.
 
     Parameters
     ----------
-    array : AtomArray
+    context.array : AtomArray
         Structure array (amino acids recommended). Non-standard residues
         receive NaN.
 
     Returns
     -------
-    np.ndarray
-        Per-residue Kyte–Doolittle hydropathy values in the residue order
-        implied by `struc.apply_residue_wise`.
+    pd.DataFrame
+        DataFrame with a column 'kyte_doolittle' containing per-residue
+        Kyte–Doolittle hydropathy scores.
     """
     kd_scale = {
         "ILE": 4.5, "VAL": 4.2, "LEU": 3.8, "PHE": 2.8, "CYS": 2.5,
@@ -71,41 +83,52 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
         "TRP": -0.9, "TYR": -1.3, "PRO": -1.6, "HIS": -3.2, "GLU": -3.5,
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
+    array = context.array
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
 
     # Collapse to per-residue (mean of identical values == the same value)
-    kd_per_res = struc.apply_residue_wise(array, atom_vals, func=lambda x: np.nanmean(x))
-    return kd_per_res
+    kd_per_res = struc.apply_residue_wise(array, atom_vals, np.nanmean)
+
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['kyte_doolittle'] = kd_per_res
+
+    return metadata_df
 
 
-def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness: float = 15) -> np.ndarray:
+@register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
+def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     """
     Calculate distance of each residue from the edge of the membrane along the z-axis.
 
     Parameters:
     -----------
-    array : AtomArray
+    context.array : AtomArray
         Structure array (amino acids only recommended)
-    membrane_thickness : float
-        Half-thickness of the membrane in Angstroms (default: 15 Å)
+    context.membrane_thickness : float
+        Half-thickness of the membrane in Angstroms
 
     Returns:
     ---------
-    np.ndarray
-        Per-residue distance from the membrane edge in Angstroms.
-        Negative values indicate positions inside the membrane.
+    pd.DataFrame
+        DataFrame with a column 'distance_from_membrane_edge' containing
+        per-residue distances in Angstroms.
     """
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
+    array, membrane_thickness = context.array, context.membrane_thickness
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
 
     # Calculate distance from membrane edge
     distance_from_edge = np.abs(res_z) - membrane_thickness
 
-    return distance_from_edge
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['distance_from_membrane_edge'] = distance_from_edge
+
+    return metadata_df
+
 
 @register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
 
@@ -115,11 +138,13 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(context.array)
     chains = context.array.chain_id[res_starts]
     resi = context.array.res_id[res_starts]
+    resn = context.array.res_name[res_starts]
     sse_vals = calculate_secondary_structure(context.array)
 
     ss_df = pd.DataFrame({
         "chain": chains,
         "resi": resi,
+        "resn": resn,
         "sse": sse_vals
     })
 
