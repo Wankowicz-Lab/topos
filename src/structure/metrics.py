@@ -192,7 +192,6 @@ def calculate_hbond_metrics(array: struc.AtomArray) -> dict[str, np.ndarray]:
         "bb_hbond_count": bb_counts,
         "sc_hbond_count": sc_counts,
         "total_hbond_count": total_counts,
-        "weighted_degree": weighted_degree,
     }
 
 
