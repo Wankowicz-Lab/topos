@@ -66,32 +66,26 @@ def altloc_compatible(d_alt, a_alt) -> bool:
         return True
     return d == a
 
-def _split_by_residue(arr: struc.AtomArray):
+def split_by_residue(arr: struc.AtomArray):
     """
-    Yield per residue:
-      (resname, chain_id, res_id, idxs, base_arr)
-
-    Residues are sorted by (chain_id, res_id).
+    Yields: (resname, chain_id, res_id, idxs, base_arr)
     """
     if arr.array_length() == 0:
         return
 
-    order = np.lexsort((arr.res_id, arr.chain_id))
-    arr = arr[order]
-
-    starts = [0]
-    for i in range(1, arr.array_length()):
-        if (arr.chain_id[i] != arr.chain_id[i - 1] or
-                arr.res_id[i] != arr.res_id[i - 1]):
-            starts.append(i)
-    starts.append(arr.array_length())
+    starts = struc.get_residue_starts(arr)
+    
+    starts = np.append(starts, arr.array_length())
 
     for s, e in zip(starts[:-1], starts[1:]):
+        # idxs are indices into the current arr slice
+        idxs = np.arange(s, e, dtype=int)
+        
         yield (
             arr.res_name[s],
             arr.chain_id[s],
             int(arr.res_id[s]),
-            np.arange(s, e, dtype=int),
+            idxs,
             arr,
         )
 
