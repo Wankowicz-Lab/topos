@@ -214,11 +214,10 @@ def calculate_residue_packing(
     n_neighbors = np.zeros(n_res, dtype=int)
     contact_density = np.full(n_res, np.nan, dtype=float)
 
-    full_keys = np.array(
-        [residue_key(ch, ri) for ch, ri in zip(chains, res_ids)],
-        dtype=object,
-    )
-    key_to_idx = {k: i for i, k in enumerate(full_keys)}
+    key_to_idx = {
+            f"{ch}:{int(ri)}:{rn}": i
+            for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames))
+        }
 
     # Filter to heavy amino-acid atoms
     aa_mask = struc.filter_amino_acids(array)
@@ -235,9 +234,9 @@ def calculate_residue_packing(
 
     # Residue keys for filtered array
     residue_ids = np.array(
-        [residue_key(c, r) for c, r in zip(arr.chain_id, arr.res_id)],
-        dtype=object,
-    )
+            [f"{c}:{int(r)}:{n}" for c, r, n in zip(arr.chain_id, arr.res_id, arr.res_name)],
+            dtype=object,
+        )
     unique_res = np.unique(residue_ids)
 
     coords = arr.coord.astype(float)
