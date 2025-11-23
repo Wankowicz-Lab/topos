@@ -66,7 +66,7 @@ def altloc_compatible(d_alt, a_alt) -> bool:
         return True
     return d == a
 
-def split_by_residue(arr: struc.AtomArray):
+def _split_by_residue(arr: struc.AtomArray):
     """
     Yields: (resname, chain_id, res_id, idxs, base_arr)
     """
