@@ -74,10 +74,10 @@ def test_merge_dms_scores(tmp_path):
     dms_scores_invalid_df.loc[[4,5], 'resn'] = 'LYS'  # change GLU to cause mismatch
 
     with pytest.raises(ValueError, match="Mismatch between DMS scores and structure residues"):
-        out = merge_dms_scores(dms_scores_invalid_df, residue_table, chain='A')
+        merge_dms_scores(dms_scores_invalid_df, residue_table, chain='A')
 
     residue_table_invalid = residue_table.copy()
     residue_table_invalid.at[1, 'resn'] = 'LYS'  # change second residue to cause mismatch
 
     with pytest.raises(ValueError, match="Mismatch between DMS scores and structure residues"):
-        out= merge_dms_scores(dms_scores_df, residue_table_invalid, chain='A')
+        merge_dms_scores(dms_scores_df, residue_table_invalid, chain='A')

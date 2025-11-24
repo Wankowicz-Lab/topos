@@ -110,7 +110,7 @@ def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chai
                               left_on=['resi', 'resn'],
                               right_on=['resi', 'resn'],
                               how='outer')
-    print(merge_test)
+
     # If sequence is aligned between DMS and structure, there should only be one row for each unique residue index
     if len(merge_test) > len(merge_test.resi.unique()):
         raise ValueError(f"Mismatch between DMS scores and structure residues for chain {chain}. "
