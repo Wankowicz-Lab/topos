@@ -13,7 +13,10 @@ dependencies = [
   "scipy>=1.11",
   "matplotlib>=3.8",
   "blosum",
-  "lxml"
+  "lxml",
+  "tomli-w",
+  "tomli",
+  "pydantic"
 ]
 
 [project.optional-dependencies]
