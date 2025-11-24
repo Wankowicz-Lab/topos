@@ -71,11 +71,8 @@ class Runner:
             pdb = PDBFile.read(config.pdb_path)
             arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
 
-        # TODO: do we need this?
-        self.array = arr
-
         # create context object
-        self.context = structure_context.Context(self.array, config=config)
+        self.context = structure_context.Context(arr, config=config)
 
         if self.context.config.membrane_protein:
             # TODO: simplify this code to only return pdbtm_df
@@ -94,6 +91,24 @@ class Runner:
 
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:
+        """Merge configuration overrides with base configuration.
+
+        Parameters
+        ----------
+        base : Config
+            Base configuration loaded from config file.
+        overrides : Dict[str, Any]
+            Dictionary of override values from Runner initialization.
+
+        Returns
+        -------
+        Config
+            New Config object with overrides applied to base configuration.
+
+        Warnings
+        --------
+        Issues a warning if unknown configuration keys are provided in overrides. """
+
         # only keep known fields
         valid = list(Config.model_fields.keys())
         filtered = {k: v for k, v in overrides.items() if k in valid}

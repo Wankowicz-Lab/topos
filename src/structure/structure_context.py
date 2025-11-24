@@ -43,6 +43,35 @@ def metrics_with_tag(tag: str) -> List[str]:
 
 # --------------- Context ------------------
 class Config(BaseModel):
+    """
+    Configuration settings for protein structure analysis pipeline.
+
+    This class manages all configurable parameters for the pipeline including structure data sources,
+    membrane protein settings, mutagenesis data, and feature calculation options.
+
+    Attributes
+    ----------
+    pdb_id : Optional[str]
+        PDB identifier for fetching structure from RCSB.
+    pdb_path : Optional[Path]
+        Local path to structure file (PDB or mmCIF format).
+    pdb_ext : Optional[str]
+        File extension of the structure file.
+    membrane_protein : Optional[bool]
+        Whether the protein is a membrane protein (affects analysis methods).
+    vdw_radii : str
+        Van der Waals radii set to use for calculations (default: "ProtOr").
+    membrane_thickness : Optional[float]
+        Half-thickness of membrane in Angstroms (default: 15).
+    mutation_data_path : Optional[Path]
+        Path to CSV file containing mutagenesis data.
+    mutation_data_chain : Optional[str]
+        Chain identifier for mutagenesis data alignment.
+    aaindex_path : Path
+        Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
+    """
+
+
     # Allow values to be changed after initialization
     model_config = {"validate_assignment": True}
 
