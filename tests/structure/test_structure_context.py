@@ -3,7 +3,7 @@ import tomli
 from src.structure.structure_context import Config
 from tests.test_utils import _make_config_file
 
-def test_structure_context_config(tmp_path):
+def test_config(tmp_path):
     config_args = {'pdb_id': "1abc", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
                    'mutation_data_chain': "A", 'aa_index_path': "data/aaindex_parsed_small.csv"}
 

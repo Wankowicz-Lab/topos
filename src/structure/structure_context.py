@@ -49,7 +49,12 @@ class Config(BaseModel):
     # structure data
     pdb_id: str
     pdb_path: Optional[Path] = None
+    pdb_ext: Optional[str] = None
     membrane_protein: Optional[bool] = False
+
+    # structure parameters
+    vdw_radii: str =  "ProtOr"
+    membrane_thickness: Optional[float] = 15
 
     # mutagenesis data
     mutation_data_path: Optional[Path] = None
@@ -79,7 +84,7 @@ class Context:
     kdtree: Any = None                          # built on demand
     neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff -> neighbor lists
     extras: Dict[str, Any] = None               # room for DSSP, graphs, etc.
-    membrane_protein: bool = False
+    config: Optional[Config] = None
 
     def __post_init__(self):
         self.neighbor_cache = {}
@@ -91,6 +96,10 @@ class Context:
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
         self.residue_table = residue_table(aa)
+
+        if self.config.aa_index_path is not None:
+            aa_index = pd.read_csv(self.config.aa_index_path)
+            self.extras['aa_index'] = aa_index
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)

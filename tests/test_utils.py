@@ -357,7 +357,8 @@ def _make_aaindex_data(accessions):
 
 def _make_config_file(file_path: Path) -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
-    defaults = {"pdb_id": "1abc",
+    #TODO: figure out what sensible defaults are here for testing to balance not rewriting with testing key functions
+    defaults = {"pdb_id": "8smv",
                 "membrane_protein": True,
                 "mutation_data_path": "data/aaindex_parsed_small.csv",
                 "mutation_data_chain": "A",
