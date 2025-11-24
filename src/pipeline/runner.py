@@ -42,7 +42,10 @@ class Runner:
 
         # load and merge config with overrides
         with self.config_path.open("rb") as f:
-            config = Config(**tomli.load(f))
+            config_dict = tomli.load(f)
+            # convert empty strings to None
+            config_dict = {k: (None if v == "" else v) for k, v in config_dict.items()}
+            config = Config(**config_dict)
         config = self._merge_config(base=config, overrides=overrides)
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file

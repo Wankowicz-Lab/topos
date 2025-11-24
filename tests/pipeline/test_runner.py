@@ -13,7 +13,7 @@ from src.structure.structure_context import _REGISTRY, Config
 def test_runner_initialization(tmp_path):
 
     config_path = tmp_path / 'config.toml'
-    _make_config_file(config_path, mutation_data_chain='A')
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
 
     base_runner = runner.Runner(
         config_path=config_path
@@ -25,6 +25,7 @@ def test_runner_initialization(tmp_path):
     assert base_runner.context.config.pdb_id == '8smv'
     assert base_runner.context.config.pdb_path is not None
     assert base_runner.context.config.pdb_ext == 'cif'
+    assert base_runner.context.config.mutation_data_path is None
 
 
 def test_runner_initialization_overrides_membrane(tmp_path):
