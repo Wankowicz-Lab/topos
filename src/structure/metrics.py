@@ -47,7 +47,7 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
         DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    array, vdw_radii = context.array, context.vdw_radii
+    array, vdw_radii = context.array, context.config.vdw_radii
     atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
 
     # Sum up SASA for each residue
@@ -106,7 +106,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     -----------
     context.array : AtomArray
         Structure array (amino acids only recommended)
-    context.membrane_thickness : float
+    context.config.membrane_thickness : float
         Half-thickness of the membrane in Angstroms
 
     Returns:
@@ -117,7 +117,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     """
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
-    array, membrane_thickness = context.array, context.membrane_thickness
+    array, membrane_thickness = context.array, context.config.membrane_thickness
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
 
@@ -147,7 +147,7 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
         "sse": sse_vals
     })
 
-    if context.membrane_protein:
+    if context.config.membrane_protein:
         ss_output = pdbtm.define_secondary_structure(context.residue_table, ss_df)
     else:
         # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins

@@ -73,7 +73,7 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
     return df
 
 
-def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd.DataFrame:
+def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:
     """
     Merge DMS scores with structural context based on residue positions.
 
@@ -82,8 +82,8 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     dms_scores : pd.DataFrame
         DataFrame containing DMS scores with 'resi' and 'resn' columns.
 
-    ctx : Context
-        Structural context containing residue information.
+    residue_table : pd.DataFrame
+        DataFrame containing structural residue information with 'chain', 'resi', and 'resn' columns.
 
     chain : str
         Chain identifier to filter structural context.
@@ -95,7 +95,7 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     """
 
     # Extract residue information from context
-    res_table = ctx.residue_table.copy()
+    res_table = residue_table.copy()
 
     # test merge to make sure sequence is aligned with structure
     res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
@@ -105,8 +105,9 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
                               left_on=['resi', 'resn'],
                               right_on=['resi', 'resn'],
                               how='outer')
-
-    if len(merge_test) > len(set(res_test.resi + dms_test.resi)):
+    print(merge_test)
+    # If sequence is aligned between DMS and structure, there should only be one row for each unique residue index
+    if len(merge_test) > len(merge_test.resi.unique()):
         raise ValueError(f"Mismatch between DMS scores and structure residues for chain {chain}. "
                       f"Check that the sequence used for DMS matches the structure.")
 
@@ -132,6 +133,4 @@ def merge_dms_scores(dms_scores: pd.DataFrame, ctx: "Context", chain: str) -> pd
     # drop extra columns if present
     res_table = res_table[['chain', 'resi', 'resn', 'resm', 'type', 'effect', 'seq_info', 'struct_info']]
 
-    ctx.residue_table = res_table
-
-    return ctx
+    return res_table

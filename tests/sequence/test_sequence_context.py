@@ -49,36 +49,35 @@ def test_load_dms_scores(tmp_path):
 def test_merge_dms_scores(tmp_path):
     # Create a dms_scores df
     dms_scores_df = pd.DataFrame({
-        'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU'],
-        'resi': [1, 1, 2, 2, 3, 3],
-        'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP'],
-        'type': ['missense', 'missense', 'nonsense', 'missense', 'missense', 'nonsense'],
-        'effect': [0.5, -1.2, 0.3, -0.7, 1.0, -0.4],
-        'extra_col': [10, 20, 30, 40, 50, 60]
+        'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU', 'ASP'],
+        'resi': [2, 2, 3, 3, 4, 4, 5],
+        'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP', 'MET'],
+        'type': ['missense', 'missense', 'nonsense', 'missense', 'missense', 'nonsense', 'missense'],
+        'effect': [0.5, -1.2, 0.3, -0.7, 1.0, -0.4, -0.1],
+        'extra_col': [10, 20, 30, 40, 50, 60, 70]
     })
 
-    # Create a mock sequence context with residue_table
-    class MockSequenceContext:
-        def __init__(self):
-            self.residue_table = pd.DataFrame({
-                'chain': ['A', 'A', 'A'],
-                'resi': [1, 2, 3],
-                'resn': ['ARG', 'THR', 'GLU']
-            })
-
-    ctx = MockSequenceContext()
+    # Create a residue_table
+    residue_table = pd.DataFrame({'chain': ['A', 'A', 'A', 'A', 'B'], 'resi': [1, 2, 3, 4, 1],
+                                  'resn': ['LEU', 'ARG', 'THR', 'GLU', 'TYR']})
 
     # Merge using the function
-    merged_df = merge_dms_scores(dms_scores_df, ctx, chain='A').residue_table
+    merged_df = merge_dms_scores(dms_scores=dms_scores_df, residue_table=residue_table, chain='A')
 
-    assert len(merged_df) == 6
+    assert len(merged_df) == 9 # 1 row for residues 1 and 5, two rows for residues 2, 3, and 4 each, 1 row row chain B
     assert set(merged_df.columns) == {'resn', 'resi', 'resm', 'type', 'effect', 'chain', 'seq_info', 'struct_info'}
+    assert merged_df['seq_info'].tolist() == [False, False, True, True, True, True, True, True, True]
+    assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True, False]
 
     # Check that incorrect indices raise an error
     dms_scores_invalid_df = dms_scores_df.copy()
-    dms_scores_invalid_df.at[0, 'resi'] = 99  # invalid index
+    dms_scores_invalid_df.loc[[4,5], 'resn'] = 'LYS'  # change GLU to cause mismatch
 
     with pytest.raises(ValueError, match="Mismatch between DMS scores and structure residues"):
-        merge_dms_scores(dms_scores_invalid_df, ctx, chain='A')
+        out = merge_dms_scores(dms_scores_invalid_df, residue_table, chain='A')
 
-    # TODO: Check that function works with multiple chains, that seq_info and struct_info are set correctly, that non-redundant seq and structure information are handled appropriately
+    residue_table_invalid = residue_table.copy()
+    residue_table_invalid.at[1, 'resn'] = 'LYS'  # change second residue to cause mismatch
+
+    with pytest.raises(ValueError, match="Mismatch between DMS scores and structure residues"):
+        out= merge_dms_scores(dms_scores_df, residue_table_invalid, chain='A')

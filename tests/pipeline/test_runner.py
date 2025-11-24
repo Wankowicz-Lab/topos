@@ -50,6 +50,9 @@ def test_runner_initialization(tmp_path):
     assert myrunner.context.config.pdb_ext == 'cif'
     assert myrunner.context.array is not None
 
+
+    # TODO: check overrides worked
+
     myrunner_membrane = runner.Runner(
         pdb_id=pdb_id,
         pdb_path=None,

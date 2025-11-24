@@ -74,19 +74,19 @@ class Runner:
         # create context object
         self.context = structure_context.Context(self.array, config=config)
 
-        # if self.membrane_protein:
-        #     # TODO: simplify this code to only return pdbtm_df
-        #     pdbtm_df, _ = pdbtm.fetch_pdbtm_annotation(self.pdb_id)
-        #     self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
-        #
-        # if self.mutation_data_path is not None:
-        #     # TODO: change function names to be more general (not DMS-specific)
-        #     self.mutation_data = sequence_context.load_dms_scores(self.mutation_data_path)
-        #     self.context = sequence_context.merge_dms_scores(
-        #         dms_scores=self.mutation_data,
-        #         ctx=self.context,
-        #         chain=self.mutation_data_chain
-        #     )
+        if self.context.config.membrane_protein:
+            # TODO: simplify this code to only return pdbtm_df
+            pdbtm_df, _ = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
+            self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
+
+        if self.context.config.mutation_data_path is not None:
+            # TODO: change function names to be more general (not DMS-specific)
+            self.context.extras['mutation_data'] = sequence_context.load_dms_scores(self.context.config.mutation_data_path)
+            self.context = sequence_context.merge_dms_scores(
+                dms_scores=self.mutation_data,
+                ctx=self.context,
+                chain=self.mutation_data_chain
+            )
 
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:

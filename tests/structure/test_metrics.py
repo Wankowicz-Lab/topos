@@ -3,6 +3,7 @@ import pandas as pd
 import random
 
 from src.structure import metrics
+from src.structure.structure_context import Config
 from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
 
 import biotite.structure as struc
@@ -59,7 +60,7 @@ def test_calculate_membrane_distance():
     class MockContext:
         def __init__(self, array):
             self.array = array
-            self.membrane_thickness = 15.0
+            self.config = Config()
 
     context = MockContext(array=arr)
 
@@ -79,14 +80,15 @@ def test_define_secondary_structure():
     aa_list = residue_table.resn.tolist()
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
-    context = metrics.Context(array=arr)
+    context = metrics.Context(array=arr, config=Config())
     context.residue_table = residue_table
 
     output = metrics.define_secondary_structure(context)
     assert 'ss_domains' not in output.columns.tolist()
     assert 'ss_group' in output.columns.tolist()
 
-    context.membrane_protein = True
+    context = metrics.Context(array=arr, config=Config(membrane_protein=True))
+    context.residue_table = residue_table
     output = metrics.define_secondary_structure(context)
     assert 'ss_domains' in output.columns.tolist()
     assert 'ss_group' in output.columns.tolist()

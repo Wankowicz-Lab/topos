@@ -47,7 +47,7 @@ class Config(BaseModel):
     model_config = {"validate_assignment": True}
 
     # structure data
-    pdb_id: str
+    pdb_id: Optional[str] = None
     pdb_path: Optional[Path] = None
     pdb_ext: Optional[str] = None
     membrane_protein: Optional[bool] = False
@@ -96,6 +96,9 @@ class Context:
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
         self.residue_table = residue_table(aa)
+
+        if self.config is None:
+            self.config = Config()
 
         if self.config.aa_index_path is not None:
             aa_index = pd.read_csv(self.config.aa_index_path)
