@@ -355,14 +355,21 @@ def _make_aaindex_data(accessions):
 
     return aaindex_data
 
-def _make_config_file(file_path: Path) -> None:
+def _make_config_file(file_path: Path, pdb_id='8smv', membrane_protein=False,
+                      mutation_data_path=None,
+                      mutation_data_chain=None, aaindex_path=None) -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
-    #TODO: figure out what sensible defaults are here for testing to balance not rewriting with testing key functions
-    defaults = {"pdb_id": "8smv",
-                "membrane_protein": True,
-                "mutation_data_path": "data/aaindex_parsed_small.csv",
-                "mutation_data_chain": "A",
-                "aa_index_path": "data/aaindex_parsed_small.csv"}
+
+    defaults = {"pdb_id": pdb_id,
+                "membrane_protein": membrane_protein,
+                "mutation_data_path": str(mutation_data_path) if mutation_data_path is not None else None,
+                "mutation_data_chain": mutation_data_chain,
+                "aaindex_path": str(aaindex_path) if aaindex_path is not None else None}
+
+    # Remove any keys with None values
+    remove_keys = [key for key, value in defaults.items() if value is None]
+    for key in remove_keys:
+        del defaults[key]
 
     # write TOML
     with file_path.open("wb") as f:

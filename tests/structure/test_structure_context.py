@@ -5,7 +5,7 @@ from tests.test_utils import _make_config_file
 
 def test_config(tmp_path):
     config_args = {'pdb_id': "1abc", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
-                   'mutation_data_chain': "A", 'aa_index_path': "data/aaindex_parsed_small.csv"}
+                   'mutation_data_chain': "A", 'aaindex_path': "data/aaindex_parsed_small.csv"}
 
     _ = Config(**config_args)
 
@@ -30,5 +30,5 @@ def test_config(tmp_path):
 
     with pytest.raises(ValueError, match="AA index data file not found at nonexistent.csv"):
         bad_config_args = config_args.copy()
-        bad_config_args["aa_index_path"] = "nonexistent.csv"
+        bad_config_args["aaindex_path"] = "nonexistent.csv"
         Config(**bad_config_args)

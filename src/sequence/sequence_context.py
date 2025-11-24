@@ -39,6 +39,11 @@ def load_dms_scores(path: str, residue_col_name: str = "wildtype",
     """
 
     df = pd.read_csv(path)
+
+    for input_col_name in [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]:
+        if input_col_name not in df.columns:
+            raise ValueError(f"Column '{input_col_name}' not found in DMS scores file.")
+
     df = df.rename(columns={
         residue_col_name: "resn",
         residue_idx_name: "resi",

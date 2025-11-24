@@ -44,6 +44,7 @@ class Runner:
         with self.config_path.open("rb") as f:
             config = Config(**tomli.load(f))
         config = self._merge_config(base=config, overrides=overrides)
+        print(config)
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
         if config.pdb_path is None:
@@ -81,11 +82,12 @@ class Runner:
 
         if self.context.config.mutation_data_path is not None:
             # TODO: change function names to be more general (not DMS-specific)
+            # TODO: pass keyword args for column names
             self.context.extras['mutation_data'] = sequence_context.load_dms_scores(self.context.config.mutation_data_path)
-            self.context = sequence_context.merge_dms_scores(
-                dms_scores=self.mutation_data,
-                ctx=self.context,
-                chain=self.mutation_data_chain
+            self.context.residue_table = sequence_context.merge_dms_scores(
+                dms_scores=self.context.extras['mutation_data'],
+                residue_table=self.context.residue_table,
+                chain=self.context.config.mutation_data_chain
             )
 
 
