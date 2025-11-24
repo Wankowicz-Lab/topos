@@ -25,7 +25,7 @@ class Runner:
     pdb_path: Optional[Path] = None
     membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
-    config_path: Path = Path("data/example_runner_config.yaml")
+    config_path: Path = Path("example/example_runner_config.toml")
 
     def __post_init__(self):
 
@@ -44,7 +44,6 @@ class Runner:
         with self.config_path.open("rb") as f:
             config = Config(**tomli.load(f))
         config = self._merge_config(base=config, overrides=overrides)
-        print(config)
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
         if config.pdb_path is None:

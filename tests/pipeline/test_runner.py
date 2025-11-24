@@ -15,37 +15,39 @@ def test_runner_initialization(tmp_path):
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_chain='A')
 
-    pdb_id = '8smv'
+    base_runner = runner.Runner(
+        config_path=config_path
+    )
 
-    myrunner = runner.Runner(
-        pdb_id=pdb_id,
+    assert base_runner.context.array is not None
+    assert base_runner.context is not None
+    assert base_runner.context.config is not None
+    assert base_runner.context.config.pdb_id == '8smv'
+    assert base_runner.context.config.pdb_path is not None
+    assert base_runner.context.config.pdb_ext == 'cif'
+
+
+def test_runner_initialization_overrides_membrane(tmp_path):
+
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A')
+
+    membrane_runner = runner.Runner(
+        pdb_id='9DMS',
         pdb_path=None,
         membrane_protein=True,
         mutation_data_path=None,
         config_path=config_path
     )
-    assert myrunner.context is not None
-    assert myrunner.context.config is not None
-    # TODO: add more checks here for stepwise addition of properties
-    assert myrunner.context.config.pdb_path is not None
-    assert myrunner.context.config.pdb_ext == 'cif'
-    assert myrunner.context.array is not None
+    assert membrane_runner.context.config.pdb_id == '9DMS'
+    assert membrane_runner.context.config.membrane_protein is True
+    assert 'pdbtm_region' in membrane_runner.context.residue_table.columns.tolist()
+    assert 'pdbtm_region_detailed' in membrane_runner.context.residue_table.columns.tolist()
 
+def test_runner_initialization_overrides_mutation_data(tmp_path):
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A')
 
-    # TODO: check overrides worked
-
-    myrunner_membrane = runner.Runner(
-        pdb_id=pdb_id,
-        pdb_path=None,
-        membrane_protein=True,
-        mutation_data_path=None,
-        config_path=config_path
-    )
-
-    assert 'pdbtm_region' in myrunner_membrane.context.residue_table.columns.tolist()
-    assert 'pdbtm_region_detailed' in myrunner_membrane.context.residue_table.columns.tolist()
-
-    # Create mutation dataset
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
         num_chains=1,
@@ -71,16 +73,17 @@ def test_runner_initialization(tmp_path):
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
-    myrunner_mut = runner.Runner(
-        pdb_id=pdb_id,
+    mut_runner = runner.Runner(
+        pdb_id='8SMV',
         pdb_path=mmcif_path,
         membrane_protein=True,
         mutation_data_path=mut_data_path,
         config_path=config_path
     )
+    assert mut_runner.context.config.pdb_path == mmcif_path
+    assert mut_runner.context.config.mutation_data_path == mut_data_path
+    assert 'effect' in mut_runner.context.residue_table.columns.tolist()
 
-    assert myrunner_mut.context.config.pdb_path == mmcif_path
-    assert 'effect' in myrunner_mut.context.residue_table.columns.tolist()
 
 def test_runner__merge_config(tmp_path):
     config_path = tmp_path / 'config.toml'
@@ -162,7 +165,6 @@ def test_runner_run_metric_provides(tmp_path):
         config_path=config_path
     )
 
-    print(myrunner.context.extras.keys())
     # modify arguments for downstream metrics
     myrunner.context.config.membrane_protein = True
     myrunner.context.residue_table = residue_table

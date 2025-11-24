@@ -61,7 +61,7 @@ class Config(BaseModel):
     mutation_data_chain: Optional[str] = None
 
     # sequence features
-    aa_index_path: Path = 'data/aaindex_parsed_small.csv'
+    aaindex_path: Path = 'data/aaindex_parsed_small.csv'
 
     def model_post_init(self, __context):
         if self.mutation_data_path is not None:
@@ -72,8 +72,8 @@ class Config(BaseModel):
                 raise ValueError("If mutation_data_path is provided, "
                                  "mutation_data_chain must also be provided.")
 
-        if not Path(self.aa_index_path).is_file():
-            raise ValueError(f"AA index data file not found at {self.aa_index_path}")
+        if not Path(self.aaindex_path).is_file():
+            raise ValueError(f"AA index data file not found at {self.aaindex_path}")
 
 
 @dataclass
@@ -100,9 +100,9 @@ class Context:
         if self.config is None:
             self.config = Config()
 
-        if self.config.aa_index_path is not None:
-            aa_index = pd.read_csv(self.config.aa_index_path)
-            self.extras['aa_index'] = aa_index
+        if self.config.aaindex_path is not None:
+            aa_index = pd.read_csv(self.config.aaindex_path)
+            self.extras['aaindex'] = aa_index
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
