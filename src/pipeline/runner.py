@@ -25,7 +25,7 @@ class Runner:
     pdb_path: Optional[Path] = None
     membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
-    config_path: Path = Path("example/example_runner_config.toml")
+    config_path: Path = Path("example/test_config.toml")
 
     def __post_init__(self):
 
@@ -41,11 +41,16 @@ class Runner:
             overrides['mutation_data_path'] = self.mutation_data_path
 
         # load and merge config with overrides
-        with self.config_path.open("rb") as f:
-            config_dict = tomli.load(f)
-            # convert empty strings to None
-            config_dict = {k: (None if v == "" else v) for k, v in config_dict.items()}
-            config = Config(**config_dict)
+        try:
+            with self.config_path.open("rb") as f:
+                config_dict = tomli.load(f)
+                # convert empty strings to None
+                config_dict = {k: (None if v == "" else v) for k, v in config_dict.items()}
+                config = Config(**config_dict)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Configuration file not found at {self.config_path}")
+        except tomli.TOMLDecodeError as e:
+            raise ValueError(f"Invalid TOML in configuration file {self.config_path}: {e}")
         config = self._merge_config(base=config, overrides=overrides)
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file

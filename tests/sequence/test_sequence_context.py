@@ -64,7 +64,7 @@ def test_merge_dms_scores(tmp_path):
     # Merge using the function
     merged_df = merge_dms_scores(dms_scores=dms_scores_df, residue_table=residue_table, chain='A')
 
-    assert len(merged_df) == 9 # 1 row for residues 1 and 5, two rows for residues 2, 3, and 4 each, 1 row row chain B
+    assert len(merged_df) == 9 # 1 row for residues 1 and 5, two rows for residues 2, 3, and 4 each, 1 row for chain B
     assert set(merged_df.columns) == {'resn', 'resi', 'resm', 'type', 'effect', 'chain', 'seq_info', 'struct_info'}
     assert merged_df['seq_info'].tolist() == [False, False, True, True, True, True, True, True, True]
     assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True, False]

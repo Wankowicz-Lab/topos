@@ -82,7 +82,7 @@ class Config(BaseModel):
     membrane_protein: Optional[bool] = False
 
     # structure parameters
-    vdw_radii: str =  "ProtOr"
+    vdw_radii: str = "ProtOr"
     membrane_thickness: Optional[float] = 15
 
     # mutagenesis data

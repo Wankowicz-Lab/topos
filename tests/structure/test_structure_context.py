@@ -12,7 +12,7 @@ def test_config(tmp_path):
     config_file_path = tmp_path / "test_config.toml"
     _make_config_file(config_file_path)
 
-    # 3️⃣ Load TOML file
+    # Load TOML file
     with config_file_path.open("rb") as f:
         loaded_config_data = tomli.load(f)
 
