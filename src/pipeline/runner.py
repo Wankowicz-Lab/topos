@@ -125,7 +125,6 @@ class Runner:
         for m in order:
             meta, func = _REGISTRY[m]
 
-            # TODO: update context to contain all fields needed by metrics, no others
             df = func(self.context)
 
             # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)

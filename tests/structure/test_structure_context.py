@@ -1,7 +1,7 @@
 import pytest
 import tomli
-from src.structure.structure_context import Config
-from tests.test_utils import _make_config_file
+from src.structure.structure_context import Config, Context
+from tests.test_utils import _make_config_file, _make_chain, _make_aaindex_data
 
 def test_config(tmp_path):
     config_args = {'pdb_id': "1abc", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
@@ -32,3 +32,28 @@ def test_config(tmp_path):
         bad_config_args = config_args.copy()
         bad_config_args["aaindex_path"] = "nonexistent.csv"
         Config(**bad_config_args)
+
+
+def test_context(tmp_path):
+    # Create a test chain
+    arr = _make_chain(aa_list=['ALA', 'CYS', 'ASP'], chain_id='A')
+
+    context = Context(array=arr)
+
+    assert context.neighbor_cache == {}
+    assert context.residue_table is not None
+    assert len(context.residue_table) == 3
+    assert context.config is not None
+    assert context.config.aaindex_path == 'data/aaindex_parsed_small.csv'
+
+    # Test loading AA index data
+    aaindex_path = tmp_path / "aaindex.csv"
+    aaindex_data = _make_aaindex_data(accessions=['AA1', 'AA2'])
+    aaindex_data.to_csv(aaindex_path, index=False)
+
+    config = Config(aaindex_path=aaindex_path, membrane_protein=True)
+    context_with_aaindex = Context(array=arr, config=config)
+
+    assert 'aaindex' in context_with_aaindex.extras
+    assert context_with_aaindex.extras['aaindex'].equals(aaindex_data)
+    assert context_with_aaindex.config.membrane_protein is True
