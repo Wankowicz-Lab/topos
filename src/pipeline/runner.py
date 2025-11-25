@@ -122,12 +122,10 @@ class Runner:
         keep_cols = ['resi', 'chain', 'resn']
         keep_cols += ['resm'] if mutations else []
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
-        print(len(merged_df), "initial rows")
+
         for df in dfs:
-            print(len(df), "rows to merge")
             keep_cols = ['resi', 'chain', 'resn'] + (['resm'] if 'resm' in df.columns else [])
-            print(keep_cols, "merging on these columns")
             merged_df = pd.merge(merged_df, df, on=keep_cols, how='outer')
-            print(len(merged_df), "rows after merge")
+
         return merged_df
 

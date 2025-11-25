@@ -156,10 +156,7 @@ def test_runner_run_metric_no_mutations(tmp_path):
     all_result = all_result.set_index(['chain', 'resi', 'resn'])
     residue_table = myrunner.context.residue_table.set_index(['chain', 'resi', 'resn'])
 
-    # find mismatched indices
-    mismatched_indices = all_result.index.difference(residue_table.index)
-    print("Indices in all_result not in residue_table:", mismatched_indices)
-    print("all_result indices:", all_result.loc[mismatched_indices])
+    # Check that all residues are present and no 'resm' column
     assert len(all_result) == len(myrunner.context.residue_table)
     assert 'resm' not in all_result.columns.tolist()
 
