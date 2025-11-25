@@ -124,8 +124,8 @@ class Runner:
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
         for df in dfs:
-            keep_cols = ['resi', 'chain', 'resn'] + (['resm'] if 'resm' in df.columns else [])
-            merged_df = pd.merge(merged_df, df, on=keep_cols, how='outer')
+            merge_cols = ['resi', 'chain', 'resn'] + (['resm'] if 'resm' in df.columns else [])
+            merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
 
         return merged_df
 
