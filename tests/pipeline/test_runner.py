@@ -153,8 +153,6 @@ def test_runner_run_metric_no_mutations(tmp_path):
 
     # run all metrics
     all_result = myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
-    all_result = all_result.set_index(['chain', 'resi', 'resn'])
-    residue_table = myrunner.context.residue_table.set_index(['chain', 'resi', 'resn'])
 
     # Check that all residues are present and no 'resm' column
     assert len(all_result) == len(myrunner.context.residue_table)
