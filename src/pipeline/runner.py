@@ -101,3 +101,31 @@ class Runner:
         # TODO: fix this to merge on chain/resi instead of index, handle mutation data (resm) as needed
         merged = pd.concat(result_frames, axis=1)
         return merged
+
+    def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
+        """Merge feature DataFrames on chain, resi, resn, and resm columns.
+
+        Parameters
+        ----------
+        dfs : List[pd.DataFrame]
+            List of DataFrames to merge.
+
+        mutations : bool
+            Whether mutation-level data is included (i.e., resm column present).
+
+        Returns
+        -------
+        pd.DataFrame
+            Merged DataFrame.
+        """
+        # Get all unique rows based on chain, resi, resn, resm to merge on
+        keep_cols = ['resi', 'chain', 'resn']
+        keep_cols += ['resm'] if mutations else []
+        merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
+
+        for df in dfs:
+            keep_cols = ['resi', 'chain', 'resn'] + (['resm'] if 'resm' in df.columns else [])
+            merged_df = pd.merge(merged_df, df, on=keep_cols, how='outer')
+
+        return merged_df
+
