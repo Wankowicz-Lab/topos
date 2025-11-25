@@ -47,7 +47,7 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
         DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    array, vdw_radii = context.array, context.vdw_radii
+    array, vdw_radii = context.aa, context.vdw_radii
     atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
 
     # Sum up SASA for each residue
@@ -83,7 +83,7 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
         "TRP": -0.9, "TYR": -1.3, "PRO": -1.6, "HIS": -3.2, "GLU": -3.5,
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
-    array = context.array
+    array = context.aa
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
@@ -134,11 +134,11 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
 def define_secondary_structure(context: Context) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
-    res_starts = struc.get_residue_starts(context.array)
-    chains = context.array.chain_id[res_starts]
-    resi = context.array.res_id[res_starts]
-    resn = context.array.res_name[res_starts]
-    sse_vals = calculate_secondary_structure(context.array)
+    res_starts = struc.get_residue_starts(context.aa)
+    chains = context.aa.chain_id[res_starts]
+    resi = context.aa.res_id[res_starts]
+    resn = context.aa.res_name[res_starts]
+    sse_vals = calculate_secondary_structure(context.aa)
 
     ss_df = pd.DataFrame({
         "chain": chains,

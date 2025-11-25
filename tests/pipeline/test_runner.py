@@ -72,7 +72,7 @@ def test_runner_initialization(tmp_path):
     assert 'effect' in myrunner_mut.context.residue_table.columns.tolist()
 
 
-def test_runner_run_metric_provides(tmp_path):
+def test_runner_run_metric(tmp_path):
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
         num_chains=1,
@@ -124,23 +124,105 @@ def test_runner_run_metric_provides(tmp_path):
         result = myrunner.run(metrics=[metric])
 
         returned_cols = result.columns.tolist()
+        expected_cols = ['chain', 'resi', 'resn', 'resm']
+
         if metric == 'aa_index_scores':
             # aaindex scores add columns for each index
-            expected_cols = ['chain', 'resi', 'resn', 'resm']
             for acc in ['AA1', 'AA2']:
                 expected_cols.extend([f'AAIndex_{acc}_wt', f'AAIndex_{acc}_mut', f'AAIndex_{acc}_diff'])
         else:
-            expected_cols = provides + ['chain', 'resi', 'resn']
-            if 'resm' in requires:
-                expected_cols.append('resm')
+            expected_cols.extend(provides)
 
         assert set(expected_cols) == set(returned_cols)
 
     # run all metrics
     all_result = myrunner.run(metrics=list(metrics))
+    assert len(all_result) == len(residue_table)
+
+
+def test_runner_run_metric_no_mutations(tmp_path):
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None,
+        mutation_data_chain=None
+    )
+
+    # run all metrics
+    all_result = myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
+    all_result = all_result.set_index(['chain', 'resi', 'resn'])
+    residue_table = myrunner.context.residue_table.set_index(['chain', 'resi', 'resn'])
+
+    # find mismatched indices
+    mismatched_indices = all_result.index.difference(residue_table.index)
+    print("Indices in all_result not in residue_table:", mismatched_indices)
+    print("all_result indices:", all_result.loc[mismatched_indices])
+    assert len(all_result) == len(myrunner.context.residue_table)
+    assert 'resm' not in all_result.columns.tolist()
 
 
 def test_runner__merge_features():
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None,
+        mutation_data_chain=None
+    )
+
+    residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=False)
+
+    # df1 has residue level features from a subset of the residues
+    df1_keep_resis = np.random.choice(residue_table['resi'], size=7, replace=False)
+    df1 = residue_table[residue_table['resi'].isin(df1_keep_resis)].copy()
+    df1 = df1[['chain', 'resi', 'resn']]
+    df1['feature1'] = np.random.rand(len(df1))
+
+    # df2 has residue-level features from a subset of positions in chain A
+    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi'], size=3, replace=False)
+    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi'].isin(df2_keep_resis))].copy()
+    df2 = df2[['chain', 'resi', 'resn']]
+    df2['feature2'] = np.random.rand(len(df2))
+
+    # df3 has residue level features from residues in Chain B
+    df3_keep_resis = np.random.choice(residue_table.loc[residue_table['chain']=='B']['resi'],
+                                      size=5, replace=False)
+    df3 = residue_table[residue_table['resi'].isin(df3_keep_resis)].copy()
+    df3 = df3[['chain', 'resi', 'resn']]
+    df3['feature3'] = np.random.rand(len(df3))
+
+    result_frames = [df1, df2, df3]
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    myrunner.context = MockContext(residue_table=residue_table)
+
+    merged_df = myrunner._merge_features(result_frames, mutations=False)
+
+    assert 'resm' not in merged_df.columns.tolist()
+    assert len(merged_df) == len(residue_table)
+
+    # Check that df values are correctly merged
+    df1_mask = merged_df['resi'].isin(df1_keep_resis)
+    assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
+    assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
+
+    df2_mask = (merged_df['chain']=='A') & (merged_df['resi'].isin(df2_keep_resis))
+    assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
+    assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
+
+    df3_mask = merged_df['resi'].isin(df3_keep_resis)
+    assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
+    assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
+
+
+def test_runner__merge_features_with_muts():
     pdb_id = '8smv'
 
     myrunner = runner.Runner(
@@ -189,6 +271,7 @@ def test_runner__merge_features():
     merged_df = myrunner._merge_features(result_frames, mutations=True)
 
     assert len(merged_df) == len(residue_table)
+    assert 'resm' in merged_df.columns.tolist()
 
     # Check that df values are correctly merged
     df1_mask = merged_df['resi'].isin(df1_keep_resis)
@@ -208,62 +291,3 @@ def test_runner__merge_features():
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
-
-
-#
-# # Create dataframes with different indices to test merging
-# df1 = pd.DataFrame({
-#     'chain': ['A', 'A', 'B'],
-#     'resi': [1, 2, 1],
-#     'resn': ['ALA', 'GLY', 'ARG'],
-#     'feature_residue_level': [0.1, 0.2, 0.3]
-# })
-#
-# df1['resm'] = None  # Add resm column with None values for merging
-#
-# # df2 has multiple mutations per position
-# df2 = pd.DataFrame({
-#     'chain': ['A', 'A', 'A', 'A', 'B'],
-#     'resi': [1, 1, 2, 2, 1],
-#     'resn': ['ALA', 'ALA', 'GLY', 'GLY', 'ARG'],
-#     'resm': ['GLU', 'ASN', 'ASP', 'ARG', 'THR',],
-#     'feature_mutations': [0.4, 0.5, 0.6, 0.7, 0.8]
-# })
-#
-# # df3 has residue level features at more indices
-# df3 = pd.DataFrame({
-#     'chain': ['A', 'A', 'B', 'B'],
-#     'resi': [1, 2, 1, 2],
-#     'resn': ['ALA', 'GLY', 'ARG', 'SER'],
-#     'feature_residue_2': [0.8, 0.9, 1.0, 1.1]
-# })
-# df3['resm'] = None  # Add resm column with None values for merging
-#
-# # df4 has mutations in new residues in chain A
-# df4 = pd.DataFrame({
-#     'chain': ['A', 'A', 'A', 'A', 'B'],
-#     'resi': [1, 2, 3, 3, 1],
-#     'resn': ['ALA', 'GLY', 'TRP', 'TRP', 'ARG'],
-#     'resm': ['GLU', 'ASP', 'HIS', 'LYS', 'GLN'],
-#     'feature_mutations_2': [1.2, 1.3, 1.4, 1.5, 1.6]
-# })
-#
-# # create df with only metadata columns for all four dfs
-# baseline_df = pd.DataFrame({
-#     'chain': ['A', 'A', 'A', 'A', 'A', 'A', 'B', 'B'],
-#     'resi': [1, 1, 2, 2, 3, 3, 1, 2],
-#     'resn': ['ALA', 'ALA', 'GLY', 'GLY', 'TRP', 'TRP', 'ARG', 'SER'],
-#     'resm': ['GLU', 'ASN', 'ASP', 'ARG', 'HIS', 'LYS', 'THR', None],
-# })
-#
-# result_frames = [baseline_df]
-# result_frames.append(df1)
-# result_frames.append(df2)
-# result_frames.append(df3)
-# result_frames.append(df4)
-#
-# from functools import reduce
-# def merge_dfs_on_chain_resi_resn(dfs):
-#     return reduce(lambda left, right: pd.merge(left, right, on=['chain', 'resi', 'resn', 'resm'], how='outer'), dfs)
-#
-# merged_df = merge_dfs_on_chain_resi_resn(result_frames)
