@@ -66,7 +66,6 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> pd.DataFrame:
         "TRP": -0.9, "TYR": -1.3, "PRO": -1.6, "HIS": -3.2, "GLU": -3.5,
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
-    array = Context
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.resn], dtype=float)
@@ -101,7 +100,6 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
     """
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
-    array, membrane_thickness = Context, Context.membrane_thickness
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
 
@@ -116,11 +114,11 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
 def define_secondary_structure(array: struc.AtomArray) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
-    res_starts = struc.get_residue_starts(Context)
+    res_starts = struc.get_residue_starts(array)
     chains = Context.chain_id[res_starts]
     resi = Context.res_id[res_starts]
     resn = Context.res_name[res_starts]
-    sse_vals = calculate_secondary_structure(Context)
+    sse_vals = calculate_secondary_structure(array)
 
     ss_df = pd.DataFrame({
         "chain": chains,
