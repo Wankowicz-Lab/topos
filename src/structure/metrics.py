@@ -134,8 +134,6 @@ def calculate_membrane_distance(array: struc.AtomArray) -> pd.DataFrame:
     return metadata_df
 
 
-@register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
-
 def define_secondary_structure(array: struc.AtomArray) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
