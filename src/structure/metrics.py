@@ -98,7 +98,7 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
 
 
 @register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
-def calculate_membrane_distance(context: Context) -> pd.DataFrame:
+def calculate_membrane_distance(context: Context, membrane_thickness) -> pd.DataFrame:
     """
     Calculate distance of each residue from the edge of the membrane along the z-axis.
 
