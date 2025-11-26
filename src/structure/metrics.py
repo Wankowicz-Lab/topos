@@ -11,6 +11,9 @@ from src.sequence import utils
 
 
 # TODO: move helper functions to separate file so only @registered_metric functions remain here
+@register_metric(name='define_secondary_structure',
+                 provides=['ss_group', 'ss_domains'],
+                 tags={'structure'})
 def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
     """
     Calculate secondary structure assignment per residue.
