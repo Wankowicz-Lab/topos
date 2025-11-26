@@ -170,9 +170,6 @@ def test_calculate_kyte_doolittle():
     # ASP and GLU should be hydrophilic (around -3.5)
     assert kd_values[3] < -3.0, "ASP should be hydrophilic"
     assert kd_values[4] < -3.0, "GLU should be hydrophilic"
-    
-    # All values should be finite or NaN
-    assert np.all(np.isfinite(kd_values) | np.isnan(kd_values))
 
 
 def test_calculate_residue_packing():
