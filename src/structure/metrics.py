@@ -48,9 +48,11 @@ def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> pd.Data
     """
     # Calculate atom-wise SASA
     atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
+    print(atom_sasa)
 
     # Sum up SASA for each residue
     res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
+    print(res_sasa)
 
     # Attach to metadata DataFrame
     metadata_df = utils.get_metadata_cols(array)
