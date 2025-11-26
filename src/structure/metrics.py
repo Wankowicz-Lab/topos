@@ -66,7 +66,7 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> pd.DataFrame:
         "TRP": -0.9, "TYR": -1.3, "PRO": -1.6, "HIS": -3.2, "GLU": -3.5,
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
-    array = Context.array
+    array = Context
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
@@ -88,7 +88,7 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
 
     Parameters:
     -----------
-    context.array : AtomArray
+    context.array: AtomArray
         Structure array (amino acids only recommended)
     context.membrane_thickness : float
         Half-thickness of the membrane in Angstroms
@@ -101,7 +101,7 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
     """
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
-    array, membrane_thickness = Context.array, Context.membrane_thickness
+    array, membrane_thickness = Context, Context.membrane_thickness
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
 
@@ -116,11 +116,11 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
 def define_secondary_structure(array: struc.AtomArray) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
-    res_starts = struc.get_residue_starts(Context.array)
-    chains = Context.array.chain_id[res_starts]
-    resi = Context.array.res_id[res_starts]
-    resn = Context.array.res_name[res_starts]
-    sse_vals = calculate_secondary_structure(Context.array)
+    res_starts = struc.get_residue_starts(Context)
+    chains = Context.chain_id[res_starts]
+    resi = Context.res_id[res_starts]
+    resn = Context.res_name[res_starts]
+    sse_vals = calculate_secondary_structure(Context)
 
     ss_df = pd.DataFrame({
         "chain": chains,
@@ -146,7 +146,7 @@ def calculate_hbond_metrics(array: struc.AtomArray) -> dict[str, np.ndarray]:
     donors, acceptors = _build_sites_biotite(array)
     hbonds = _detect_hbonds(donors, acceptors)
     
-    res_starts = struc.get_residue_starts(array)
+    res_starts = struc.get_residue_starts(Context)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
@@ -207,7 +207,7 @@ def calculate_residue_packing(array: struc.AtomArray, cutoff: float = 5.0) -> di
     """
     
     # Residue indexing for original array
-    res_starts = struc.get_residue_starts(array)
+    res_starts = struc.get_residue_starts(Context)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
