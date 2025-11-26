@@ -176,9 +176,20 @@ def _donor_acceptor_templates(resname: str, names_set: set[str]):
 
 def _index_by_name_alt(arr: struc.AtomArray, idxs: np.ndarray):
     d: Dict[str, Dict[str, int]] = defaultdict(dict)
+    # Check if altloc_id annotation exists
+    try:
+        has_altloc = "altloc_id" in arr.get_annotation_categories()
+    except (AttributeError, TypeError):
+        has_altloc = False
     for i in idxs:
         name = arr.atom_name[i].strip()
-        alt = norm_alt(arr.altloc_id[i])
+        if has_altloc:
+            try:
+                alt = norm_alt(arr.altloc_id[i])
+            except (AttributeError, KeyError, IndexError):
+                alt = ""
+        else:
+            alt = ""
         d[name][alt] = i
     return d
 
