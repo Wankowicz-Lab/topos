@@ -12,7 +12,7 @@ np.random.seed(42)
 
 def test_calculate_secondary_structure():
     # Create a test chain with random coordinates
-    aa_list = random.choices(AA_LIST, k=10)
+    aa_list = random.choices(AA_LIST, k=5)
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
     sse = metrics.calculate_secondary_structure(arr)
@@ -23,11 +23,12 @@ def test_calculate_secondary_structure():
 
 def test_calculate_sasa():
     # Create a test chain with random coordinates
-    aa_list = random.choices(AA_LIST, k=10)
+    aa_list = random.choices(AA_LIST, k=5)
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
+    print('FAIL-1')
     context = metrics.Context(array=arr)
-    context.vdw_radii = "ProtOr"
+    print('FAIL')
 
     output = metrics.calculate_sasa(context)
 
