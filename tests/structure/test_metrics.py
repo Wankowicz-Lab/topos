@@ -166,6 +166,7 @@ def test_calculate_kyte_doolittle():
     assert len(kd_values) == len(res_starts)
     
     # ILE should be very hydrophobic (around 4.5)
+    print(kd_values)
     assert kd_values[0] > 4.0, "ILE should be highly hydrophobic"
     # ASP and GLU should be hydrophilic (around -3.5)
     assert kd_values[3] < -3.0, "ASP should be hydrophilic"
