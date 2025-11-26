@@ -6,7 +6,7 @@ import pandas as pd
 import biotite.structure as struc
 from .structure_context import Context, register_metric
 from . import pdbtm
-from .utils import residue_key, is_heavy
+from .utils import residue_key, is_heavy, get_metadata_cols
 
 def calculate_sasa(array: struc.AtomArray | Context, vdw_radii: str = "ProtOr") -> pd.DataFrame:
     """
