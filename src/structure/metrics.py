@@ -29,7 +29,7 @@ def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
 
 
 @register_metric(name='sasa', provides=['sasa'], tags={'structure'})
-def calculate_sasa(context: Context) -> pd.DataFrame:
+def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
     """
     Calculate solvent accessible surface area (SASA) per residue.
     
@@ -61,7 +61,7 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
 
 
 @register_metric(name='kyte_doolittle', provides=['kyte_doolittle'], tags={'structure'})
-def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
+def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
     """
     Calculate Kyte–Doolittle hydropathy per residue.
 
@@ -98,7 +98,7 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
 
 
 @register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
-def calculate_membrane_distance(context: Context) -> pd.DataFrame:
+def calculate_membrane_distance(array: struc.AtomArray) -> pd.DataFrame:
     """
     Calculate distance of each residue from the edge of the membrane along the z-axis.
 
@@ -132,7 +132,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
 
 @register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
 
-def define_secondary_structure(context: Context) -> pd.DataFrame:
+def define_secondary_structure(array: struc.AtomArray) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
     res_starts = struc.get_residue_starts(context.array)
@@ -220,10 +220,7 @@ def calculate_hbond_metrics(array: struc.AtomArray) -> dict[str, np.ndarray]:
     }
 
 
-def calculate_residue_packing(
-    array: struc.AtomArray,
-    cutoff: float = 5.0,
-) -> dict[str, np.ndarray]:
+def calculate_residue_packing(array: struc.AtomArray, cutoff: float = 5.0) -> dict[str, np.ndarray]:
     """
     Compute residue packing values.
     """
