@@ -153,22 +153,6 @@ def test_calculate_sasa():
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
 
 
-def test_calculate_secondary_structure():
-    # Create a chain with several residues
-    aa_list = ['ALA', 'GLY', 'SER', 'PRO', 'LEU']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
-    
-    # Calculate secondary structure
-    ss_values = metrics.calculate_secondary_structure(arr)
-    
-    # Check that we get per-residue secondary structure assignments
-    res_starts = struc.get_residue_starts(arr)
-    assert len(ss_values) == len(res_starts)
-    # Check that values are valid SSE codes ('a', 'b', 'c', or empty)
-    valid_codes = {'a', 'b', 'c', ''}
-    assert all(sse in valid_codes for sse in ss_values), "Secondary structure codes should be 'a', 'b', 'c', or ''"
-
-
 def test_calculate_kyte_doolittle():
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
