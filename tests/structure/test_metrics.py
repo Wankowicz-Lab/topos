@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import random
+import pytest
 
 from src.structure import metrics
 from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
