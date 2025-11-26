@@ -95,7 +95,6 @@ ATOM   2537 HD22 LEU A 169     -22.200 -37.598  -0.114  1.00 27.94           H
 ATOM   2538 HD23 LEU A 169     -22.842 -39.045   0.017  1.00 27.94           H"""
 
 
-
 def test_calculate_membrane_distance():
     # Create a test chain with varying z-coordinates
     z_values = list(range(-25, 25, 5))
@@ -108,7 +107,6 @@ def test_calculate_membrane_distance():
     expected_distances = np.abs(np.array(z_values)) - 15.0
 
     assert np.allclose(distances, expected_distances)
-
 
 def test_define_secondary_structure():
     # Create input data
@@ -153,7 +151,6 @@ def test_calculate_sasa():
     sasa_values = sasa_df['sasa']
     assert sasa_values.dtype in [np.float64, np.float32, np.int64, np.int32], f"SASA values should be numeric, got {sasa_values.dtype}"
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
-
 
 
 def test_calculate_secondary_structure():
