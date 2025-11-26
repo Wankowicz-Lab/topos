@@ -144,12 +144,12 @@ def define_secondary_structure(ctx: Context) -> pd.DataFrame:
         "resn": resn,
         "sse": sse_vals
     })
+    print(ss_df.head())
 
     if ctx.membrane_protein:
         ss_output = pdbtm.define_secondary_structure(Context.residue_table, ss_df)
     else:
         # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
-        ss_output = ss_df.copy()
         ss_output['ss_group'] = pdbtm.make_contiguous_group_labels(ss_output['sse'].tolist())
 
     return ss_output
