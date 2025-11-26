@@ -28,9 +28,7 @@ def test_calculate_sasa():
     aa_list = random.choices(AA_LIST, k=5)
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
-    print('FAIL-1')
     context = Context(array=arr)
-    print('FAIL')
 
     output = metrics.calculate_sasa(context)
 
