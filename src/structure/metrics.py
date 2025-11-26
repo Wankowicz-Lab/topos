@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from .structure_context import Context, register_metric
+from .utils import *
 from . import pdbtm
 from src.sequence import utils
 
