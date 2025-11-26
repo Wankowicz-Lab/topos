@@ -29,8 +29,14 @@ def register_metric(*, name: str, provides: Iterable[str],
                       tags=set(tags), requires=set(requires))
     def _wrap(fn: MetricFunc):
         if name in _REGISTRY:
-            raise ValueError(f"Metric '{name}' already registered")
-        _REGISTRY[name] = (meta, fn)
+            # If the same function is being registered again (e.g., module reload),
+            # allow it silently. Otherwise, raise an error for conflicting registrations.
+            existing_meta, existing_fn = _REGISTRY[name]
+            if existing_fn is not fn:
+                raise ValueError(f"Metric '{name}' already registered with a different function")
+            # Same function, allow re-registration (idempotent)
+        else:
+            _REGISTRY[name] = (meta, fn)
         return fn
     return _wrap
 
