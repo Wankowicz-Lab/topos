@@ -146,7 +146,7 @@ def calculate_hbond_metrics(array: struc.AtomArray) -> dict[str, np.ndarray]:
     donors, acceptors = _build_sites_biotite(array)
     hbonds = _detect_hbonds(donors, acceptors)
     
-    res_starts = struc.get_residue_starts(Context)
+    res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
@@ -207,7 +207,7 @@ def calculate_residue_packing(array: struc.AtomArray, cutoff: float = 5.0) -> di
     """
     
     # Residue indexing for original array
-    res_starts = struc.get_residue_starts(Context)
+    res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
