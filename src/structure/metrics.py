@@ -33,13 +33,13 @@ def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
 
 
 @register_metric(name='sasa', provides=['sasa'], tags={'structure'})
-def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndarray:
+def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> pd.DataFrame:
     """
     Calculate solvent accessible surface area (SASA) per residue.
     
     Parameters:
     -----------
-    context.array : AtomArray
+    context.array: AtomArray
         Structure array (amino acids only recommended)
     context.vdw_radii : str
         Van der Waals radii set. Use "ProtOr" (default) for structures without hydrogens,
@@ -51,7 +51,6 @@ def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndar
         DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    array, vdw_radii = context.array, context.vdw_radii
     atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
 
     # Sum up SASA for each residue
@@ -65,7 +64,7 @@ def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> np.ndar
 
 
 @register_metric(name='kyte_doolittle', provides=['kyte_doolittle'], tags={'structure'})
-def calculate_kyte_doolittle(array: struc.AtomArray) -> np.ndarray:
+def calculate_kyte_doolittle(array: struc.AtomArray) -> pd.DataFrame:
     """
     Calculate Kyte–Doolittle hydropathy per residue.
 
