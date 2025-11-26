@@ -153,24 +153,32 @@ def test_calculate_sasa():
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
 
 
-def test_calculate_kyte_doolittle():
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
     arr = _make_chain(aa_list=aa_list, chain_id='A')
     
-    # Calculate Kyte-Doolittle values
-    kd_values = metrics.calculate_kyte_doolittle(arr)
+    # Calculate Kyte-Doolittle values - should return a DataFrame with 'kyte_doolittle' column
+    kd_df = metrics.calculate_kyte_doolittle(arr)
+    
+    # Check that we get a DataFrame
+    assert isinstance(kd_df, pd.DataFrame), "calculate_kyte_doolittle should return a DataFrame"
+    
+    # Check that 'kyte_doolittle' column exists
+    assert 'kyte_doolittle' in kd_df.columns, "DataFrame should have 'kyte_doolittle' column"
     
     # Check that we get per-residue values
     res_starts = struc.get_residue_starts(arr)
-    assert len(kd_values) == len(res_starts)
+    assert len(kd_df) == len(res_starts)
+    
+    # Extract values for testing
+    kd_values = kd_df['kyte_doolittle']
     
     # ILE should be very hydrophobic (around 4.5)
-    print(kd_values)
-    assert kd_values[0] > 4.0, "ILE should be highly hydrophobic"
+    assert kd_values.iloc[0] > 4.0, "ILE should be highly hydrophobic"
     # ASP and GLU should be hydrophilic (around -3.5)
-    assert kd_values[3] < -3.0, "ASP should be hydrophilic"
-    assert kd_values[4] < -3.0, "GLU should be hydrophilic"
+    assert kd_values.iloc[3] < -3.0, "ASP should be hydrophilic"
+    assert kd_values.iloc[4] < -3.0, "GLU should be hydrophilic"
+
 
 
 def test_calculate_residue_packing():
