@@ -5,6 +5,7 @@ import pytest
 
 from src.structure import metrics
 from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
+from src.structure.structure_context import Context
 
 import biotite.structure as struc
 
@@ -28,7 +29,7 @@ def test_calculate_sasa():
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
     print('FAIL-1')
-    context = metrics.Context(array=arr)
+    context = Context(array=arr)
     print('FAIL')
 
     output = metrics.calculate_sasa(context)
@@ -43,7 +44,7 @@ def test_calculate_kyte_doolittle():
     aa_list = random.choices(AA_LIST, k=10)
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
-    context = metrics.Context(array=arr)
+    context = Context(array=arr)
 
     output = metrics.calculate_kyte_doolittle(context)
 
@@ -81,7 +82,7 @@ def test_define_secondary_structure():
     aa_list = residue_table.resn.tolist()
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
-    context = metrics.Context(array=arr)
+    context = Context(array=arr)
     context.residue_table = residue_table
 
     output = metrics.define_secondary_structure(context)
