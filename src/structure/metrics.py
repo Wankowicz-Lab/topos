@@ -146,7 +146,7 @@ def define_secondary_structure(ctx: Context) -> pd.DataFrame:
         "resn": resn,
         "sse": sse_vals
     })
-    print(ss_df.head())
+    ss_output = ss_df.copy()
 
     if ctx.membrane_protein:
         ss_output = pdbtm.define_secondary_structure(Context.residue_table, ss_df)
