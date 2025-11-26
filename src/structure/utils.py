@@ -5,6 +5,7 @@ from collections import defaultdict, namedtuple
 from typing import Dict, List, Tuple
 
 import numpy as np
+import pandas as pd
 import biotite.structure as struc
 
 #________________HYDROGEN BONDS__________________________
