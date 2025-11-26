@@ -47,7 +47,7 @@ def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> pd.Data
         DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
+    atom_sasa = struc.sasa(array, vdw_radii)
     print(atom_sasa)
 
     # Sum up SASA for each residue
@@ -99,7 +99,6 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> pd.DataFrame:
 
 @register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
 def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> pd.DataFrame:
-
     """
     Calculate distance of each residue from the edge of the membrane along the z-axis.
 
@@ -130,7 +129,9 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
     return metadata_df
 
 def define_secondary_structure(ctx: Context) -> pd.DataFrame:
-    """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
+    """
+    Calculate secondary structure and merge adjacent regions based on heuristics or membrane information
+    """
 
     array = ctx.aa
     
