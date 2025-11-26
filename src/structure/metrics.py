@@ -93,7 +93,7 @@ def calculate_kyte_doolittle(array: struc.AtomArray | Context) -> pd.DataFrame:
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
 
     # Collapse to per-residue (mean of identical values == the same value)
-    kd_per_res = struc.apply_residue_wise(array, atom_vals, func=lambda x: np.nanmean(x))
+    kd_per_res = struc.apply_residue_wise(array, atom_vals, function=np.nanmean)
     
     # Attach to metadata DataFrame
     metadata_df = get_metadata_cols(array)
