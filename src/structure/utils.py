@@ -8,6 +8,27 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 
+def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
+    """
+    Extract metadata columns (chain, resi, resn) from an AtomArray.
+    
+    Parameters:
+    -----------
+    array : AtomArray
+        Structure array
+        
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with columns 'chain', 'resi', 'resn' for each residue
+    """
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    resi = array.res_id[res_starts]
+    resn = array.res_name[res_starts]
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
+
+
 #________________HYDROGEN BONDS__________________________
 
 DA_MAX = 3.5           # Å donor–acceptor distance
