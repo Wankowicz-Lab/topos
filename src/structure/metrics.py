@@ -47,7 +47,6 @@ def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> pd.Data
 def calculate_kyte_doolittle(array: struc.AtomArray) -> pd.DataFrame:
     """
     Calculate Kyte–Doolittle hydropathy per residue.
-
     Parameters
     ----------
     context.array: AtomArray
@@ -118,9 +117,9 @@ def define_secondary_structure(ctx: Context) -> pd.DataFrame:
     array = ctx.aa
     
     res_starts = struc.get_residue_starts(array)
-    chains = Context.chain_id[res_starts]
-    resi = Context.res_id[res_starts]
-    resn = Context.res_name[res_starts]
+    chains = array.chain_id[res_starts]
+    resi = array.res_id[res_starts]
+    resn = array.res_name[res_starts]
     sse_vals = calculate_secondary_structure(array)
 
     ss_df = pd.DataFrame({
