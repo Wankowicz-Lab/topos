@@ -11,6 +11,22 @@ from src.sequence import utils
 
 
 # TODO: move helper functions to separate file so only @registered_metric functions remain here
+def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
+    """
+    Calculate secondary structure assignment per residue.
+
+    Parameters:
+    -----------
+    array : AtomArray
+        Structure array (amino acids only recommended)
+
+    Returns:
+    --------
+    np.ndarray
+        Per-residue secondary structure assignment.
+        'a' = alpha-helix, 'b' = beta-sheet, 'c' = coil
+    """
+    return struc.annotate_sse(array)
 
 @register_metric(name='sasa', provides=['sasa'], tags={'structure'})
 def calculate_sasa(array: struc.AtomArray, vdw_radii: str = "ProtOr") -> pd.DataFrame:
