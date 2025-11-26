@@ -111,9 +111,11 @@ def calculate_membrane_distance(array: struc.AtomArray, membrane_thickness) -> p
 
     return metadata_df
 
-def define_secondary_structure(array: struc.AtomArray) -> pd.DataFrame:
+def define_secondary_structure(ctx: Context) -> pd.DataFrame:
     """Calculate secondary structure and merge adjacent regions based on heuristics or membrane information"""
 
+    array = ctx.aa
+    
     res_starts = struc.get_residue_starts(array)
     chains = Context.chain_id[res_starts]
     resi = Context.res_id[res_starts]
@@ -127,7 +129,7 @@ def define_secondary_structure(array: struc.AtomArray) -> pd.DataFrame:
         "sse": sse_vals
     })
 
-    if Context.membrane_protein:
+    if ctx.membrane_protein:
         ss_output = pdbtm.define_secondary_structure(Context.residue_table, ss_df)
     else:
         # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
