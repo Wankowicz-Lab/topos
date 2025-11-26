@@ -110,6 +110,27 @@ def test_calculate_membrane_distance():
     assert np.allclose(distances, expected_distances)
 
 
+def test_define_secondary_structure():
+    # Create input data
+    residue_table = _make_residue_table(num_chains=1, make_muts=False)
+    residue_table['pdbtm_region'] = 'membrane_spanning'
+    residue_table['pdbtm_region_detailed'] = 'TM1'
+    aa_list = residue_table.resn.tolist()
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+
+    context = Context(array=arr)
+    context.residue_table = residue_table
+
+    output = metrics.define_secondary_structure(context)
+    assert 'ss_domains' not in output.columns.tolist()
+    assert 'ss_group' in output.columns.tolist()
+
+    context.membrane_protein = True
+    output = metrics.define_secondary_structure(context)
+    assert 'ss_domains' in output.columns.tolist()
+    assert 'ss_group' in output.columns.tolist()
+
+
 def test_calculate_sasa():
     # Create a simple chain with a few residues
     aa_list = ['ALA', 'GLY', 'SER']
@@ -121,8 +142,10 @@ def test_calculate_sasa():
     # Check that we get per-residue SASA values
     res_starts = struc.get_residue_starts(arr)
     assert len(sasa_values) == len(res_starts)
-    assert all(sasa_values >= 0), "SASA values should be non-negative"
+    # Ensure sasa_values is numeric before comparison
     assert isinstance(sasa_values, np.ndarray)
+    assert sasa_values.dtype in [np.float64, np.float32, np.int64, np.int32], f"SASA values should be numeric, got {sasa_values.dtype}"
+    assert np.all(sasa_values >= 0), "SASA values should be non-negative"
 
 
 def test_calculate_secondary_structure():
