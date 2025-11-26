@@ -1,4 +1,4 @@
-# metrics_core.py
+# structure_context.py
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,8 +29,14 @@ def register_metric(*, name: str, provides: Iterable[str],
                       tags=set(tags), requires=set(requires))
     def _wrap(fn: MetricFunc):
         if name in _REGISTRY:
-            raise ValueError(f"Metric '{name}' already registered")
-        _REGISTRY[name] = (meta, fn)
+            # If the same function is being registered again (e.g., module reload),
+            # allow it silently. Otherwise, raise an error for conflicting registrations.
+            existing_meta, existing_fn = _REGISTRY[name]
+            if existing_fn is not fn:
+                raise ValueError(f"Metric '{name}' already registered with a different function")
+            # Same function, allow re-registration (idempotent)
+        else:
+            _REGISTRY[name] = (meta, fn)
         return fn
     return _wrap
 
@@ -45,10 +51,10 @@ def metrics_with_tag(tag: str) -> List[str]:
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack
     aa: Optional[struc.AtomArray] = None        # amino-acid only
-    residue_table: Optional[pd.DataFrame] = None     # (chain, resi, ins, resn)
+    residue_table: Optional[pd.DataFrame] = None     # (chain, resi,resn)
     kdtree: Any = None                          # built on demand
-    neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff -> neighbor lists
-    extras: Dict[str, Any] = None               # room for DSSP, graphs, etc.
+    neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff
+    extras: Dict[str, Any] = None               
     membrane_protein: bool = False
 
     def __post_init__(self):
@@ -66,14 +72,12 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
-    ins    = getattr(array, "ins_code", None)
-    ins    = ins[res_starts] if ins is not None else np.array([None]*len(res_starts), dtype=object)
     resn   = array.res_name[res_starts]
-    return pd.DataFrame({"chain": chains, "resi": resi, "ins": ins, "resn": resn})
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
 
 def load_structure(path: str | Path,
                    model: Optional[int] = 1,
-                   altloc_policy: Literal["occupancy","first","all"] = "occupancy",
+                   altloc_policy: Literal["occupancy","all"] = "occupancy",
                    pdb_ext: str = "pdb") -> struc.AtomArray:
 
 
@@ -96,8 +100,3 @@ def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
         keep[idx[int(np.argmax(occ))]] = True
     return keep
 
-def _keep_first_altloc_per_atom(array: struc.AtomArray) -> np.ndarray:
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id","res_id","atom_name","altloc_id"]):
-        keep[idx[0]] = True
-    return keep
