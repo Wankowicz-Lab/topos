@@ -136,16 +136,24 @@ def test_calculate_sasa():
     aa_list = ['ALA', 'GLY', 'SER']
     arr = _make_chain(aa_list=aa_list, chain_id='A')
     
-    # Calculate SASA
-    sasa_values = metrics.calculate_sasa(arr)
+    # Calculate SASA - should return a DataFrame with 'sasa' column
+    sasa_df = metrics.calculate_sasa(arr)
+    
+    # Check that we get a DataFrame
+    assert isinstance(sasa_df, pd.DataFrame), "calculate_sasa should return a DataFrame"
+    
+    # Check that 'sasa' column exists
+    assert 'sasa' in sasa_df.columns, "DataFrame should have 'sasa' column"
     
     # Check that we get per-residue SASA values
     res_starts = struc.get_residue_starts(arr)
-    assert len(sasa_values) == len(res_starts)
-    # Ensure sasa_values is numeric before comparison
-    assert isinstance(sasa_values, np.ndarray)
+    assert len(sasa_df) == len(res_starts), f"Expected {len(res_starts)} rows, got {len(sasa_df)}"
+    
+    # Check that SASA values are numeric and non-negative
+    sasa_values = sasa_df['sasa']
     assert sasa_values.dtype in [np.float64, np.float32, np.int64, np.int32], f"SASA values should be numeric, got {sasa_values.dtype}"
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
+
 
 
 def test_calculate_secondary_structure():
