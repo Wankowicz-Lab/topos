@@ -106,7 +106,7 @@ def test_calculate_membrane_distance():
     # Expected distance is absolute z minus membrane thickness
     expected_distances = np.abs(np.array(z_values)) - 15.0
 
-    assert np.allclose(distances, expected_distances)
+    assert np.allclose(distances['distance_from_membrane_edge'], expected_distances)
 
 def test_define_secondary_structure():
     # Create input data
