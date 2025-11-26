@@ -72,11 +72,12 @@ def calculate_kyte_doolittle(array: struc.AtomArray) -> pd.DataFrame:
 
     # Collapse to per-residue (mean of identical values == the same value)
     kd_per_res = struc.apply_residue_wise(array, atom_vals, np.nanmean)
-
-    # Collapse to per-residue (mean of identical values == the same value)
-    kd_per_res = struc.apply_residue_wise(array, atom_vals, func=lambda x: np.nanmean(x))
     
-    return kd_per_res
+    metadata_df = utils.get_metadata_cols(array)
+    metadata_df['kyte_doolittle'] = kd_per_res
+    
+    return metadata_df
+  
 
 
 @register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
