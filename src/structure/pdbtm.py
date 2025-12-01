@@ -8,14 +8,13 @@ from itertools import groupby
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
-def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]]]:
+def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     """
-    Parse PDBTM XML content into a list of regions and a chain→regions dictionary.
+    Parse PDBTM XML content into a list of regions and transformation matrix.
     """
     parser = etree.XMLParser(ns_clean=True, recover=True)
     root = etree.fromstring(xml_bytes, parser=parser)
     regions = []
-    chain_map = {}
 
     # Loop through <CHAIN> elements
     for chain_elem in root.xpath("//*[local-name() = 'CHAIN']"):
@@ -25,7 +24,6 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
         if not cid:
             continue
 
-        chain_regions = []
         # Loop through <REGION> elements inside each chain
         for region in chain_elem.xpath(".//*[local-name() = 'REGION']"):
             def get_int(attr_names):
@@ -61,11 +59,33 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[List[dict], Dict[str, List[dict]
                 pdb_end=pdb_end,
             )
             regions.append(rec)
-            chain_regions.append(rec)
 
-        chain_map[cid] = chain_regions
+    # find MEMBRANE node
+    membrane_node = root.xpath("//*[local-name() = 'MEMBRANE']")
+    if not membrane_node:
+        raise RuntimeError("No <MEMBRANE> element found in XML")
 
-    return regions, chain_map
+    # use the first MEMBRANE block
+    mem = membrane_node[0]
+
+    # Extract TMATRIX rows
+    tmatrix_node = mem.xpath(".//*[local-name() = 'TMATRIX']")
+    if not tmatrix_node:
+        raise RuntimeError("No <TMATRIX> element found in <MEMBRANE>")
+
+    tn = tmatrix_node[0]
+
+    # Parse numeric values from each row
+    mat = np.eye(4, dtype=float)
+    for i, key in enumerate(["ROWX", "ROWY", "ROWZ"]):
+        row = tn.xpath(f".//*[local-name() = '{key}']")[0]
+
+        mat[i, 0] = float(row.get("X"))
+        mat[i, 1] = float(row.get("Y"))
+        mat[i, 2] = float(row.get("Z"))
+        mat[i, 3] = float(row.get("T"))
+
+    return mat, regions
 
 
 def describe_pdbtm_region(region_code: str) -> str:
@@ -98,17 +118,17 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
 
     Parameters:
     -----------
-        pdb_id : str
+        pdb_id: str
             4-character PDB identifier (case-insensitive)
-        timeout : int
+        timeout: int
             Request timeout in seconds (default: 15)
 
     Returns:
     ---------
-        regions_df : pd.DataFrame
-            Dataframe with information on regions in each chain
-        chain_map : dict
-            mapping chain ID -> list of region dicts
+        regions_df: pd.DataFrame
+            DataFrame with PDBTM region annotations
+        mat: np.ndarray
+            4x4 transformation matrix from PDBTM
     """
 
     pdb = pdb_id.lower()
@@ -122,14 +142,51 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
         raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}")
 
     xml_bytes = r.content
-    regions, chain_map = _parse_pdbtm_xml(xml_bytes)
+    mat, regions = _parse_pdbtm_xml(xml_bytes)
 
     if not regions:
         raise RuntimeError(f"No regions found in XML for {pdb_id}")
 
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
     regions_df.type = regions_df.type.apply(describe_pdbtm_region)
-    return regions_df, chain_map
+
+    return regions_df, mat
+
+
+def transform_coordinates(coords: np.ndarray, tmatrix: np.ndarray) -> np.ndarray:
+    """
+    Apply the PDBTM transformation matrix to a set of 3D coordinates.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Nx3 array of 3D coordinates
+    tmatrix : np.ndarray
+        4x4 transformation matrix from PDBTM with 3x3 rotation matrix and 4th column translation vector
+
+    Returns
+    -------
+    transformed_coords : np.ndarray
+        Nx3 array of transformed 3D coordinates
+    """
+
+    if len(coords.shape) !=2 or coords.shape[1] != 3:
+        raise ValueError("Coordinates must be of shape Nx3")
+
+    if tmatrix.shape != (4, 4):
+        raise ValueError("Transformation matrix must be of shape 4x4")
+
+    # Convert to homogeneous coordinates by adding a column of ones
+    num_coords = coords.shape[0]
+    homogeneous_coords = np.hstack([coords, np.ones((num_coords, 1))])
+
+    # Apply the transformation matrix
+    transformed_homogeneous = homogeneous_coords @ tmatrix.T
+
+    # Convert back to 3D coordinates by dropping the homogeneous coordinate
+    transformed_coords = transformed_homogeneous[:, :3]
+
+    return transformed_coords
 
 
 def annotate_pdbtm_detailed(pdbtm_regions: pd.DataFrame) -> pd.DataFrame:
@@ -315,4 +372,4 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
                 residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
 
 
-    return residue_table[['chain', 'resi', 'ss_group', 'ss_domains']]
+    return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']]

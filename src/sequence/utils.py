@@ -1,5 +1,8 @@
 import warnings
 
+import biotite.structure as struc
+import pandas as pd
+
 # Bi-directional mapping between amino acid codes
 AA_3_TO_1 = {
     "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D",
@@ -49,3 +52,19 @@ def convert_amino_acid(code):
 
     warnings.warn(f"Unexpected amino acid code length: {code}")
     return code
+
+
+def get_metadata_cols(array):
+    """Gets metadata columns from an AtomArray or AtomArrayStack."""
+
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    resi = array.res_id[res_starts]
+    resn = array.res_name[res_starts]
+
+    return pd.DataFrame({
+        "chain": chains,
+        "resi": resi,
+        "resn": resn
+    })
+

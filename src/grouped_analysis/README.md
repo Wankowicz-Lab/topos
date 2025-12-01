@@ -2,6 +2,7 @@ This folder contains scripts for analyzing groups of PDBs. All PDBs need outputs
 
 
 They also require a content or cluster file with how PDBs should be compared. For only descriptive information, including a cluster file with one Cluster defined. 
+
 ##TO DO-> FIX THIS
 
 
