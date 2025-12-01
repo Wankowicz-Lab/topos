@@ -19,3 +19,14 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "coveralls", "ruff", "mypy"]
 
+[project.scripts]
+biogenesis = "pipeline.runner:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+
