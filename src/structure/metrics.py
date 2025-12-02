@@ -221,7 +221,7 @@ def calculate_hbond_metrics(context: Context) -> dict[str, np.ndarray]:
         "total_hbond_count": total_counts,
     }
 
-@register_metric(name='calculate_hbond_metrics', provides=['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density'], tags={'structure', 'interaction'})
+@register_metric(name='calculate_packing_metrics', provides=['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density'], tags={'structure', 'interaction'})
 def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> dict[str, np.ndarray]:
     """
     Compute residue packing values.
