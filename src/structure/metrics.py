@@ -38,10 +38,6 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     -----------
     array : AtomArray or Context
         Structure array (amino acids only recommended) or Context object containing the array.
-    vdw_radii : str
-        Van der Waals radii set. Use "ProtOr" (default) for structures without hydrogens,
-        or "Single" for structures with hydrogen atoms resolved.
-    
     Returns:
     --------
     pd.DataFrame
@@ -49,7 +45,7 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     """
     # Calculate atom-wise SASA
     array = context.array
-    atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
+    atom_sasa = struc.sasa(array=array)
     
     # Sum up SASA for each residue
     res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
