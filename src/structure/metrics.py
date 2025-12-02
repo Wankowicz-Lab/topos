@@ -50,7 +50,7 @@ def calculate_sasa(context: Context, vdw_radii: str = "ProtOr") -> pd.DataFrame:
         DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    array, vdw_radii = context.array, context.vdw_radii
+    array = context.array
     atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
     
     # Sum up SASA for each residue
