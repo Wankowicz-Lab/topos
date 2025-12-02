@@ -164,10 +164,11 @@ def calculate_hbond_metrics(context: Context) -> dict[str, np.ndarray]:
     Compute several per-residue hydrogen-bond metrics using an altloc-aware donor/acceptor model.     
     Metrics (all per residue, aligned to `struc.get_residue_starts(array)`)
     """
-    donors, acceptors = _build_sites_biotite(context.array)
+    array = context.array
+    donors, acceptors = _build_sites_biotite(array)
     hbonds = _detect_hbonds(donors, acceptors)
     
-    res_starts = struc.get_residue_starts(context.array)
+    res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
