@@ -10,8 +10,8 @@ from . import pdbtm
 from .utils import residue_key, is_heavy, get_metadata_cols
 from .utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as _detect_hbonds
 
-# TODO: move helper functions to separate file so only @registered_metric functions remain here
-def calculate_secondary_structure(array: struc.AtomArray | Context) -> np.ndarray:
+# TODO: move helper functions to a separate file so only @registered_metric functions remain here
+def calculate_secondary_structure(array) -> np.ndarray:
     """
     Calculate secondary structure assignment per residue.
     
@@ -26,13 +26,11 @@ def calculate_secondary_structure(array: struc.AtomArray | Context) -> np.ndarra
         Per-residue secondary structure assignment.
         'a' = alpha-helix, 'b' = beta-sheet, 'c' = coil
     """
-    if isinstance(array, Context):
-        array = array.array
     return struc.annotate_sse(array)
     
 
 @register_metric(name='sasa', provides=['sasa'], tags={'structure'})
-def calculate_sasa(context: Context, vdw_radii: str = "ProtOr") -> pd.DataFrame:
+def calculate_sasa(context: Context) -> pd.DataFrame:
     """
     Calculate solvent accessible surface area (SASA) per residue.
     
