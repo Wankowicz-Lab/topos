@@ -134,9 +134,10 @@ def test_calculate_sasa():
     # Create a simple chain with a few residues
     aa_list = ['ALA', 'GLY', 'SER']
     arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr)
     
     # Calculate SASA - should return a DataFrame with 'sasa' column
-    sasa_df = metrics.calculate_sasa(arr)
+    sasa_df = metrics.calculate_sasa(context)
 
     # Check that SASA values are non-negative
     sasa_values = sasa_df['sasa']
@@ -146,8 +147,9 @@ def test_KD_values():
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
     arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr)
     
-    kd_df = metrics.calculate_kyte_doolittle(arr)
+    kd_df = metrics.calculate_kyte_doolittle(context)
     # Check that we get per-residue values
     res_starts = struc.get_residue_starts(arr)
     assert len(kd_df) == len(res_starts)
@@ -164,9 +166,10 @@ def test_calculate_residue_packing():
     # Create a chain with a few residues that can be close together
     aa_list = ['ALA', 'GLY', 'ALA', 'LEU']
     arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr)
     
     # Calculate packing metrics
-    packing = metrics.calculate_residue_packing(arr, cutoff=5.0)
+    packing = metrics.calculate_residue_packing(context, cutoff=5.0)
     
     # Check that all expected keys are present
     expected_keys = ['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density']
@@ -188,9 +191,9 @@ def test_calculate_hbond_metrics():
     # Create a chain with residues that can form H-bonds
     aa_list = ['SER', 'GLY', 'ASP', 'ASN']
     arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr)
     
-
-    hbond_metrics = metrics.calculate_hbond_metrics(arr)
+    hbond_metrics = metrics.calculate_hbond_metrics(context)
         
     # Check that all expected keys are present
     expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']
