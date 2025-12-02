@@ -129,7 +129,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     # Calculate distance from membrane edge
     distance_from_edge = np.abs(res_z) - membrane_thickness
     
-    metadata_df = utils.get_metadata_cols(array)
+    metadata_df = get_metadata_cols(array)
     metadata_df['distance_from_membrane_edge'] = distance_from_edge
 
     return metadata_df
