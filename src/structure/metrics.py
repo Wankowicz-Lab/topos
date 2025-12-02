@@ -153,7 +153,7 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     return ss_output
 
 @register_metric(name='calculate_hbond_metrics', provides=['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count'], tags={'structure', 'interaction'})
-def calculate_hbond_metrics(context: Context) -> dict[str, np.ndarray]:
+def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     """
     Compute several per-residue hydrogen-bond metrics using an altloc-aware donor/acceptor model.     
     Metrics (all per residue, aligned to `struc.get_residue_starts(array)`)
@@ -209,12 +209,13 @@ def calculate_hbond_metrics(context: Context) -> dict[str, np.ndarray]:
                 bb_counts[a_idx] += 1
             else:
                 sc_counts[a_idx] += 1
+    
+    metadata_df = get_metadata_cols(array)
+    metadata_df['bb_hbond_count'] = bb_counts
+    metadata_df['sc_hbond_count'] = sc_counts
+    metadata_df['total_hbond_count'] = total_counts
+    return metadata_df
 
-    return {
-        "bb_hbond_count": bb_counts,
-        "sc_hbond_count": sc_counts,
-        "total_hbond_count": total_counts,
-    }
 
 @register_metric(name='calculate_packing_metrics', provides=['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density'], tags={'structure', 'interaction'})
 def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataFrame:
@@ -287,6 +288,7 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
             n_atoms[idx] = res_n_atoms
             n_neighbors[idx] = len(neighbor_res_keys)
             contact_density[idx] = len(neighbor_res_keys) / max(1, res_n_atoms)
+    
     metadata_df = get_metadata_cols(array)
     metadata_df['packing_n_atoms'] = n_atoms
     metadata_df['packing_n_neighbor_residues'] = n_neighbors
