@@ -217,7 +217,7 @@ def calculate_hbond_metrics(context: Context) -> dict[str, np.ndarray]:
     }
 
 @register_metric(name='calculate_packing_metrics', provides=['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density'], tags={'structure', 'interaction'})
-def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> dict[str, np.ndarray]:
+def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataFrame:
     """
     Compute residue packing values.
     """
@@ -288,8 +288,9 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> dict[str
             n_neighbors[idx] = len(neighbor_res_keys)
             contact_density[idx] = len(neighbor_res_keys) / max(1, res_n_atoms)
 
-    return {
+   packing_df = pd.DataFrame({
         "packing_n_atoms": n_atoms,
         "packing_n_neighbor_residues": n_neighbors,
         "packing_contact_density": contact_density,
-    }
+    })
+    return packing_df
