@@ -102,6 +102,7 @@ def test_calculate_membrane_distance():
     aa_list = random.choices(AA_LIST, k=len(z_values))
     arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A')
     context = Context(array=arr)
+    context.membrane_thickness = 15.0
     
     distance_df = metrics.calculate_membrane_distance(context)
     calc_distance = distance_df['distance_from_membrane_edge']
@@ -140,6 +141,7 @@ def test_calculate_sasa():
     
     # Calculate SASA - should return a DataFrame with 'sasa' column
     sasa_df = metrics.calculate_sasa(context)
+    context.vdw_radii = "ProtOr"
 
     # Check that SASA values are non-negative
     sasa_values = sasa_df['sasa']
