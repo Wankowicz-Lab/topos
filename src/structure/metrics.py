@@ -287,10 +287,8 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
             n_atoms[idx] = res_n_atoms
             n_neighbors[idx] = len(neighbor_res_keys)
             contact_density[idx] = len(neighbor_res_keys) / max(1, res_n_atoms)
-
-   packing_df = pd.DataFrame({
-        "packing_n_atoms": n_atoms,
-        "packing_n_neighbor_residues": n_neighbors,
-        "packing_contact_density": contact_density,
-    })
-    return packing_df
+    metadata_df = get_metadata_cols(array)
+    metadata_df['packing_n_atoms'] = n_atoms
+    metadata_df['packing_n_neighbor_residues'] = n_neighbors
+    metadata_df['packing_contact_density'] = contact_density
+    return metadata_df
