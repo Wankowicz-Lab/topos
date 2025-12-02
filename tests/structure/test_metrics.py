@@ -101,7 +101,9 @@ def test_calculate_membrane_distance():
     coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
     aa_list = random.choices(AA_LIST, k=len(z_values))
     arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A')
-    distance_df = metrics.calculate_membrane_distance(arr)
+    context = Context(array=arr)
+    
+    distance_df = metrics.calculate_membrane_distance(context)
     calc_distance = distance_df['distance_from_membrane_edge']
 
     # Expected distance is absolute z minus membrane thickness
