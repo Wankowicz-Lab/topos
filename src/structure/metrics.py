@@ -41,14 +41,12 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata, structural information,
-        and mutation information.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with a column 'sasa' containing per-residue SASA values
-        in Å².
+        DataFrame with 'sasa' along with residue metadata.
     """
     # Calculate atom-wise SASA
     array, vdw_radii = context.aa, context.config.vdw_radii
@@ -72,14 +70,12 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata, structural information,
-        and mutation information.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with a column 'kyte_doolittle' containing per-residue
-        Kyte-Doolittle hydropathy scores. Non-standard residues receive NaN.
+        DataFrame with 'kyte_doolittle' along with residue metadata.
     """
 
     kd_scale = {
@@ -107,21 +103,17 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     """
     Calculate distance of each residue from the edge of the membrane.
 
-    Uses the z-axis to determine membrane position, assuming the membrane
-    plane is oriented horizontally.
+    Uses the z-axis to determine membrane position, assuming the membrane plane is oriented horizontally.
 
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata, structural information,
-        and configuration including membrane thickness.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with a column 'distance_from_membrane_edge' containing
-        per-residue distance from the membrane edge in Angstroms.
-        Negative values indicate positions inside the membrane.
+        DataFrame with 'distance_from_membrane_edge' along with residue metadata.
     """
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
@@ -143,21 +135,18 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     """
     Calculate secondary structure and merge adjacent regions.
 
-    For membrane proteins, uses PDBTM regions to define transmembrane domains
-    and loop regions. For non-membrane proteins, creates contiguous groups
-    based on secondary structure assignments.
+    For membrane proteins, uses PDBTM regions to define transmembrane domains and loop regions.
+    For non-membrane proteins, creates contiguous groups based on secondary structure assignments.
 
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata and structural information.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with 'ss_group' column containing contiguous group labels,
-        and 'ss_domains' column for membrane proteins indicating TMD or loop
-        assignments.
+        DataFrame with 'ss_group', 'ss_domains' along with residue metadata.
     """
 
     res_starts = struc.get_residue_starts(context.aa)
@@ -187,20 +176,17 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     """
     Compute per-residue hydrogen bond metrics.
 
-    Uses an altloc-aware donor/acceptor model to detect hydrogen bonds
-    and count them per residue.
+    Uses an altloc-aware donor/acceptor model to detect hydrogen bonds and count them per residue.
 
     Parameters
     ----------
     context : Context
-        Context object containing the protein structure array.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'bb_hbond_count', 'sc_hbond_count', and
-        'total_hbond_count' indicating backbone, sidechain, and total
-        hydrogen bond counts per residue.
+        DataFrame with 'bb_hbond_count', 'sc_hbond_count', 'total_hbond_count' along with residue metadata.
     """
     array = context.array
     donors, acceptors = _build_sites_biotite(array)
@@ -266,22 +252,20 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     """
     Compute residue packing metrics.
 
-    Calculates the number of heavy atoms per residue, the number of
-    neighboring residues within a distance cutoff, and the contact density
-    (neighbors per atom).
+    Calculates the number of heavy atoms per residue, the number of neighboring residues within a distance cutoff,
+    and the contact density (neighbors per atom).
 
     Parameters
     ----------
     context : Context
-        Context object containing the protein structure array.
+        Context object containing residue metadata, structural information, and mutation information.
     cutoff : float, optional
         Distance cutoff in Angstroms for neighbor detection. Default is 5.0.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'packing_n_atoms', 'packing_n_neighbor_residues',
-        and 'packing_contact_density' for each residue.
+        DataFrame with 'packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density' along with residue metadata.
     """
     array = context.array
     # Residue indexing for original array

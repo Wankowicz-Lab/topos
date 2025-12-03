@@ -13,25 +13,21 @@ KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
 
 @register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
                  requires={'resm'}, tags={'sequence'})
-def calculate_position_effect_quartiles(
-    context: Context, percentiles: Optional[List[float]] = None
-) -> pd.DataFrame:
+def calculate_position_effect_quartiles(context: Context, percentiles: Optional[List[float]] = None) -> pd.DataFrame:
     """
     Calculate quartiles of position effect scores.
 
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata, structural information,
-        and mutation information.
+        Context object containing residue metadata, structural information, and mutation information.
     percentiles : list of float, optional
         List of percentiles to calculate. Default is [25, 50, 75].
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with 'effect_quartile' and 'pos_effect' columns along
-        with residue information.
+        DataFrame with 'effect_quartile', 'pos_effect' along with residue metadata.
 
     Raises
     ------
@@ -85,15 +81,12 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata and amino acid indices
-        in ``context.extras['aaindex']``.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with AAIndex score columns for wildtype and mutant amino acids.
-        Columns include ``AAIndex_{acc}_wt``, ``AAIndex_{acc}_mut``, and
-        ``AAIndex_{acc}_diff`` for each accession.
+        DataFrame with 'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff' along with residue metadata.
     """
     # extract params
     residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
@@ -127,14 +120,12 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     Parameters
     ----------
     context : Context
-        Context object containing residue metadata including 'resn' and 'resm'
-        columns for wildtype and mutant residues.
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with a 'blosum90' column containing BLOSUM90 substitution
-        scores for each mutation.
+        DataFrame with 'blosum90' along with residue metadata.
     """
     residue_table, blosum_threshold = context.residue_table, 90
     blosum_scores = residue_table.loc[residue_table.seq_info, KEEP_COLS].copy()

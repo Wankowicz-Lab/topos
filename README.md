@@ -4,32 +4,32 @@ A toolkit for computing and analyzing sequence and structure metrics.
 
 ## Installation
 
-### Dependencies
-
-To install the required dependencies:
+Install the package from source:
 
 ```bash
-pip install biotite numpy pandas scipy matplotlib
+git clone https://github.com/Wankowicz-Lab/biogenesis.git
+cd biogenesis
+pip install -e .
 ```
 
 ### Development and Testing
 
-To run tests locally, install the testing dependencies:
+To install with development/testing dependencies:
 
 ```bash
-pip install -r requirements-test.txt
+pip install -e ".[test]"
 ```
 
-Then run the test suite:
+Run the test suite:
 
 ```bash
 pytest tests/ -v
 ```
 
-To run tests with code coverage:
+Run tests with code coverage:
 
 ```bash
-pytest tests/ -v --cov=structure --cov=grouped_analysis --cov-report=term --cov-report=xml
+pytest tests/ -v --cov=src --cov-report=term --cov-report=xml
 ```
 
 Coverage reports are automatically generated and uploaded to Coveralls when running through GitHub Actions.
