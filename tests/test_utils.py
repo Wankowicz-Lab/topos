@@ -22,7 +22,10 @@ AA_LIST = ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS',
            'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'SER', 'THR', 'VAL', 'TRP', 'TYR']
 
 
-def _random_AA_seq(length: int = 1, seed: int = None):
+from typing import Optional, List, Union
+
+
+def _random_AA_seq(length: int = 1, seed: Optional[int] = None) -> Union[str, List[str]]:
     """
     Generate a random amino acid sequence.
 

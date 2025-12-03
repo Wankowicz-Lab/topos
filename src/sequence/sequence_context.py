@@ -135,6 +135,7 @@ def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chai
 
     res_table['struct_info'] = True
     res_table_chain = res_table[res_table['chain'] == chain].reset_index(drop=True)
+    # Copy to avoid modifying the caller's DataFrame when adding seq_info column
     dms_scores = dms_scores.copy()
     dms_scores['seq_info'] = True
 

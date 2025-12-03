@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+import random
 
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
@@ -13,6 +14,7 @@ from src.structure.structure_context import _REGISTRY, Config
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)
+random.seed(42)
 
 
 def test_runner_initialization(tmp_path):
