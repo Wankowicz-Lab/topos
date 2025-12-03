@@ -8,15 +8,14 @@ import warnings
 
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
-from biotite.structure.io.pdbx import CIFFile, get_structure, get_model_count
+from biotite.structure.io.pdbx import CIFFile, get_structure
 
-from src.structure import structure_context, metrics
+from src.structure import structure_context
 from src.sequence import sequence_context
 from src.structure import pdbtm
 
 from typing import List, Optional, Dict, Any
 from src.structure.structure_context import _REGISTRY, Config
-import src.sequence.metrics
 
 
 @dataclass
