@@ -1,3 +1,4 @@
+"""Tests for the pipeline runner module."""
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,6 +10,9 @@ from src.pipeline import runner
 import src.sequence.metrics
 import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
+
+# Seed RNGs for deterministic tests
+np.random.seed(42)
 
 
 def test_runner_initialization(tmp_path):

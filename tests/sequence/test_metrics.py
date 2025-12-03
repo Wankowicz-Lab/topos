@@ -1,3 +1,4 @@
+"""Tests for sequence metrics module."""
 import numpy as np
 import pandas as pd
 import random
@@ -6,6 +7,11 @@ from src.sequence import metrics
 from src.sequence.utils import convert_amino_acid
 
 from tests.test_utils import _random_AA_seq, _make_residue_table, _make_aaindex_data
+
+# Seed RNGs for deterministic tests
+np.random.seed(42)
+random.seed(42)
+
 
 def test_calculate_position_effect_quartiles_with_pos_effect():
 
@@ -62,6 +68,46 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     assert 'effect_quartile' in quartile_df.columns
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
     assert 10 not in quartile_df.resi.values
+
+
+def test_calculate_position_effect_quartiles_custom_percentiles():
+    """Test that custom percentiles can be passed without affecting default behavior."""
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
+    # Test with custom percentiles (must be 3 values for quartile bins)
+    custom_percentiles = [20, 50, 80]
+    quartile_df = metrics.calculate_position_effect_quartiles(context, percentiles=custom_percentiles)
+
+    assert 'effect_quartile' in quartile_df.columns
+    assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
+
+
+def test_calculate_position_effect_quartiles_default_not_mutated():
+    """Test that mutable default argument is not mutated across calls."""
+    # This test ensures the fix for mutable default argument is working
+    residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
+    # Call the function twice with default percentiles
+    # If the mutable default was not fixed, subsequent calls could be affected
+    result1 = metrics.calculate_position_effect_quartiles(context)
+    result2 = metrics.calculate_position_effect_quartiles(context)
+
+    # Results should be identical (same default percentiles used)
+    assert len(result1) == len(result2)
+    assert result1['effect_quartile'].equals(result2['effect_quartile'])
 
 
 def test_calculate_aaindex_scores_no_muts():

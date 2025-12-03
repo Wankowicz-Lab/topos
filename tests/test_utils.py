@@ -1,3 +1,9 @@
+"""
+Test utilities for biogenesis tests.
+
+Provides helper functions for creating test data including residue tables,
+atom arrays, and synthetic structure files.
+"""
 from pathlib import Path
 from string import ascii_uppercase
 
@@ -8,15 +14,35 @@ import tomli_w
 
 import biotite.structure as struc
 
+# Seed RNGs for reproducible test data generation
+np.random.seed(42)
+random.seed(42)
+
 AA_LIST = ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS',
            'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'SER', 'THR', 'VAL', 'TRP', 'TYR']
 
 
-def _random_AA_seq(length=1):
+def _random_AA_seq(length: int = 1, seed: int = None):
+    """
+    Generate a random amino acid sequence.
+
+    Parameters
+    ----------
+    length : int, optional
+        Length of the sequence. Default is 1.
+    seed : int, optional
+        Random seed for reproducibility. If provided, reseeds the RNG.
+
+    Returns
+    -------
+    str or list of str
+        Single amino acid code if length is 1, otherwise a list of codes.
+    """
+    if seed is not None:
+        random.seed(seed)
     if length == 1:
         return random.choice(AA_LIST)
     else:
-        # return a list of length=length, each a random amino acid
         return random.choices(AA_LIST, k=length)
 
 
