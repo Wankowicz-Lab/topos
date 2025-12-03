@@ -18,7 +18,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
     Parameters:
     -----------
     context : Context
-        Context object containing residue metadata and DMS scores
+        Context object containing residue metadata, structural information, and mutation information
 
     percentiles : list
         List of percentiles to calculate (default: [25, 50, 75])
