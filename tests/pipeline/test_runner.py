@@ -11,7 +11,7 @@ import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
 
 
-def test_runner_initialization(tmp_path):
+def test_runner_initialization_from_config(tmp_path):
 
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
@@ -27,6 +27,24 @@ def test_runner_initialization(tmp_path):
     assert base_runner.context.config.pdb_path is not None
     assert base_runner.context.config.pdb_ext == 'cif'
     assert base_runner.context.config.mutation_data_path is None
+
+    with pytest.raises(ValueError, match="Either pdb_id or config_path must be provided."):
+        _ = runner.Runner()
+
+
+def test_runner_initialization_from_pdb_id():
+    pdb_id = '8smv'
+
+    id_runner = runner.Runner(
+        pdb_id=pdb_id)
+
+    assert id_runner.context.array is not None
+    assert id_runner.context is not None
+    assert id_runner.context.config is not None
+    assert id_runner.context.config.pdb_id == pdb_id
+    assert id_runner.context.config.pdb_path is not None
+    assert id_runner.context.config.pdb_ext == 'cif'
+    assert id_runner.context.config.mutation_data_path is None
 
 
 def test_runner_initialization_overrides_membrane(tmp_path):
