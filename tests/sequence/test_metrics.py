@@ -84,7 +84,7 @@ def test_calculate_position_effect_quartiles_custom_percentiles():
     # Get results with default percentiles
     default_df = metrics.calculate_position_effect_quartiles(context)
 
-    # Use extreme custom percentiles - set high threshold for Q1 so most data falls in Q1
+    # Use extreme custom percentiles - with [90, 95, 99], most values fall below the 90th percentile, ending up in Q1
     custom_percentiles = [90, 95, 99]
     custom_df = metrics.calculate_position_effect_quartiles(context, percentiles=custom_percentiles)
 
