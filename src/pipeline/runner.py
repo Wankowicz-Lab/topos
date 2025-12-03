@@ -141,17 +141,21 @@ class Runner:
         return Config(**base_dict)
 
 
-    def run(self, metrics: List[str]) -> pd.DataFrame:
+    def run(self, metrics: List[str] = None) -> pd.DataFrame:
         """Compute specified metrics and return as a merged DataFrame.
 
         Parameters
         ----------
-        metrics : List[str]
+        metrics : Optional[List[str]] = None
             List of metric names to compute.
         """
 
+        if metrics is None:
+            metrics = list(_REGISTRY.keys())
+
         # filter unknown metrics
-        metrics = [m for m in metrics if m in _REGISTRY]
+        else:
+            metrics = [m for m in metrics if m in _REGISTRY]
         # TODO: resolve dependencies
         #order = _topological_order(metrics)
         order = metrics.copy()

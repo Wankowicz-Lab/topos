@@ -220,6 +220,9 @@ def test_runner_run_metric(tmp_path):
     all_result = myrunner.run(metrics=list(metrics))
     assert len(all_result) == len(residue_table)
 
+    all_result_default = myrunner.run()
+    pd.testing.assert_frame_equal(all_result, all_result_default)
+
 
 def test_runner_run_metric_no_mutations(tmp_path):
     pdb_id = '8smv'
