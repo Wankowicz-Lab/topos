@@ -371,5 +371,4 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
             if np.sum(ss_mask) > 0:
                 residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
 
-
     return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']].drop_duplicates()

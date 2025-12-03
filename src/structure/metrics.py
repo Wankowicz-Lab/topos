@@ -17,8 +17,8 @@ def calculate_secondary_structure(array) -> np.ndarray:
     
     Parameters:
     -----------
-    array : AtomArray or Context
-        Structure array (amino acids only recommended) or Context.
+    array : AtomArray
+        Structure array (amino acids only recommended).
     
     Returns:
     --------
@@ -36,17 +36,17 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     
     Parameters:
     -----------
-    array : AtomArray or Context
-        Structure array (amino acids only recommended) or Context object containing the array.
+    context: Context
+        Context object containing residue metadata, structural information, and mutation information
+
     Returns:
     --------
     pd.DataFrame
         DataFrame with a column 'sasa' containing per-residue SASA values in Å².
     """
     # Calculate atom-wise SASA
-    array = context.aa
-    atom_sasa = struc.sasa(array=array)
-    
+    array, vdw_radii = context.aa, context.config.vdw_radii
+    atom_sasa = struc.sasa(array=array, vdw_radii=vdw_radii)
 
     # Sum up SASA for each residue
     res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
@@ -65,15 +65,14 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
 
     Parameters
     ----------
-    array : AtomArray or Context
-        Structure array (amino acids recommended) or Context object. Non-standard residues
-        receive NaN.
+    context: Context
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns
     -------
     pd.DataFrame
         DataFrame with a column 'kyte_doolittle' containing per-residue
-        Kyte–Doolittle hydropathy scores.
+        Kyte–Doolittle hydropathy scores. Non-standard residues receive NaN.
     """
 
     kd_scale = {
@@ -103,20 +102,19 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
 
     Parameters:
     -----------
-    array : AtomArray or Context
-        Structure array (amino acids only recommended) or Context object.
-    membrane_thickness : float
-        Half-thickness of the membrane in Angstroms (default: 15 Å)
+    context: Context
+        Context object containing residue metadata, structural information, and mutation information.
 
     Returns:
     ---------
-    np.ndarray
-        Per-residue distance from the membrane edge in Angstroms.
-        Negative values indicate positions inside the membrane.
+    pd.DataFrame
+        DataFrame with a column 'membrane_distance' containing per-residue distance
+        from the membrane edge in Angstroms. Negative values indicate positions inside the membrane.
     """
-    array, membrane_thickness = context.array, context.membrane_thickness
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
+    array, membrane_thickness = context.array, context.config.membrane_thickness
+
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
 
@@ -145,7 +143,7 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
         "sse": sse_vals
     })
 
-    if context.membrane_protein:
+    if context.config.membrane_protein:
         ss_output = pdbtm.define_secondary_structure(context.residue_table, ss_df)
     else:
         # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
@@ -248,6 +246,7 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     mask = aa_mask & heavy_mask
     arr = array[mask]
 
+    # TODO: handle empty case so that it still returns a DF
     if arr.array_length() == 0:
         return {
             "packing_n_atoms": n_atoms,

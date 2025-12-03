@@ -18,7 +18,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
     Parameters:
     -----------
     context : Context
-        Context object containing residue metadata and DMS scores
+        Context object containing residue metadata, structural information, and mutation information
 
     percentiles : list
         List of percentiles to calculate (default: [25, 50, 75])
@@ -64,7 +64,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: list = [2
 
     return pos_scores
 
-@register_metric(name='aa_index_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
+@register_metric(name='aaindex_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
                  tags={'sequence'})
 def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
@@ -81,7 +81,7 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
         DataFrame with AAIndex score columns for wildtype and mutant amino acids.
     """
     # extract params
-    residue_table, aaindex_data = context.residue_table, context.aaindex_data
+    residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
 
     # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]

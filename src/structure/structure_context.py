@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
+from pydantic import BaseModel
 from biotite.structure.io.pdbx import CIFFile, get_structure, get_model_count
 
 # ---------------- Registry ----------------
@@ -47,6 +48,69 @@ def metrics_with_tag(tag: str) -> List[str]:
     return sorted(m for m,(meta,_) in _REGISTRY.items() if tag in meta.tags)
 
 # --------------- Context ------------------
+class Config(BaseModel):
+    """
+    Configuration settings for protein structure analysis pipeline.
+
+    This class manages all configurable parameters for the pipeline including structure data sources,
+    membrane protein settings, mutagenesis data, and feature calculation options.
+
+    Attributes
+    ----------
+    pdb_id : Optional[str]
+        PDB identifier for fetching structure from RCSB.
+    pdb_path : Optional[Path]
+        Local path to structure file (PDB or mmCIF format).
+    pdb_ext : Optional[str]
+        File extension of the structure file.
+    membrane_protein : Optional[bool]
+        Whether the protein is a membrane protein (affects analysis methods).
+    vdw_radii : str
+        Van der Waals radii set to use for calculations (default: "ProtOr").
+    membrane_thickness : Optional[float]
+        Half-thickness of membrane in Angstroms (default: 15).
+    mutation_data_path : Optional[Path]
+        Path to CSV file containing mutagenesis data.
+    mutation_data_chain : Optional[str]
+        Chain identifier for mutagenesis data alignment.
+    aaindex_path : Path
+        Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
+    """
+
+
+    # Allow values to be changed after initialization
+    model_config = {"validate_assignment": True}
+
+    # structure data
+    pdb_id: Optional[str] = None
+    pdb_path: Optional[Path] = None
+    pdb_ext: Optional[str] = None
+    membrane_protein: Optional[bool] = False
+
+    # structure parameters
+    vdw_radii: str = "ProtOr"
+    membrane_thickness: Optional[float] = 15
+
+    # mutagenesis data
+    mutation_data_path: Optional[Path] = None
+    mutation_data_chain: Optional[str] = None
+
+    # sequence features
+    aaindex_path: Path = 'data/aaindex_parsed_small.csv'
+
+    def model_post_init(self, __context):
+        if self.mutation_data_path is not None:
+            if not Path(self.mutation_data_path).is_file():
+                raise ValueError(f"Mutation data file not found at {self.mutation_data_path}")
+
+            if self.mutation_data_chain is None:
+                raise ValueError("If mutation_data_path is provided, "
+                                 "mutation_data_chain must also be provided.")
+
+        if not Path(self.aaindex_path).is_file():
+            raise ValueError(f"AA index data file not found at {self.aaindex_path}")
+
+
 @dataclass
 class Context:
     array: struc.AtomArray | struc.AtomArrayStack
@@ -54,8 +118,8 @@ class Context:
     residue_table: Optional[pd.DataFrame] = None     # (chain, resi,resn)
     kdtree: Any = None                          # built on demand
     neighbor_cache: Dict[float, list[np.ndarray]] = None # cutoff
-    extras: Dict[str, Any] = None               
-    membrane_protein: bool = False
+    extras: Dict[str, Any] = None
+    config: Optional[Config] = None
 
     def __post_init__(self):
         self.neighbor_cache = {}
@@ -67,6 +131,13 @@ class Context:
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
         self.residue_table = residue_table(aa)
+
+        if self.config is None:
+            self.config = Config()
+
+        if self.config.aaindex_path is not None:
+            aa_index = pd.read_csv(self.config.aaindex_path)
+            self.extras['aaindex'] = aa_index
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
@@ -99,4 +170,3 @@ def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
         occ = array.occupancy[idx]
         keep[idx[int(np.argmax(occ))]] = True
     return keep
-

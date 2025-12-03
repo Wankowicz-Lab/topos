@@ -2,16 +2,53 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data
+from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
 
 # import files containing metrics to register them in _REGISTRY
 import src.sequence.metrics
 import src.structure.metrics
-from src.structure.structure_context import _REGISTRY
+from src.structure.structure_context import _REGISTRY, Config
 
 
 def test_runner_initialization(tmp_path):
+
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+
+    base_runner = runner.Runner(
+        config_path=config_path
+    )
+
+    assert base_runner.context.array is not None
+    assert base_runner.context is not None
+    assert base_runner.context.config is not None
+    assert base_runner.context.config.pdb_id == '8smv'
+    assert base_runner.context.config.pdb_path is not None
+    assert base_runner.context.config.pdb_ext == 'cif'
+    assert base_runner.context.config.mutation_data_path is None
+
+
+def test_runner_initialization_overrides_membrane(tmp_path):
+
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A')
+
+    membrane_runner = runner.Runner(
+        pdb_id='9DMS',
+        pdb_path=None,
+        membrane_protein=True,
+        mutation_data_path=None,
+        config_path=config_path
+    )
+    assert membrane_runner.context.config.pdb_id == '9DMS'
+    assert membrane_runner.context.config.membrane_protein is True
+    assert 'pdbtm_region' in membrane_runner.context.residue_table.columns.tolist()
+    assert 'pdbtm_region_detailed' in membrane_runner.context.residue_table.columns.tolist()
+
+def test_runner_initialization_overrides_mutation_data(tmp_path):
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A')
 
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
@@ -20,6 +57,7 @@ def test_runner_initialization(tmp_path):
         start_resis=1,
         make_muts=True
     )
+
     mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
         'resn': 'wildtype',
@@ -32,44 +70,54 @@ def test_runner_initialization(tmp_path):
     mut_data_path = tmp_path / 'mut_data.csv'
     mut_dataset.to_csv(mut_data_path, index=False)
 
-    pdb_id = '8smv'
-
-    myrunner = runner.Runner(
-        pdb_id=pdb_id,
-        pdb_path=None,
-        membrane_protein=False,
-        mutation_data_path=None,
-        mutation_data_chain=None
-    )
-
-    assert myrunner.pdb_path is not None
-    assert myrunner.pdb_ext == 'cif'
-    assert myrunner.array is not None
-
-    myrunner_membrane = runner.Runner(
-        pdb_id=pdb_id,
-        pdb_path=None,
-        membrane_protein=True,
-        mutation_data_path=None,
-        mutation_data_chain=None
-    )
-
-    assert 'pdbtm_region' in myrunner_membrane.context.residue_table.columns.tolist()
-    assert 'pdbtm_region_detailed' in myrunner_membrane.context.residue_table.columns.tolist()
-
     # Create synthetic mmcif file to match mutation data
     residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
-    myrunner_mut = runner.Runner(
-        pdb_id=pdb_id,
+    mut_runner = runner.Runner(
+        pdb_id='8SMV',
         pdb_path=mmcif_path,
         membrane_protein=True,
         mutation_data_path=mut_data_path,
-        mutation_data_chain='A'
+        config_path=config_path
     )
-    assert 'effect' in myrunner_mut.context.residue_table.columns.tolist()
+    assert mut_runner.context.config.pdb_path == mmcif_path
+    assert mut_runner.context.config.mutation_data_path == mut_data_path
+    assert 'effect' in mut_runner.context.residue_table.columns.tolist()
+
+
+def test_runner__merge_config(tmp_path):
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_path=None)
+    myrunner = runner.Runner(config_path=config_path)
+
+    # make placeholder files
+    pdb_file_path = tmp_path / '1abc.cif'
+    pdb_file_path.touch()
+    aaindex_file_path = tmp_path / 'aaindex.csv'
+    aaindex_file_path.touch()
+
+    base_config = Config(
+        pdb_id='1abc',
+        pdb_path=pdb_file_path,
+        membrane_protein=False,
+        mutation_data_path=None,
+        aaindex_path=aaindex_file_path
+    )
+
+    overrides = {
+        'pdb_id': '2xyz',
+        'membrane_protein': True
+    }
+
+    merged_config = myrunner._merge_config(base=base_config, overrides=overrides)
+
+    assert merged_config.pdb_id == '2xyz'
+    assert merged_config.pdb_path == pdb_file_path
+    assert merged_config.membrane_protein is True
+    assert merged_config.mutation_data_path is None
+    assert merged_config.aaindex_path == aaindex_file_path
 
 
 def test_runner_run_metric(tmp_path):
@@ -101,18 +149,27 @@ def test_runner_run_metric(tmp_path):
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
+    # make aaindex data
+    aaindex_path = tmp_path / 'aaindex.csv'
+    aaindex_data = _make_aaindex_data(accessions=['AA1', 'AA2'])
+    aaindex_data.to_csv(aaindex_path, index=False)
+
+    # Make config file
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_path=mut_data_path, mutation_data_chain='A',
+                      aaindex_path=aaindex_path)
+
     myrunner = runner.Runner(
         pdb_id='test',
         pdb_path=mmcif_path,
         membrane_protein=False,
         mutation_data_path=mut_data_path,
-        mutation_data_chain='A'
+        config_path=config_path
     )
 
     # modify arguments for downstream metrics
-    myrunner.context.membrane_protein = True
+    myrunner.context.config.membrane_protein = True
     myrunner.context.residue_table = residue_table
-    myrunner.context.aaindex_data = _make_aaindex_data(accessions=['AA1', 'AA2'])
 
     # get metrics that are registered
     metrics = _REGISTRY.keys()
@@ -126,7 +183,7 @@ def test_runner_run_metric(tmp_path):
         returned_cols = result.columns.tolist()
         expected_cols = ['chain', 'resi', 'resn', 'resm']
 
-        if metric == 'aa_index_scores':
+        if metric == 'aaindex_scores':
             # aaindex scores add columns for each index
             for acc in ['AA1', 'AA2']:
                 expected_cols.extend([f'AAIndex_{acc}_wt', f'AAIndex_{acc}_mut', f'AAIndex_{acc}_diff'])
@@ -147,8 +204,7 @@ def test_runner_run_metric_no_mutations(tmp_path):
         pdb_id=pdb_id,
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None,
-        mutation_data_chain=None
+        mutation_data_path=None
     )
 
     # run all metrics
@@ -166,8 +222,7 @@ def test_runner__merge_features():
         pdb_id=pdb_id,
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None,
-        mutation_data_chain=None
+        mutation_data_path=None
     )
 
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=False)
@@ -224,8 +279,7 @@ def test_runner__merge_features_with_muts():
         pdb_id=pdb_id,
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None,
-        mutation_data_chain=None
+        mutation_data_path=None
     )
 
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=[True, False])

@@ -1,0 +1,15 @@
+# Structure data
+pdb_id = "8smv"
+pdb_path = ""
+membrane_protein = false
+
+# Structure parameters 
+vdw_radii = "ProtOr"
+membrane_thickness = 15
+
+# Mutagenesis data
+mutation_data_path = ""
+mutation_data_chain = ""
+
+# Sequence parameters
+aaindex_path = "data/aaindex_parsed_small.csv"

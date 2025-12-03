@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 
 from src.structure import metrics
-from src.structure.structure_context import Context, load_structure
+from src.structure.structure_context import Config, Context
 from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
 
 import biotite.structure as struc
@@ -95,22 +95,37 @@ ATOM   2537 HD22 LEU A 169     -22.200 -37.598  -0.114  1.00 27.94           H
 ATOM   2538 HD23 LEU A 169     -22.842 -39.045   0.017  1.00 27.94           H"""
 
 
+def test_calculate_secondary_structure():
+    # Create a test chain with random coordinates
+    aa_list = random.choices(AA_LIST, k=10)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+
+    sse = metrics.calculate_secondary_structure(arr)
+
+    assert len(sse) == len(aa_list)
+    assert all(ss in {'a', 'b', 'c'} for ss in sse)
+
+
 def test_calculate_membrane_distance():
     # Create a test chain with varying z-coordinates
     z_values = list(range(-25, 25, 5))
     coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
     aa_list = random.choices(AA_LIST, k=len(z_values))
     arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A')
-    context = Context(array=arr)
-    context.membrane_thickness = 15.0
-    
-    distance_df = metrics.calculate_membrane_distance(context)
-    calc_distance = distance_df['distance_from_membrane_edge']
+
+    class MockContext:
+        def __init__(self, array):
+            self.array = array
+            self.config = Config()
+
+    context = MockContext(array=arr)
+
+    distances = metrics.calculate_membrane_distance(context)
 
     # Expected distance is absolute z minus membrane thickness
     expected_distances = np.abs(np.array(z_values)) - 15.0
 
-    assert np.allclose(calc_distance, expected_distances)
+    assert np.allclose(distances['distance_from_membrane_edge'], expected_distances)
 
 def test_define_secondary_structure():
     # Create input data
@@ -120,14 +135,15 @@ def test_define_secondary_structure():
     aa_list = residue_table.resn.tolist()
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
-    context = Context(array=arr)
+    context = Context(array=arr, config=Config())
     context.residue_table = residue_table
 
     output = metrics.define_secondary_structure(context)
     assert 'ss_domains' not in output.columns.tolist()
     assert 'ss_group' in output.columns.tolist()
 
-    context.membrane_protein = True
+    context = Context(array=arr, config=Config(membrane_protein=True))
+    context.residue_table = residue_table
     output = metrics.define_secondary_structure(context)
     assert 'ss_domains' in output.columns.tolist()
     assert 'ss_group' in output.columns.tolist()
@@ -141,11 +157,11 @@ def test_calculate_sasa():
     
     # Calculate SASA - should return a DataFrame with 'sasa' column
     sasa_df = metrics.calculate_sasa(context)
-    context.vdw_radii = "ProtOr"
 
     # Check that SASA values are non-negative
     sasa_values = sasa_df['sasa']
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
+
 
 def test_KD_values():  
     # Create a chain with known hydrophobic and hydrophilic residues
@@ -154,6 +170,7 @@ def test_KD_values():
     context = Context(array=arr)
     
     kd_df = metrics.calculate_kyte_doolittle(context)
+
     # Check that we get per-residue values
     res_starts = struc.get_residue_starts(arr)
     assert len(kd_df) == len(res_starts)
@@ -164,6 +181,7 @@ def test_KD_values():
     assert kd_values.iloc[0] > 4.0, "ILE should be highly hydrophobic"
     assert kd_values.iloc[3] < -3.0, "ASP should be hydrophilic"
     assert kd_values.iloc[4] < -3.0, "GLU should be hydrophilic"
+
 
 ##TO DO MAKE MORE ROBUST WITH REAL PDB FILE
 def test_calculate_residue_packing():
@@ -190,6 +208,7 @@ def test_calculate_residue_packing():
     assert all(packing['packing_n_atoms'] >= 0), "Number of atoms should be positive"
     assert all(packing['packing_n_neighbor_residues'] >= 0), "Number of neighbors should be non-negative"
 
+
 ##TO DO MAKE MORE ROBUST WITH REAL PDB FILE
 def test_calculate_hbond_metrics():
     # Create a chain with residues that can form H-bonds
@@ -213,4 +232,3 @@ def test_calculate_hbond_metrics():
     assert all(hbond_metrics['bb_hbond_count'] >= 0)
     assert all(hbond_metrics['sc_hbond_count'] >= 0)
     assert all(hbond_metrics['total_hbond_count'] >= 0)
-    

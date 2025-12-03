@@ -73,7 +73,7 @@ def test_calculate_aaindex_scores_no_muts():
     class MockContext:
         def __init__(self, residue_table, aaindex_data):
             self.residue_table = residue_table
-            self.aaindex_data = aaindex_data
+            self.extras = {'aaindex': aaindex_data}
 
     context = MockContext(residue_table, aaindex_data)
 
@@ -103,7 +103,7 @@ def test_calculate_aaindex_scores_with_muts():
     class MockContext:
         def __init__(self, residue_table, aaindex_data):
             self.residue_table = residue_table
-            self.aaindex_data = aaindex_data
+            self.extras = {'aaindex': aaindex_data}
 
     context = MockContext(residue_table, aaindex_data)
 
