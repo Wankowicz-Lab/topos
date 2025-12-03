@@ -310,7 +310,7 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
     ----------
     residue_table : pd.DataFrame
         DataFrame containing residue metadata
-    ss_annotation : pd.DataFrame
+    ss_df : pd.DataFrame
         DataFrame containing secondary structure assignments for each residue
 
     Returns
@@ -372,4 +372,4 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
                 residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
 
 
-    return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']]
+    return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']].drop_duplicates()
