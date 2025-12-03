@@ -1,3 +1,4 @@
+"""Tests for sequence metrics module."""
 import numpy as np
 import pandas as pd
 import random
@@ -5,7 +6,12 @@ import random
 from src.sequence import metrics
 from src.sequence.utils import convert_amino_acid
 
-from tests.test_utils import _random_AA_seq, _make_residue_table, _make_aaindex_data
+from tests.test_utils import _make_residue_table, _make_aaindex_data
+
+# Seed RNGs for deterministic tests
+np.random.seed(42)
+random.seed(42)
+
 
 def test_calculate_position_effect_quartiles_with_pos_effect():
 
@@ -62,6 +68,34 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     assert 'effect_quartile' in quartile_df.columns
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
     assert 10 not in quartile_df.resi.values
+
+
+def test_calculate_position_effect_quartiles_custom_percentiles():
+    """Test that custom percentiles produce different quartile assignments than defaults."""
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
+    # Get results with default percentiles
+    default_df = metrics.calculate_position_effect_quartiles(context)
+
+    # Use extreme custom percentiles - with [90, 95, 99], most values fall below the 90th percentile, ending up in Q1
+    custom_percentiles = [90, 95, 99]
+    custom_df = metrics.calculate_position_effect_quartiles(context, percentiles=custom_percentiles)
+
+    assert 'effect_quartile' in custom_df.columns
+    assert set(custom_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
+
+    # With extreme percentiles, the distribution should be different from default
+    default_q1_count = (default_df['effect_quartile'] == 'Q1').sum()
+    custom_q1_count = (custom_df['effect_quartile'] == 'Q1').sum()
+    # With [90, 95, 99] cutoffs, most values should fall into Q1
+    assert custom_q1_count > default_q1_count
 
 
 def test_calculate_aaindex_scores_no_muts():

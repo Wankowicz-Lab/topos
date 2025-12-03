@@ -1,3 +1,4 @@
+"""Tests for structure metrics module."""
 import numpy as np
 import pandas as pd
 import random
@@ -11,7 +12,9 @@ from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
 
 import biotite.structure as struc
 
+# Seed RNGs for deterministic tests
 np.random.seed(42)
+random.seed(42)
 
 # Real protein structure data for testing residue packing
 # PDB ATOM records for residues VAL 165, SER 166, SER 167, PHE 168, LEU 169 (chain A)

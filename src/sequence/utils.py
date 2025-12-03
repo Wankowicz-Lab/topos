@@ -1,7 +1,11 @@
-import warnings
+"""
+Sequence utility functions for amino acid code conversion.
 
-import biotite.structure as struc
-import pandas as pd
+This module provides utilities for working with amino acid sequences,
+including conversion between 1-letter and 3-letter amino acid codes.
+"""
+
+import warnings
 
 # Bi-directional mapping between amino acid codes
 AA_3_TO_1 = {
@@ -16,7 +20,7 @@ AA_3_TO_1 = {
 AA_1_TO_3 = {v: k for k, v in AA_3_TO_1.items()}
 
 
-def convert_amino_acid(code):
+def convert_amino_acid(code: str) -> str:
     """
     Convert between 1-letter and 3-letter amino acid codes.
 
@@ -28,12 +32,20 @@ def convert_amino_acid(code):
     Returns
     -------
     str
-        The corresponding 3-letter or 1-letter code.
+        The corresponding 3-letter or 1-letter code. If the input is a
+        1-letter code, returns the 3-letter code, and vice versa.
 
-    Raises
-    ------
-    ValueError
-        If the provided code is not recognized.
+    Warns
+    -----
+    UserWarning
+        If the provided code is not recognized or has an unexpected length.
+
+    Examples
+    --------
+    >>> convert_amino_acid('A')
+    'ALA'
+    >>> convert_amino_acid('ALA')
+    'A'
     """
     code = code.upper().strip()
     if len(code) == 1:
@@ -52,19 +64,4 @@ def convert_amino_acid(code):
 
     warnings.warn(f"Unexpected amino acid code length: {code}")
     return code
-
-
-def get_metadata_cols(array):
-    """Gets metadata columns from an AtomArray or AtomArrayStack."""
-
-    res_starts = struc.get_residue_starts(array)
-    chains = array.chain_id[res_starts]
-    resi = array.res_id[res_starts]
-    resn = array.res_name[res_starts]
-
-    return pd.DataFrame({
-        "chain": chains,
-        "resi": resi,
-        "resn": resn
-    })
 

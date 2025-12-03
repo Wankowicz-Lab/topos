@@ -1,26 +1,34 @@
 # utils.py
+"""
+Structure utility functions for hydrogen bond detection and residue packing.
+
+This module provides utilities for analyzing protein structures, including
+hydrogen bond detection, residue metadata extraction, and packing calculations.
+"""
 from __future__ import annotations
 import math
 from collections import defaultdict, namedtuple
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
 
+
 def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     """
     Extract metadata columns (chain, resi, resn) from an AtomArray.
-    
-    Parameters:
-    -----------
-    array : AtomArray
-        Structure array
-        
-    Returns:
-    --------
+
+    Parameters
+    ----------
+    array : struc.AtomArray
+        Biotite AtomArray containing protein structure data.
+
+    Returns
+    -------
     pd.DataFrame
         DataFrame with columns 'chain', 'resi', 'resn' for each residue
+        in the structure.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
@@ -60,6 +68,21 @@ def _norm_vec(v: np.ndarray) -> np.ndarray:
 
 
 def angle_deg(u: np.ndarray, v: np.ndarray) -> float:
+    """
+    Calculate the angle between two vectors in degrees.
+
+    Parameters
+    ----------
+    u : np.ndarray
+        First vector.
+    v : np.ndarray
+        Second vector.
+
+    Returns
+    -------
+    float
+        Angle between the vectors in degrees.
+    """
     un = _norm_vec(u)
     vn = _norm_vec(v)
     dot = np.clip(np.dot(un, vn), -1.0, 1.0)
@@ -71,17 +94,61 @@ def _res_key(chain, resi, resname) -> str:
 
 
 def is_backbone_atom(atom_name: str) -> bool:
+    """
+    Check if an atom is part of the protein backbone.
+
+    Parameters
+    ----------
+    atom_name : str
+        Name of the atom (e.g., 'N', 'CA', 'C', 'O').
+
+    Returns
+    -------
+    bool
+        True if the atom is a backbone atom, False otherwise.
+    """
     return atom_name in ("N", "CA", "C", "O", "OXT", "H", "H1", "H2", "H3")
 
 
-def norm_alt(a) -> str:
+def norm_alt(a: Any) -> str:
+    """
+    Normalize an alternate location identifier.
+
+    Parameters
+    ----------
+    a : Any
+        Alternate location identifier (may be None or string).
+
+    Returns
+    -------
+    str
+        Normalized uppercase string, or empty string if input is None or empty.
+    """
     if a is None:
         return ""
     s = str(a).strip()
     return s.upper() if s else ""
 
 
-def altloc_compatible(d_alt, a_alt) -> bool:
+def altloc_compatible(d_alt: Any, a_alt: Any) -> bool:
+    """
+    Check if two alternate location identifiers are compatible.
+
+    Two altloc identifiers are compatible if either is empty/None, or if they
+    are identical (case-insensitive).
+
+    Parameters
+    ----------
+    d_alt : Any
+        First alternate location identifier.
+    a_alt : Any
+        Second alternate location identifier.
+
+    Returns
+    -------
+    bool
+        True if the identifiers are compatible, False otherwise.
+    """
     d = norm_alt(d_alt)
     a = norm_alt(a_alt)
     if d == "" or a == "":
@@ -90,7 +157,12 @@ def altloc_compatible(d_alt, a_alt) -> bool:
 
 def _split_by_residue(arr: struc.AtomArray):
     """
-    Yields: (resname, chain_id, res_id, idxs, base_arr)
+    Split an AtomArray into residues.
+
+    Yields
+    ------
+    tuple
+        A tuple of (resname, chain_id, res_id, idxs, base_arr) for each residue.
     """
     if arr.array_length() == 0:
         return
@@ -115,9 +187,25 @@ def _residue_ok(resname: str,
                 is_protein_flag: bool,
                 include_water: bool = True,
                 include_ligands: bool = False) -> bool:
-    '''
-    If considering protein/ligand/solvent
-    '''
+    """
+    Check if a residue should be included in hydrogen bond analysis.
+
+    Parameters
+    ----------
+    resname : str
+        Three-letter residue name.
+    is_protein_flag : bool
+        Whether the residue is a protein amino acid.
+    include_water : bool, optional
+        Whether to include water molecules. Default is True.
+    include_ligands : bool, optional
+        Whether to include ligand molecules. Default is False.
+
+    Returns
+    -------
+    bool
+        True if the residue should be included, False otherwise.
+    """
     if is_protein_flag:
         return True
     if include_water and resname.upper() in ("HOH", "WAT", "H2O"):
@@ -245,9 +333,24 @@ def build_sites_biotite(
     arr: struc.AtomArray,
     include_water: bool = INCLUDE_WATER,
     include_ligands: bool = INCLUDE_LIGANDS,
-):
+) -> Tuple[List[DonorSite], List[AcceptorSite]]:
     """
     Build DonorSite and AcceptorSite lists from a Biotite AtomArray.
+
+    Parameters
+    ----------
+    arr : struc.AtomArray
+        Biotite AtomArray containing protein structure data.
+    include_water : bool, optional
+        Whether to include water molecules. Default is False.
+    include_ligands : bool, optional
+        Whether to include ligand molecules. Default is False.
+
+    Returns
+    -------
+    tuple
+        A tuple of (donors, acceptors) where each is a list of
+        DonorSite or AcceptorSite namedtuples.
     """
     prot_mask = struc.filter_amino_acids(arr)
     donors: List[DonorSite] = []
@@ -328,13 +431,31 @@ def detect_hbonds(
     da_max: float = DA_MAX,
     h_a_max: float = H_A_MAX,
     angle_min: float = ANGLE_MIN,
-):
+) -> List[Dict[str, Any]]:
     """
-    Return a list of H-bond dicts with keys:
-      donor_chain, donor_resi, donor_resname, donor_atom, donor_altloc
-      acceptor_chain, acceptor_resi, acceptor_resname, acceptor_atom, acceptor_altloc
-      DA_dist, angle, category
-    where category is one of: backbone-backbone, backbone-sidechain, etc.
+    Detect hydrogen bonds between donor and acceptor sites.
+
+    Parameters
+    ----------
+    donors : list of DonorSite
+        List of hydrogen bond donor sites.
+    acceptors : list of AcceptorSite
+        List of hydrogen bond acceptor sites.
+    da_max : float, optional
+        Maximum donor-acceptor distance in Angstroms. Default is 3.5.
+    h_a_max : float, optional
+        Maximum hydrogen-acceptor distance in Angstroms. Default is 2.6.
+    angle_min : float, optional
+        Minimum bond angle in degrees. Default is 120.0.
+
+    Returns
+    -------
+    list of dict
+        List of dictionaries containing hydrogen bond information with keys:
+        donor_chain, donor_resi, donor_resname, donor_atom, donor_altloc,
+        acceptor_chain, acceptor_resi, acceptor_resname, acceptor_atom,
+        acceptor_altloc, DA_dist, angle, category. The category indicates
+        the type of H-bond (e.g., 'backbone-backbone', 'backbone-sidechain').
     """
     hbonds = []
     for d in donors:
@@ -399,14 +520,37 @@ def detect_hbonds(
 #_________________________________PACKING_________________________
 def is_heavy(atom_name: str) -> bool:
     """
-    Return True if the atom is considered heavy (non-hydrogen).
+    Check if an atom is a heavy atom (non-hydrogen).
+
+    Parameters
+    ----------
+    atom_name : str
+        Name of the atom.
+
+    Returns
+    -------
+    bool
+        True if the atom is heavy (does not start with 'H' or 'D'),
+        False otherwise.
     """
     n = atom_name.strip()
     return not (n.startswith("H") or n.startswith("D"))
 
 
-def residue_key(chain_id, res_id) -> str:
+def residue_key(chain_id: str, res_id: int) -> str:
     """
-    Build a unique residue identifier (chain:resi).
+    Build a unique residue identifier string.
+
+    Parameters
+    ----------
+    chain_id : str
+        Chain identifier.
+    res_id : int
+        Residue number.
+
+    Returns
+    -------
+    str
+        A unique identifier in the format 'chain:resi'.
     """
     return f"{chain_id}:{int(res_id)}"

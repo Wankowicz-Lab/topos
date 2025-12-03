@@ -1,43 +1,54 @@
 import warnings
+from pathlib import Path
+from typing import Union
 
 import pandas as pd
 from src.sequence.utils import convert_amino_acid
 
 
-def load_dms_scores(path: str, residue_col_name: str = "wildtype",
-                    residue_idx_name: str = "position",
-                    mutation_col_name: str = "mutation",
-                    mutation_type_col_name: str = "type",
-                    score_col_name: str = "effect") -> pd.DataFrame:
+def load_dms_scores(
+    path: Union[str, Path],
+    residue_col_name: str = "wildtype",
+    residue_idx_name: str = "position",
+    mutation_col_name: str = "mutation",
+    mutation_type_col_name: str = "type",
+    score_col_name: str = "effect",
+) -> pd.DataFrame:
     """
     Load DMS scores from a CSV file and standardize column names.
 
-    Parameters:
-    -----------
-    path : str
+    Parameters
+    ----------
+    path : str or Path
         Path to the CSV file containing DMS scores.
+    residue_col_name : str, optional
+        Name of the column containing wildtype residues. Default is "wildtype".
+    residue_idx_name : str, optional
+        Name of the column containing residue positions. Default is "position".
+    mutation_col_name : str, optional
+        Name of the column containing mutant residues. Default is "mutation".
+    mutation_type_col_name : str, optional
+        Name of the column containing mutation types. Default is "type".
+    score_col_name : str, optional
+        Name of the column containing mutation effect scores. Default is "effect".
 
-    residue_col_name : str
-        Name of the column containing wildtype residues (default: "wildtype").
-
-    residue_idx_name : str
-        Name of the column containing residue positions (default: "position").
-
-    mutation_col_name : str
-        Name of the column containing mutant residues (default: "mutation").
-
-    mutation_type_col_name : str
-        Name of the column containing mutation types (default: "type").
-
-    score_col_name : str
-        Name of the column containing mutation effect scores (default: "effect").
-
-    Returns:
-    --------
+    Returns
+    -------
     pd.DataFrame
-        DataFrame with standardized column names: 'resn', 'resi', 'resm', 'effect'.
-    """
+        DataFrame with standardized column names: 'resn', 'resi', 'resm',
+        'type', and 'effect'.
 
+    Raises
+    ------
+    ValueError
+        If required columns are missing or if the residue column contains
+        codes that are neither 1-letter nor 3-letter amino acid codes.
+
+    Warns
+    -----
+    UserWarning
+        If mutation types contain unexpected values.
+    """
     df = pd.read_csv(path)
 
     required_cols = [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]
@@ -82,23 +93,29 @@ def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chai
     """
     Merge DMS scores with structural context based on residue positions.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dms_scores : pd.DataFrame
         DataFrame containing DMS scores with 'resi' and 'resn' columns.
-
     residue_table : pd.DataFrame
-        DataFrame containing structural residue information with 'chain', 'resi', and 'resn' columns.
-
+        DataFrame containing structural residue information with 'chain',
+        'resi', and 'resn' columns.
     chain : str
         Chain identifier to filter structural context.
 
-    Returns:
-    --------
+    Returns
+    -------
     pd.DataFrame
-        Merged DataFrame with DMS scores and structural features.
-    """
+        Merged DataFrame with DMS scores and structural features. Contains
+        columns for chain, resi, resn, resm, type, effect, seq_info, and
+        struct_info.
 
+    Raises
+    ------
+    ValueError
+        If there is a mismatch between DMS scores and structure residues
+        for the specified chain.
+    """
     # Extract residue information from context
     res_table = residue_table.copy()
 
@@ -118,6 +135,8 @@ def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chai
 
     res_table['struct_info'] = True
     res_table_chain = res_table[res_table['chain'] == chain].reset_index(drop=True)
+    # Copy to avoid modifying the caller's DataFrame when adding seq_info column
+    dms_scores = dms_scores.copy()
     dms_scores['seq_info'] = True
 
     # Merge DMS scores with structural residue table
