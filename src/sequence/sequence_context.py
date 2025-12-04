@@ -6,7 +6,7 @@ import pandas as pd
 from src.sequence.utils import convert_amino_acid
 
 
-def load_dms_scores(
+def load_mutation_scores(
     path: Union[str, Path],
     residue_col_name: str = "wildtype",
     residue_idx_name: str = "position",
@@ -15,12 +15,12 @@ def load_dms_scores(
     score_col_name: str = "effect",
 ) -> pd.DataFrame:
     """
-    Load DMS scores from a CSV file and standardize column names.
+    Load mutation scores from a CSV file and standardize column names.
 
     Parameters
     ----------
     path : str or Path
-        Path to the CSV file containing DMS scores.
+        Path to the CSV file containing mutation scores.
     residue_col_name : str, optional
         Name of the column containing wildtype residues. Default is "wildtype".
     residue_idx_name : str, optional
@@ -54,7 +54,7 @@ def load_dms_scores(
     required_cols = [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
-        raise ValueError(f"Columns {missing_cols} not found in DMS scores file at {path}.")
+        raise ValueError(f"Columns {missing_cols} not found in mutation scores file at {path}.")
     df = df.rename(columns={
         residue_col_name: "resn",
         residue_idx_name: "resi",
@@ -89,14 +89,14 @@ def load_dms_scores(
     return df
 
 
-def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:
+def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:
     """
-    Merge DMS scores with structural context based on residue positions.
+    Merge mutation scores with structural context based on residue positions.
 
     Parameters
     ----------
-    dms_scores : pd.DataFrame
-        DataFrame containing DMS scores with 'resi' and 'resn' columns.
+    mutation_scores : pd.DataFrame
+        DataFrame containing mutation scores with 'resi' and 'resn' columns.
     residue_table : pd.DataFrame
         DataFrame containing structural residue information with 'chain',
         'resi', and 'resn' columns.
@@ -106,14 +106,14 @@ def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chai
     Returns
     -------
     pd.DataFrame
-        Merged DataFrame with DMS scores and structural features. Contains
+        Merged DataFrame with mutation scores and structural features. Contains
         columns for chain, resi, resn, resm, type, effect, seq_info, and
         struct_info.
 
     Raises
     ------
     ValueError
-        If there is a mismatch between DMS scores and structure residues
+        If there is a mismatch between mutation scores and structure residues
         for the specified chain.
     """
     # Extract residue information from context
@@ -121,26 +121,26 @@ def merge_dms_scores(dms_scores: pd.DataFrame, residue_table: pd.DataFrame, chai
 
     # test merge to make sure sequence is aligned with structure
     res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
-    dms_test = dms_scores[['resn', 'resi']].drop_duplicates().reset_index(drop=True)
+    mutation_test = mutation_scores[['resn', 'resi']].drop_duplicates().reset_index(drop=True)
 
-    merge_test = pd.merge(res_test, dms_test,
+    merge_test = pd.merge(res_test, mutation_test,
                               left_on=['resi', 'resn'],
                               right_on=['resi', 'resn'],
                               how='outer')
 
-    # If sequence is aligned between DMS and structure, there should only be one row for each unique residue index
+    # If sequence is aligned between mutation data and structure, there should only be one row for each unique residue index
     if len(merge_test) > len(merge_test.resi.unique()):
-        raise ValueError(f"Mismatch between DMS scores and structure residues for chain {chain}. "
-                      f"Check that the sequence used for DMS matches the structure.")
+        raise ValueError(f"Mismatch between mutation scores and structure residues for chain {chain}. "
+                      f"Check that the sequence used for mutation data matches the structure.")
 
     res_table['struct_info'] = True
     res_table_chain = res_table[res_table['chain'] == chain].reset_index(drop=True)
     # Copy to avoid modifying the caller's DataFrame when adding seq_info column
-    dms_scores = dms_scores.copy()
-    dms_scores['seq_info'] = True
+    mutation_scores = mutation_scores.copy()
+    mutation_scores['seq_info'] = True
 
-    # Merge DMS scores with structural residue table
-    merged_df = pd.merge(dms_scores, res_table_chain,
+    # Merge mutation scores with structural residue table
+    merged_df = pd.merge(mutation_scores, res_table_chain,
                          left_on=['resi', 'resn'],
                          right_on=['resi', 'resn'],
                          how='outer')

@@ -2,11 +2,11 @@ import pandas as pd
 import os
 import pytest
 
-from src.sequence.sequence_context import load_dms_scores, merge_dms_scores
+from src.sequence.sequence_context import load_mutation_scores, merge_mutation_scores
 
 
-def test_load_dms_scores(tmp_path):
-    # Create a dms_scores df
+def test_load_mutation_scores(tmp_path):
+    # Create a mutation_scores df
     test_df = pd.DataFrame({
         'resn_rename': ['ARG', 'THR', 'GLU'],
         'resi_rename': [1, 2, 3],
@@ -15,11 +15,11 @@ def test_load_dms_scores(tmp_path):
         'effect_rename': [0.5, -1.2, 0.3]
     })
 
-    test_file_valid_path = os.path.join(tmp_path, 'test_dms_scores.csv')
+    test_file_valid_path = os.path.join(tmp_path, 'test_mutation_scores.csv')
     test_df.to_csv(test_file_valid_path, index=False)
 
     # Load using the function
-    loaded_df = load_dms_scores(
+    loaded_df = load_mutation_scores(
         path=test_file_valid_path,
         residue_col_name='resn_rename',
         residue_idx_name='resi_rename',
@@ -32,11 +32,11 @@ def test_load_dms_scores(tmp_path):
 
     # check that invalid residue column raises error
     test_df['resn_rename'] = ['AR', 'THR', 'GLU']  # invalid length
-    test_file_invalid_path_res = os.path.join(tmp_path, 'test_dms_scores_invalid_res.csv')
+    test_file_invalid_path_res = os.path.join(tmp_path, 'test_mutation_scores_invalid_res.csv')
     test_df.to_csv(test_file_invalid_path_res, index=False)
 
     with pytest.raises(ValueError, match="Residue column must contain either 1-letter or 3-letter amino acid codes."):
-        load_dms_scores(
+        load_mutation_scores(
             path=test_file_invalid_path_res,
             residue_col_name='resn_rename',
             residue_idx_name='resi_rename',
@@ -46,9 +46,9 @@ def test_load_dms_scores(tmp_path):
         )
 
 
-def test_merge_dms_scores(tmp_path):
-    # Create a dms_scores df
-    dms_scores_df = pd.DataFrame({
+def test_merge_mutation_scores(tmp_path):
+    # Create a mutation_scores df
+    mutation_scores_df = pd.DataFrame({
         'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU', 'ASP'],
         'resi': [2, 2, 3, 3, 4, 4, 5],
         'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP', 'MET'],
@@ -62,7 +62,7 @@ def test_merge_dms_scores(tmp_path):
                                   'resn': ['LEU', 'ARG', 'THR', 'GLU', 'TYR']})
 
     # Merge using the function
-    merged_df = merge_dms_scores(dms_scores=dms_scores_df, residue_table=residue_table, chain='A')
+    merged_df = merge_mutation_scores(mutation_scores=mutation_scores_df, residue_table=residue_table, chain='A')
 
     assert len(merged_df) == 9 # 1 row for residues 1 and 5, two rows for residues 2, 3, and 4 each, 1 row for chain B
     assert set(merged_df.columns) == {'resn', 'resi', 'resm', 'type', 'effect', 'chain', 'seq_info', 'struct_info'}
@@ -70,14 +70,14 @@ def test_merge_dms_scores(tmp_path):
     assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True, False]
 
     # Check that incorrect indices raise an error
-    dms_scores_invalid_df = dms_scores_df.copy()
-    dms_scores_invalid_df.loc[[4,5], 'resn'] = 'LYS'  # change GLU to cause mismatch
+    mutation_scores_invalid_df = mutation_scores_df.copy()
+    mutation_scores_invalid_df.loc[[4,5], 'resn'] = 'LYS'  # change GLU to cause mismatch
 
-    with pytest.raises(ValueError, match="Mismatch between DMS scores and structure residues"):
-        merge_dms_scores(dms_scores_invalid_df, residue_table, chain='A')
+    with pytest.raises(ValueError, match="Mismatch between mutation scores and structure residues"):
+        merge_mutation_scores(mutation_scores_invalid_df, residue_table, chain='A')
 
     residue_table_invalid = residue_table.copy()
     residue_table_invalid.at[1, 'resn'] = 'LYS'  # change second residue to cause mismatch
 
-    with pytest.raises(ValueError, match="Mismatch between DMS scores and structure residues"):
-        merge_dms_scores(dms_scores_df, residue_table_invalid, chain='A')
+    with pytest.raises(ValueError, match="Mismatch between mutation scores and structure residues"):
+        merge_mutation_scores(mutation_scores_df, residue_table_invalid, chain='A')
