@@ -40,6 +40,35 @@ computed_metrics = b2ar_runner.run(metrics=metrics)
 all_computed_metrics = b2ar_runner.run()
 ```
 
+### Config file
+The easiest way to control the behavior of the runner is by modifying the config file that is provided to the `runner.Runner(config_path=config_path)` initialization. 
+This file has the following arguments:
+
+pdb_id  
+The PDB ID of the structure
+
+pdb_path  
+The path to the PDB file. Only one of pdb_id or pdb_path needs to be provided
+
+membrane_protein  
+Whether or not the protein is a membrane protein. If it is, calculates additional features
+
+vdw_radii  
+Setting that controls how automatic radii are set (defaults to ProtOr) 
+
+membrane_thickness  
+The thickness of the membrane, used for calculating distances from the center of the membrane (defaults to 15 Angstrom)
+
+mutation_data_path  
+The path to .csv file containing mutation data
+
+mutation_data_chain  
+The chain of the PDB file that corresponds to the sequence being mutated in the mutation data
+
+aaindex_path  
+Path to the data file containing amino acid indices. 
+
+
 ### Development and Testing
 
 To install with development/testing dependencies:
