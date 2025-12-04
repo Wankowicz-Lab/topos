@@ -84,11 +84,10 @@ class Runner:
             self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
 
         if self.context.config.mutation_data_path is not None:
-            # TODO: change function names to be more general (not DMS-specific)
             # TODO: pass keyword args for column names
-            self.context.extras['mutation_data'] = sequence_context.load_dms_scores(self.context.config.mutation_data_path)
-            self.context.residue_table = sequence_context.merge_dms_scores(
-                dms_scores=self.context.extras['mutation_data'],
+            self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(self.context.config.mutation_data_path)
+            self.context.residue_table = sequence_context.merge_mutation_scores(
+                mutation_scores=self.context.extras['mutation_data'],
                 residue_table=self.context.residue_table,
                 chain=self.context.config.mutation_data_chain
             )

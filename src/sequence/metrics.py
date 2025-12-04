@@ -36,7 +36,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     """
     if percentiles is None:
         percentiles = [25, 50, 75]
-    # subset to only include positions with DMS data
+    # subset to only include positions with mutation data
     seq_data = context.residue_table.loc[context.residue_table.seq_info, :]
 
     # ensure that only a single chain is provided
