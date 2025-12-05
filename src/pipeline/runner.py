@@ -24,9 +24,13 @@ class Runner:
     pdb_path: Optional[Path] = None
     membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
-    config_path: Path = Path("example/test_config.toml")
+    config_path: Optional[Path|str] = None
 
     def __post_init__(self):
+
+        # Ensure that either pdb_id or config_path is provided
+        if self.pdb_id is None and self.config_path is None:
+            raise ValueError("Either pdb_id or config_path must be provided.")
 
         # Create override dictionary from input parameters
         overrides = {}
@@ -39,17 +43,25 @@ class Runner:
         if self.mutation_data_path is not None:
             overrides['mutation_data_path'] = self.mutation_data_path
 
-        # load and merge config with overrides
-        try:
-            with self.config_path.open("rb") as f:
-                config_dict = tomli.load(f)
-                # convert empty strings to None
-                config_dict = {k: (None if v == "" else v) for k, v in config_dict.items()}
-                config = Config(**config_dict)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Configuration file not found at {self.config_path}")
-        except tomli.TOMLDecodeError as e:
-            raise ValueError(f"Invalid TOML in configuration file {self.config_path}: {e}")
+        # Set up config
+        if self.config_path is None:
+            config = Config()
+        else:
+            self.config_path = Path(self.config_path)
+
+            # load config from file
+            try:
+                with self.config_path.open("rb") as f:
+                    config_dict = tomli.load(f)
+                    # convert empty strings to None
+                    config_dict = {k: (None if v == "" else v) for k, v in config_dict.items()}
+                    config = Config(**config_dict)
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Configuration file not found at {self.config_path}")
+            except tomli.TOMLDecodeError as e:
+                raise ValueError(f"Invalid TOML in configuration file {self.config_path}: {e}")
+
+        # merge overrides
         config = self._merge_config(base=config, overrides=overrides)
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
@@ -128,17 +140,21 @@ class Runner:
         return Config(**base_dict)
 
 
-    def run(self, metrics: List[str]) -> pd.DataFrame:
+    def run(self, metrics: List[str] = None) -> pd.DataFrame:
         """Compute specified metrics and return as a merged DataFrame.
 
         Parameters
         ----------
-        metrics : List[str]
+        metrics : Optional[List[str]] = None
             List of metric names to compute.
         """
 
+        if metrics is None:
+            metrics = list(_REGISTRY.keys())
+
         # filter unknown metrics
-        metrics = [m for m in metrics if m in _REGISTRY]
+        else:
+            metrics = [m for m in metrics if m in _REGISTRY]
         # TODO: resolve dependencies
         #order = _topological_order(metrics)
         order = metrics.copy()
