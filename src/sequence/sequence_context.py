@@ -89,6 +89,147 @@ def load_mutation_scores(
     return df
 
 
+def alignment_to_index_map(alignment):
+    """
+    Convert alignment.coordinates into explicit per-residue index mapping to allow indexing into padndas df.
+
+    Parameters
+    ----------
+    alignment : Alignment object
+        Alignment object containing coordinates attribute.
+
+    Returns:
+    -------
+    list of tuples
+        list of (idx1, idx2) where either may be None for gaps
+    """
+
+    coords = alignment.coordinates  # shape (2, n_segments+1)
+    map_list = []
+
+    for col in range(coords.shape[1] - 1):
+        start1, end1 = coords[0, col], coords[0, col + 1]
+        start2, end2 = coords[1, col], coords[1, col + 1]
+
+        len1 = end1 - start1
+        len2 = end2 - start2
+
+        if len1 == len2:
+            # Match/substitution block
+            for i in range(len1):
+                map_list.append((start1 + i, start2 + i))
+        elif len1 > len2:
+            # Deletion in seq2 (seq1 has extra)
+            for i in range(len1):
+                # seq2 gap for positions beyond its end
+                map_list.append((start1 + i, start2 + i if i < len2 else None))
+        else:
+            # Insertion in seq2 (seq2 has extra)
+            for i in range(len2):
+                map_list.append((start1 + i if i < len1 else None, start2 + i))
+
+    return map_list
+
+
+def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> pd.DataFrame:
+    """
+    Merge two sequence DataFrames based on a provided index mapping.
+
+    Parameters
+    ----------
+    df1: pd.DataFrame
+        First DataFrame containing sequence information.
+    df2: pd.DataFrame
+        Second DataFrame containing sequence information.
+    mapping: list of tuples
+        List of (idx1, idx2) tuples mapping indices from df1 to df2. Either idx may be None for gaps.
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame containing combined sequence information from both DataFrames.
+    """
+
+    map_df = pd.DataFrame(mapping, columns=["i1", "i2"])
+
+    # add sequential index to each df for merging
+    df1['seq_idx'] = range(len(df1))
+    df2['seq_idx'] = range(len(df2))
+
+    merged = map_df \
+        .merge(df1, how="left", left_on="i1", right_on="seq_idx", suffixes=("", "_df1")) \
+        .merge(df2, how="left", left_on="i2", right_on="seq_idx", suffixes=("", "_df2"))
+
+    merged = merged[["idx", "sequence", "idx_df2", "sequence_df2"]]
+    merged.columns = ["idx1", "seq1", "idx2", "seq2"]
+
+    return merged
+
+
+def evaluate_sequence_alignment(alignment, merged: pd.DataFrame) -> None:
+    """
+    Evaluate the quality of a sequence alignment by summarizing mismatches, indels, and gaps at termini.
+
+    Parameters
+    ----------
+    alignment : Alignment object
+        Alignment object containing coordinates attribute.
+
+    merged : pd.DataFrame
+        Merged DataFrame containing combined sequence information from both sequences.
+
+    Returns
+    -------
+    None
+        Prints a summary of alignment quality metrics.
+    """
+    total_residues = len(merged)
+    mismatch_mask = (merged['seq1'].notna()) & (merged['seq2'].notna()) & (merged['seq1'] != merged['seq2'])
+    indel_mask = (merged['seq1'].isna()) | (merged['seq2'].isna())
+    termini_mask = [False] * total_residues
+
+    # Check for contiguous blocks of indels at beginning or end
+    if indel_mask[0] or indel_mask[-1]:
+        for i in range(total_residues):
+            if indel_mask[i]:
+                termini_mask[i] = True
+            else:
+                break
+        for i in range(total_residues - 1, -1, -1):
+            if indel_mask[i]:
+                termini_mask[i] = True
+            else:
+                break
+
+        # Exclude terminal gaps from indel count
+        indel_mask = indel_mask & (~pd.Series(termini_mask))
+
+    if mismatches := mismatch_mask.sum():
+        warnings.warn(f"Found {mismatches} mismatches out of {total_residues} residues "
+              f"({(mismatches / total_residues) * 100:.2f}%) \n"
+              f" Mismatches found at the following positions in df1 {merged.loc[mismatch_mask, 'idx1'].tolist()}.")
+
+    if indels := indel_mask.sum():
+        warnings.warn(f"Found {indels} residues with indels out of {total_residues} residues "
+              f"({(indels / total_residues) * 100:.2f}%) \n"
+              f" Indels found at the following positions in df1 {merged.loc[indel_mask, 'idx1'].tolist()}"
+                      f" and df2 {merged.loc[indel_mask, 'idx2'].tolist()}.")
+
+    if sum(termini_mask):
+        warnings.warn(f"Found gaps at the termini of the sequence alignment, "
+                       f" at positions {merged.loc[termini_mask, 'idx1'].tolist()} in df1 "
+                       f" and {merged.loc[termini_mask, 'idx2'].tolist()} in df2.")
+
+
+
+    # print(f"Alignment Summary:")
+    # print(f"Total residues compared: {total_residues}")
+    # print(f"Mismatches: {mismatches} ({(mismatches / total_residues) * 100:.2f}%)")
+    # print(f"Indels: {indels} ({(indels / total_residues) * 100:.2f}%)")
+    # print(f"N-terminal gaps - Seq1: {n_term_gaps_seq1}, Seq2: {n_term_gaps_seq2}")
+    # print(f"C-terminal gaps - Seq1: {c_term_gaps_seq1}, Seq2: {c_term_gaps_seq2}")
+
+
 def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:
     """
     Merge mutation scores with structural context based on residue positions.
