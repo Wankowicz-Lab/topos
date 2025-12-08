@@ -90,12 +90,12 @@ class Runner:
         # create context object
         self.context = structure_context.Context(arr, config=config)
 
-        if self.membrane_protein:
+        if self.context.config.membrane_protein:
             try:
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
-            except (RuntimeError, Exception) as e:
+            except (RuntimeError, ValueError, IndexError, KeyError) as e:
                 warnings.warn(
                     f"Failed to fetch PDBTM annotation for {self.pdb_id}: {e}. "
                     "Membrane features will not be calculated. Setting membrane_protein to False.",
