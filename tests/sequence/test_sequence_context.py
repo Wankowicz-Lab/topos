@@ -18,7 +18,7 @@ def test_load_mutation_scores(tmp_path):
     test_file_valid_path = os.path.join(tmp_path, 'test_mutation_scores.csv')
     test_df.to_csv(test_file_valid_path, index=False)
 
-    # Load using the function
+    # Load using the function (note: defaults are now in Config, so we must pass all parameters)
     loaded_df = load_mutation_scores(
         path=test_file_valid_path,
         residue_col_name='resn_rename',
