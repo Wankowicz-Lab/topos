@@ -70,6 +70,36 @@ def test_runner_initialization_overrides_membrane(tmp_path):
     assert 'pdbtm_region' in membrane_runner.context.residue_table.columns.tolist()
     assert 'pdbtm_region_detailed' in membrane_runner.context.residue_table.columns.tolist()
 
+
+def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
+    """Test that pipeline handles PDB not in PDBTM gracefully."""
+    # Create a synthetic mmcif file for a non-membrane protein
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+    
+    # Use a PDB ID that is unlikely to be in PDBTM (a non-membrane protein)
+    pdb_id = '1CRN'  # Crambin, a small non-membrane protein
+    
+    with pytest.warns(UserWarning, match="Failed to fetch PDBTM annotation"):
+        membrane_runner = runner.Runner(
+            pdb_id=pdb_id,
+            pdb_path=mmcif_path,
+            membrane_protein=True
+        )
+    
+    # Should have set membrane_protein to False after failure
+    assert membrane_runner.context.config.membrane_protein is False
+    
+    # Should not have PDBTM columns since fetch failed
+    assert 'pdbtm_region' not in membrane_runner.context.residue_table.columns.tolist()
+    assert 'pdbtm_region_detailed' not in membrane_runner.context.residue_table.columns.tolist()
+    
+    # Should still have a valid context and be able to continue
+    assert membrane_runner.context.array is not None
+    assert membrane_runner.context.residue_table is not None
+
+
 def test_runner_initialization_overrides_mutation_data(tmp_path):
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_chain='A')
