@@ -92,12 +92,12 @@ class Runner:
 
         if self.context.config.membrane_protein:
             try:
-                pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.pdb_id)
+                pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
             except (RuntimeError, ValueError, IndexError, KeyError) as e:
                 warnings.warn(
-                    f"Failed to fetch PDBTM annotation for {self.pdb_id}: {e}. "
+                    f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. "
                     "Membrane features will not be calculated. Setting membrane_protein to False.",
                     UserWarning
                 )
