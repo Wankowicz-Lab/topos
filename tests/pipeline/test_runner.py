@@ -78,8 +78,8 @@ def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
     
-    # Use a PDB ID that is unlikely to be in PDBTM (a non-membrane protein)
-    pdb_id = '1CRN'  # Crambin, a small non-membrane protein
+    # Use a fake PDB ID that will never be in PDBTM
+    pdb_id = 'FAKE'
     
     with pytest.warns(UserWarning, match="Failed to fetch PDBTM annotation"):
         membrane_runner = runner.Runner(
