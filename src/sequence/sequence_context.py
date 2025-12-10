@@ -3,6 +3,7 @@ import warnings
 from pathlib import Path
 from typing import Union
 
+from Bio.Align import PairwiseAligner
 import pandas as pd
 from src.sequence.utils import convert_amino_acid
 
@@ -259,45 +260,54 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
         If there is a mismatch between mutation scores and structure residues
         for the specified chain.
     """
-    # Extract residue information from context
-    res_table = residue_table.copy()
+    aligner = PairwiseAligner()
 
-    # test merge to make sure sequence is aligned with structure
-    res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
-    mutation_test = mutation_scores[['resn', 'resi']].drop_duplicates().reset_index(drop=True)
-
-    merge_test = pd.merge(res_test, mutation_test,
-                              left_on=['resi', 'resn'],
-                              right_on=['resi', 'resn'],
-                              how='outer')
-
-    # If sequence is aligned between mutation data and structure, there should only be one row for each unique residue index
-    if len(merge_test) > len(merge_test.resi.unique()):
-        raise ValueError(f"Mismatch between mutation scores and structure residues for chain {chain}. "
-                      f"Check that the sequence used for mutation data matches the structure.")
-
-    res_table['struct_info'] = True
-    res_table_chain = res_table[res_table['chain'] == chain].reset_index(drop=True)
-    # Copy to avoid modifying the caller's DataFrame when adding seq_info column
+    # Create copies to avoid modifying original DataFrames
+    residue_table = residue_table.copy()
     mutation_scores = mutation_scores.copy()
-    mutation_scores['seq_info'] = True
 
-    # Merge mutation scores with structural residue table
-    merged_df = pd.merge(mutation_scores, res_table_chain,
-                         left_on=['resi', 'resn'],
-                         right_on=['resi', 'resn'],
-                         how='outer')
+    # Add metadata
+    # residue_table['struct_info'] = True
+    # mutation_scores['seq_info'] = True
 
-    merged_df.loc[merged_df['struct_info'].isna(), 'struct_info'] = False
-    merged_df.loc[merged_df['seq_info'].isna(), 'seq_info'] = False
+    # Subset residue table to the specified chain
+    residue_table_chain = residue_table[residue_table['chain'] == chain]
+
+    # Subset mutation scores to only the wildtype sequence
+    mutation_scores_subset = mutation_scores[['resi', 'resn']].drop_duplicates()
+
+    # Prepare sequences for alignment, a single string of single-letter amino acids
+    mut_seq_short = mutation_scores_subset['resn'].apply(convert_amino_acid)
+    mut_seq = "".join(mut_seq_short.tolist())
+    res_seq_short = residue_table_chain['resn'].apply(convert_amino_acid)
+    res_seq = "".join(res_seq_short.tolist())
+
+    # Perform alignment
+    alignment = aligner.align(mut_seq, res_seq)[0]
+
+    # Create mapping to link dataframes based on alignment
+    index_map = alignment_to_index_map(alignment)
+
+    # Merge mutation scores and residue table based on alignment mapping
+    merged_df = merge_sequence_dfs(df1=mutation_scores_subset, df2=residue_table_chain, mapping=index_map)
+
+    # Evaluate alignment quality
+    evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=0.9)
+
+    # Fill in missing struct_info and seq_info
+    # merged_df.loc[merged_df['struct_info'].isna(), 'struct_info'] = False
+    # merged_df.loc[merged_df['seq_info'].isna(), 'seq_info'] = False
     merged_df['chain'] = chain
 
+    merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
+
     # Remove previous rows from residue table and update with merged data
-    res_table = res_table[res_table['chain'] != chain]
-    res_table['seq_info'] = False
-    res_table = pd.concat([res_table, merged_df], axis=0).reset_index(drop=True)
+    residue_table = residue_table[residue_table['chain'] != chain]
+    #residue_table['seq_info'] = False
+    residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
+    residue_table = pd.concat([residue_table, merged_df], axis=0).reset_index(drop=True)
 
     # drop extra columns if present
-    res_table = res_table[['chain', 'resi', 'resn', 'resm', 'type', 'effect', 'seq_info', 'struct_info']]
+    res_table = residue_table[['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'seq_info', 'struct_info']]
 
     return res_table

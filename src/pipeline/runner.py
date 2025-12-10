@@ -98,6 +98,11 @@ class Runner:
         if self.context.config.mutation_data_path is not None:
             # TODO: pass keyword args for column names
             self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(self.context.config.mutation_data_path)
+
+            if self.context.config.mutation_data_chain not in self.context.residue_table['chain'].unique():
+                raise ValueError(f"Specified mutation_data_chain '{self.context.config.mutation_data_chain}' not "
+                                 f"found in structure chains {self.context.residue_table['chain'].unique()}")
+
             self.context.residue_table = sequence_context.merge_mutation_scores(
                 mutation_scores=self.context.extras['mutation_data'],
                 residue_table=self.context.residue_table,

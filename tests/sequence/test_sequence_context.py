@@ -109,7 +109,7 @@ def test_evaluate_sequence_alignment():
 
         assert len(w) == 2 # poor alignment and mismatches
         assert issubclass(w[-2].category, UserWarning)
-        assert "Alignment quality below cutoff of 0.8" in str(w[-2].message)
+        assert "Alignment quality below cutoff of 0.80. Found 40.00%" in str(w[-2].message)
 
     # check that warning is raised for mismatched residues
     mismatch_merged_df = pd.DataFrame({
