@@ -167,7 +167,7 @@ def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> p
     return merged
 
 
-def evaluate_sequence_alignment(merged: pd.DataFrame) -> None:
+def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -> None:
     """
     Evaluate the quality of a sequence alignment by summarizing mismatches, indels, and gaps at termini.
 
@@ -175,6 +175,9 @@ def evaluate_sequence_alignment(merged: pd.DataFrame) -> None:
     ----------
     merged : pd.DataFrame
         Merged DataFrame containing combined sequence information from both sequences.
+    alignment_cutoff : float
+        Quality cutoff for the alignment. If the proportion of alignment is below this cutoff,
+        a warning is issued.
 
     Returns
     -------
@@ -202,6 +205,16 @@ def evaluate_sequence_alignment(merged: pd.DataFrame) -> None:
         # Exclude terminal gaps from indel count
         indel_mask = indel_mask & (~pd.Series(termini_mask))
 
+    # determine if alignment quality is below cutoff, excluding terminal gaps
+    error_mask = mismatch_mask | indel_mask
+    error_mask = error_mask[~pd.Series(termini_mask)]
+
+    if (error_mask.sum() / len(error_mask)) > 1 - alignment_cutoff:
+        warnings.warn(f"Alignment quality below cutoff of {alignment_cutoff:.2f}. "
+                      f"Found {(error_mask.sum() / len(error_mask)) * 100:.2f}% errors "
+                      f"({error_mask.sum()} out of {len(error_mask)} residues) "
+                      f"excluding terminal gaps.")
+
     if mismatches := mismatch_mask.sum():
         warnings.warn(f"Found {mismatches} mismatches out of {total_residues} residues "
               f"({(mismatches / total_residues) * 100:.2f}%) \n"
@@ -217,15 +230,6 @@ def evaluate_sequence_alignment(merged: pd.DataFrame) -> None:
         warnings.warn(f"Found gaps at the termini of the sequence alignment, "
                        f" at positions {merged.loc[termini_mask, 'resi_df1'].tolist()} in df1 "
                        f" and {merged.loc[termini_mask, 'resi_df2'].tolist()} in df2.")
-
-
-
-    # print(f"Alignment Summary:")
-    # print(f"Total residues compared: {total_residues}")
-    # print(f"Mismatches: {mismatches} ({(mismatches / total_residues) * 100:.2f}%)")
-    # print(f"Indels: {indels} ({(indels / total_residues) * 100:.2f}%)")
-    # print(f"N-terminal gaps - Seq1: {n_term_gaps_seq1}, Seq2: {n_term_gaps_seq2}")
-    # print(f"C-terminal gaps - Seq1: {c_term_gaps_seq1}, Seq2: {c_term_gaps_seq2}")
 
 
 def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:

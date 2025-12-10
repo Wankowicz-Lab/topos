@@ -94,6 +94,23 @@ def test_merge_sequence_dfs():
 
 
 def test_evaluate_sequence_alignment():
+    # check that warning is raised for poor alignment
+    threshold_merged_df = pd.DataFrame({
+        'resn_df1': ['A', 'K', 'N', 'D', 'A', 'A', 'A', 'A', 'I', 'M'],
+        'resi_df1': list(range(1, 11)),
+        'resn_df2': ['A', 'K', 'N', 'D', 'C', 'E', 'G', 'H', 'I', 'M'],
+        'resi_df2': list(range(1, 11))
+    })
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # Call the function that should issue the warning
+        evaluate_sequence_alignment(merged=threshold_merged_df, alignment_cutoff=0.8)
+
+        assert len(w) == 2 # poor alignment and mismatches
+        assert issubclass(w[-2].category, UserWarning)
+        assert "Alignment quality below cutoff of 0.8" in str(w[-2].message)
+
     # check that warning is raised for mismatched residues
     mismatch_merged_df = pd.DataFrame({
         'resn_df1': ['A', 'R', 'N', 'D', 'C', 'E'],
@@ -105,7 +122,7 @@ def test_evaluate_sequence_alignment():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         # Call the function that should issue the warning
-        evaluate_sequence_alignment(mismatch_merged_df)
+        evaluate_sequence_alignment(merged=mismatch_merged_df, alignment_cutoff=0.8)
 
         assert len(w) == 1
         assert issubclass(w[-1].category, UserWarning)
@@ -122,25 +139,25 @@ def test_evaluate_sequence_alignment():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         # Call the function that should issue the warning
-        evaluate_sequence_alignment(indel_merged_df)
+        evaluate_sequence_alignment(merged=indel_merged_df, alignment_cutoff=0.6)
 
         assert len(w) == 1
         assert issubclass(w[-1].category, UserWarning)
         assert "Found 2 residues with indels out of 7 residues" in str(w[-1].message)
 
 
-    # check that warning is raised for terminal gaps
+    # check that warning is raised for terminal gaps, and that they don't count towards alignment quality
     termini_merged_df = pd.DataFrame({
         'resn_df1': ['A', 'R', 'N', 'D', 'C'],
         'resi_df1': [1, 2, 3, 4, 5],
-        'resn_df2': [None, 'R', 'N', 'D', 'C'],
+        'resn_df2': [None, None, None, 'D', 'C'],
         'resi_df2': [2, 3, 4, 5, 6]
     })
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         # Call the function that should issue the warning
-        evaluate_sequence_alignment(termini_merged_df)
+        evaluate_sequence_alignment(merged=termini_merged_df, alignment_cutoff=0.9)
 
         assert len(w) == 1
         assert issubclass(w[-1].category, UserWarning)
