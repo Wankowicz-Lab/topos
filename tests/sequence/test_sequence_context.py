@@ -1,8 +1,11 @@
 import pandas as pd
 import os
 import pytest
+import warnings
 
-from src.sequence.sequence_context import load_mutation_scores, merge_mutation_scores
+from src.sequence.sequence_context import load_mutation_scores, merge_mutation_scores, alignment_to_index_map, merge_sequence_dfs, evaluate_sequence_alignment
+
+from Bio.Align import PairwiseAligner
 
 
 def test_load_mutation_scores(tmp_path):
@@ -44,6 +47,104 @@ def test_load_mutation_scores(tmp_path):
             mutation_type_col_name='type_rename',
             score_col_name='effect_rename'
         )
+
+
+def test_alignment_to_index_map():
+    # seq1 has a W insertion at position 4 and a Q mutation at position 8, seq2 has ZZ at the end
+    seq1 = 'ABCWDEQGH'
+    seq2 = 'ABCDEFGHZZ'
+
+    aligner = PairwiseAligner()
+    alignment = aligner.align(seq1, seq2)[0]
+    index_map = alignment_to_index_map(alignment)
+
+    expected_map = [(0, 0), (1, 1), (2, 2), (3, None), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (None, 8), (None, 9)]
+    assert index_map == expected_map
+
+
+def test_merge_sequence_dfs():
+    # Create two sequence dfs
+    df1 = pd.DataFrame({
+        'resi': range(1, 6),
+        'resn': ['A', 'R', 'N', 'D', 'C'],
+        'feature1': [0.1, 0.2, 0.3, 0.4, 0.5]
+    })
+
+    # Create second sequence df with 'R' deleted and 'E' added at the end
+    df2 = pd.DataFrame({
+        'resi': range(3, 8),
+        'resn': ['A', 'N', 'D', 'C', 'E'],
+        'feature2': [1.0, 1.1, 1.2, 1.3, 1.4]
+    })
+
+    # None for the deleted 'R' and for the added 'E'
+    mapping = [(0, 0), (1, None), (2, 1), (3, 2), (4, 3), (None, 4)]
+    merged_df = merge_sequence_dfs(df1=df1, df2=df2, mapping=mapping)
+
+    assert len(merged_df) == 6
+    assert set(merged_df.columns) == {'resi_df1', 'resn_df1', 'feature1', 'resi_df2', 'resn_df2', 'feature2'}
+
+    # Check that resn values are correctly aligned
+    assert merged_df['resn_df1'].equals(pd.Series(['A', 'R', 'N', 'D', 'C', None]))
+    assert merged_df['resn_df2'].equals(pd.Series(['A', None, 'N', 'D', 'C', 'E']))
+
+    # Check that feature values are correctly aligned
+    assert merged_df['feature1'].equals(pd.Series([0.1, 0.2, 0.3, 0.4, 0.5, None]))
+    assert merged_df['feature2'].equals(pd.Series([1.0, None, 1.1, 1.2, 1.3, 1.4]))
+
+
+def test_evaluate_sequence_alignment():
+    # check that warning is raised for mismatched residues
+    mismatch_merged_df = pd.DataFrame({
+        'resn_df1': ['A', 'R', 'N', 'D', 'C', 'E'],
+        'resi_df1': [1, 2, 3, 4, 5, 6],
+        'resn_df2': ['A', 'K', 'N', 'D', 'C', 'E'],
+        'resi_df2': [3, 4, 5, 6, 7, 8]
+    })
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # Call the function that should issue the warning
+        evaluate_sequence_alignment(mismatch_merged_df)
+
+        assert len(w) == 1
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Found 1 mismatches out of 6 residues" in str(w[-1].message)
+
+    # check that warning is raised for indels
+    indel_merged_df = pd.DataFrame({
+        'resn_df1': ['A', 'G', 'R', 'N', 'D', 'C', 'E'],
+        'resi_df1': [1, 2, 3, 4, 5, 6, 7],
+        'resn_df2': ['A', None, 'R', 'N', None, 'C', 'E'],
+        'resi_df2': [3, 4, 5, 6, 7, 8, 9]
+    })
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # Call the function that should issue the warning
+        evaluate_sequence_alignment(indel_merged_df)
+
+        assert len(w) == 1
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Found 2 residues with indels out of 7 residues" in str(w[-1].message)
+
+
+    # check that warning is raised for terminal gaps
+    termini_merged_df = pd.DataFrame({
+        'resn_df1': ['A', 'R', 'N', 'D', 'C'],
+        'resi_df1': [1, 2, 3, 4, 5],
+        'resn_df2': [None, 'R', 'N', 'D', 'C'],
+        'resi_df2': [2, 3, 4, 5, 6]
+    })
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # Call the function that should issue the warning
+        evaluate_sequence_alignment(termini_merged_df)
+
+        assert len(w) == 1
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Found gaps at the termini of the sequence alignment" in str(w[-1].message)
 
 
 def test_merge_mutation_scores(tmp_path):

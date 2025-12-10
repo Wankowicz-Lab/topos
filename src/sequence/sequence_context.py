@@ -1,3 +1,4 @@
+import numpy as np
 import warnings
 from pathlib import Path
 from typing import Union
@@ -160,21 +161,18 @@ def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> p
         .merge(df1, how="left", left_on="i1", right_on="seq_idx", suffixes=("", "_df1")) \
         .merge(df2, how="left", left_on="i2", right_on="seq_idx", suffixes=("", "_df2"))
 
-    merged = merged[["idx", "sequence", "idx_df2", "sequence_df2"]]
-    merged.columns = ["idx1", "seq1", "idx2", "seq2"]
+    merged.drop(columns=["i1", "i2", "seq_idx", "seq_idx_df2"], inplace=True)
+    merged.rename(columns={'resi': 'resi_df1', 'resn': 'resn_df1'}, inplace=True)
 
     return merged
 
 
-def evaluate_sequence_alignment(alignment, merged: pd.DataFrame) -> None:
+def evaluate_sequence_alignment(merged: pd.DataFrame) -> None:
     """
     Evaluate the quality of a sequence alignment by summarizing mismatches, indels, and gaps at termini.
 
     Parameters
     ----------
-    alignment : Alignment object
-        Alignment object containing coordinates attribute.
-
     merged : pd.DataFrame
         Merged DataFrame containing combined sequence information from both sequences.
 
@@ -184,8 +182,8 @@ def evaluate_sequence_alignment(alignment, merged: pd.DataFrame) -> None:
         Prints a summary of alignment quality metrics.
     """
     total_residues = len(merged)
-    mismatch_mask = (merged['seq1'].notna()) & (merged['seq2'].notna()) & (merged['seq1'] != merged['seq2'])
-    indel_mask = (merged['seq1'].isna()) | (merged['seq2'].isna())
+    mismatch_mask = (merged['resn_df1'].notna()) & (merged['resn_df2'].notna()) & (merged['resn_df1'] != merged['resn_df2'])
+    indel_mask = ((merged['resn_df1'].isna()) | (merged['resn_df2'].isna())).to_numpy()
     termini_mask = [False] * total_residues
 
     # Check for contiguous blocks of indels at beginning or end
@@ -207,18 +205,18 @@ def evaluate_sequence_alignment(alignment, merged: pd.DataFrame) -> None:
     if mismatches := mismatch_mask.sum():
         warnings.warn(f"Found {mismatches} mismatches out of {total_residues} residues "
               f"({(mismatches / total_residues) * 100:.2f}%) \n"
-              f" Mismatches found at the following positions in df1 {merged.loc[mismatch_mask, 'idx1'].tolist()}.")
+              f" Mismatches found at the following positions in df1: {merged.loc[mismatch_mask, 'resi_df1'].tolist()}.")
 
     if indels := indel_mask.sum():
         warnings.warn(f"Found {indels} residues with indels out of {total_residues} residues "
               f"({(indels / total_residues) * 100:.2f}%) \n"
-              f" Indels found at the following positions in df1 {merged.loc[indel_mask, 'idx1'].tolist()}"
-                      f" and df2 {merged.loc[indel_mask, 'idx2'].tolist()}.")
+              f" Indels found at the following positions in df1 {merged.loc[indel_mask, 'resi_df1'].tolist()}"
+                      f" and df2 {merged.loc[indel_mask, 'resi_df2'].tolist()}.")
 
     if sum(termini_mask):
         warnings.warn(f"Found gaps at the termini of the sequence alignment, "
-                       f" at positions {merged.loc[termini_mask, 'idx1'].tolist()} in df1 "
-                       f" and {merged.loc[termini_mask, 'idx2'].tolist()} in df2.")
+                       f" at positions {merged.loc[termini_mask, 'resi_df1'].tolist()} in df1 "
+                       f" and {merged.loc[termini_mask, 'resi_df2'].tolist()} in df2.")
 
 
 
