@@ -95,6 +95,7 @@ class Runner:
             self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
             self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
 
+        # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
             # TODO: pass keyword args for column names
             self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(self.context.config.mutation_data_path)
@@ -106,8 +107,13 @@ class Runner:
             self.context.residue_table = sequence_context.merge_mutation_scores(
                 mutation_scores=self.context.extras['mutation_data'],
                 residue_table=self.context.residue_table,
-                chain=self.context.config.mutation_data_chain
+                chain=self.context.config.mutation_data_chain,
+                alignment_cutoff=self.context.config.alignment_cutoff
             )
+        # Otherwise add resm_mut and resi_mut columns with existing values for downstream sequence metrics to use
+        else:
+            pass
+
 
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:

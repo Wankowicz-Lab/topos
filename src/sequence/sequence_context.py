@@ -154,6 +154,10 @@ def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> p
 
     map_df = pd.DataFrame(mapping, columns=["i1", "i2"])
 
+    # copy dfs to avoid modifying originals
+    df1 = df1.copy()
+    df2 = df2.copy()
+
     # add sequential index to each df for merging
     df1['seq_idx'] = range(len(df1))
     df2['seq_idx'] = range(len(df2))
@@ -233,7 +237,8 @@ def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -
                        f" and {merged.loc[termini_mask, 'resi_df2'].tolist()} in df2.")
 
 
-def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:
+def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame,
+                          chain: str, alignment_cutoff: float) -> pd.DataFrame:
     """
     Merge mutation scores with structural context based on residue positions.
 
@@ -246,6 +251,9 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
         'resi', and 'resn' columns.
     chain : str
         Chain identifier to filter structural context.
+    alignment_cutoff : float
+        Quality cutoff for the alignment. If the proportion of alignment is below this cutoff,
+        a warning is issued.
 
     Returns
     -------
@@ -253,22 +261,12 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
         Merged DataFrame with mutation scores and structural features. Contains
         columns for chain, resi, resn, resm, type, effect, seq_info, and
         struct_info.
-
-    Raises
-    ------
-    ValueError
-        If there is a mismatch between mutation scores and structure residues
-        for the specified chain.
     """
     aligner = PairwiseAligner()
 
     # Create copies to avoid modifying original DataFrames
     residue_table = residue_table.copy()
     mutation_scores = mutation_scores.copy()
-
-    # Add metadata
-    # residue_table['struct_info'] = True
-    # mutation_scores['seq_info'] = True
 
     # Subset residue table to the specified chain
     residue_table_chain = residue_table[residue_table['chain'] == chain]
@@ -292,22 +290,26 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     merged_df = merge_sequence_dfs(df1=mutation_scores_subset, df2=residue_table_chain, mapping=index_map)
 
     # Evaluate alignment quality
-    evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=0.9)
+    evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=alignment_cutoff)
 
-    # Fill in missing struct_info and seq_info
-    # merged_df.loc[merged_df['struct_info'].isna(), 'struct_info'] = False
-    # merged_df.loc[merged_df['seq_info'].isna(), 'seq_info'] = False
+   # Add chain information and rename columns
     merged_df['chain'] = chain
-
     merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
 
-    # Remove previous rows from residue table and update with merged data
+    # Add mutation information into merged_df
+    merged_df = merged_df.merge(mutation_scores, how='outer', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
+
+    # Remove rows from mutation chain from residue table, update with merged rows
     residue_table = residue_table[residue_table['chain'] != chain]
-    #residue_table['seq_info'] = False
     residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
     residue_table = pd.concat([residue_table, merged_df], axis=0).reset_index(drop=True)
 
+    # Determine which rows have sequence and structure info
+    residue_table['seq_info'] = ~residue_table['resn_mut'].isna()
+    residue_table['struct_info'] = ~residue_table['resn_struct'].isna()
+
     # drop extra columns if present
+    # TODO: update resi_mut and resm_mut for the rest of the repo
     res_table = residue_table[['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'seq_info', 'struct_info']]
 
     return res_table

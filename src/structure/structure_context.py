@@ -167,6 +167,7 @@ class Config(BaseModel):
     # mutagenesis data
     mutation_data_path: Optional[Path] = None
     mutation_data_chain: Optional[str] = None
+    alignment_cutoff: float = 0.95
 
     # sequence features
     aaindex_path: Path = 'data/aaindex_parsed_small.csv'

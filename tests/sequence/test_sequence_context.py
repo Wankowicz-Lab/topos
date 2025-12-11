@@ -101,6 +101,7 @@ def test_evaluate_sequence_alignment():
         'resn_df2': ['A', 'K', 'N', 'D', 'C', 'E', 'G', 'H', 'I', 'M'],
         'resi_df2': list(range(1, 11))
     })
+    pd.options.mode.chained_assignment = 'raise'
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -168,7 +169,7 @@ def test_merge_mutation_scores(tmp_path):
     # Create a mutation_scores df
     mutation_scores_df = pd.DataFrame({
         'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU', 'ASP'],
-        'resi': [2, 2, 3, 3, 4, 4, 5],
+        'resi': [12, 12, 13, 13, 14, 14, 15],
         'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP', 'MET'],
         'type': ['missense', 'missense', 'nonsense', 'missense', 'missense', 'nonsense', 'missense'],
         'effect': [0.5, -1.2, 0.3, -0.7, 1.0, -0.4, -0.1],
@@ -177,25 +178,20 @@ def test_merge_mutation_scores(tmp_path):
 
     # Create a residue_table
     residue_table = pd.DataFrame({'chain': ['A', 'A', 'A', 'A', 'B'], 'resi': [1, 2, 3, 4, 1],
-                                  'resn': ['LEU', 'ARG', 'THR', 'GLU', 'TYR']})
+                                  'resn': ['LEU', 'THR', 'GLU', 'ASP', 'TYR']})
 
     # Merge using the function
-    merged_df = merge_mutation_scores(mutation_scores=mutation_scores_df, residue_table=residue_table, chain='A')
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # Call the function that should issue the warning
+        merged_df = merge_mutation_scores(mutation_scores=mutation_scores_df, residue_table=residue_table, chain='A',
+                                          alignment_cutoff=0.7)
 
-    assert len(merged_df) == 9 # 1 row for residues 1 and 5, two rows for residues 2, 3, and 4 each, 1 row for chain B
-    assert set(merged_df.columns) == {'resn', 'resi', 'resm', 'type', 'effect', 'chain', 'seq_info', 'struct_info'}
-    assert merged_df['seq_info'].tolist() == [False, False, True, True, True, True, True, True, True]
-    assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True, False]
+        assert len(w) == 1
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Found 1 mismatches out of 4 residues" in str(w[-1].message)
 
-    # Check that incorrect indices raise an error
-    mutation_scores_invalid_df = mutation_scores_df.copy()
-    mutation_scores_invalid_df.loc[[4,5], 'resn'] = 'LYS'  # change GLU to cause mismatch
-
-    with pytest.raises(ValueError, match="Mismatch between mutation scores and structure residues"):
-        merge_mutation_scores(mutation_scores_invalid_df, residue_table, chain='A')
-
-    residue_table_invalid = residue_table.copy()
-    residue_table_invalid.at[1, 'resn'] = 'LYS'  # change second residue to cause mismatch
-
-    with pytest.raises(ValueError, match="Mismatch between mutation scores and structure residues"):
-        merge_mutation_scores(mutation_scores_df, residue_table_invalid, chain='A')
+        assert len(merged_df) == 8 # 1 row for each mutant, plus 1 for residue in chain B
+        assert set(merged_df.columns) == {'resn_struct', 'resi_struct', 'resn_mut', 'resi_mut', 'resm', 'type', 'effect', 'chain', 'seq_info', 'struct_info'}
+        assert merged_df['seq_info'].tolist() == [False, True, True, True, True, True, True, True]
+        assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True]
