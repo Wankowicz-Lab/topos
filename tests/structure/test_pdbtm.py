@@ -134,14 +134,14 @@ def test_define_secondary_structure():
 
     ss_df = pd.DataFrame({
         'chain': ['A'] * len(ss_annotation),
-        'resi': list(range(1, len(ss_annotation) + 1)),
+        'resi_struct': list(range(1, len(ss_annotation) + 1)),
         'sse': ss_annotation
     })
 
     residue_table = pd.DataFrame({
         'chain': ['A'] * len(pdbtm_region),
-        'resi': list(range(1, len(pdbtm_region) + 1)),
-        'resn': ['ALA'] * len(ss_annotation),
+        'resi_struct': list(range(1, len(pdbtm_region) + 1)),
+        'resn_struct': ['ALA'] * len(ss_annotation),
         'pdbtm_region': pdbtm_region,
         'pdbtm_region_detailed': pdbtm_region_detailed
     })

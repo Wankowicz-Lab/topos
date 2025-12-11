@@ -95,12 +95,22 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table[keep_cols].copy()
 
+    # Determine which residue name column to use (prefer seq, fall back to struct)
+    if 'resn_seq' in keep_cols:
+        resn_col = 'resn_seq'
+    else:
+        # When no mutation data is available, use structure column and add it to keep_cols
+        resn_col = 'resn_struct'
+        if resn_col not in keep_cols:
+            keep_cols.append(resn_col)
+            aaindex_scores = residue_table[keep_cols].copy()
+
     # Create a dictionary mapping AAIndex feature to its values, truncating first two metadata columns
     feature_dict = {f: aaindex_data.loc[aaindex_data.accession == f].iloc[0][2:]
                     for f in aaindex_data.accession.unique()}
 
     for aa_feature, feature_values in feature_dict.items():
-        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores['resn_seq'].map(feature_values)
+        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores[resn_col].map(feature_values)
 
         # calculate for mutant only if mutation column exists
         if 'resm' in keep_cols:
