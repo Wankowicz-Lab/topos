@@ -206,17 +206,11 @@ class Runner:
         pd.DataFrame
             Merged DataFrame.
         """
-        # Get all unique rows to merge on - use struct columns if available, seq columns otherwise
-        if 'resi_struct' in self.context.residue_table.columns:
-            keep_cols = ['chain', 'resi_struct', 'resn_struct']
-        else:
-            keep_cols = ['chain', 'resi_mut', 'resn_mut']
+        # Get all unique rows to merge on
+        keep_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
         
-        # Add sequence columns if mutations are present
-        if mutations and 'resi_mut' in self.context.residue_table.columns:
-            if 'resi_mut' not in keep_cols:
-                keep_cols.extend(['resi_mut', 'resn_mut'])
-            keep_cols.append('resm')
+        # Add mutation columns if mutations are present
+        keep_cols += ['resm'] if mutations else []
         
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
