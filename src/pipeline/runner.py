@@ -110,10 +110,12 @@ class Runner:
                 chain=self.context.config.mutation_data_chain,
                 alignment_cutoff=self.context.config.alignment_cutoff
             )
-        # Otherwise add column names to align with mutation data case
+        # Otherwise create mutation columns from structure data
         else:
             self.context.residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
-            self.context.residue_table['mut_info'] = False
+            self.context.residue_table['resn_mut'] = self.context.residue_table['resn_struct']
+            self.context.residue_table['resi_mut'] = self.context.residue_table['resi_struct']
+            self.context.residue_table['mut_info'] = True
             self.context.residue_table['struct_info'] = True
 
 
@@ -208,12 +210,12 @@ class Runner:
         if 'resi_struct' in self.context.residue_table.columns:
             keep_cols = ['chain', 'resi_struct', 'resn_struct']
         else:
-            keep_cols = ['chain', 'resi_seq', 'resn_seq']
+            keep_cols = ['chain', 'resi_mut', 'resn_mut']
         
         # Add sequence columns if mutations are present
-        if mutations and 'resi_seq' in self.context.residue_table.columns:
-            if 'resi_seq' not in keep_cols:
-                keep_cols.extend(['resi_seq', 'resn_seq'])
+        if mutations and 'resi_mut' in self.context.residue_table.columns:
+            if 'resi_mut' not in keep_cols:
+                keep_cols.extend(['resi_mut', 'resn_mut'])
             keep_cols.append('resm')
         
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
@@ -223,8 +225,8 @@ class Runner:
             merge_cols = ['chain']
             
             # Check if this is a sequence-based or structure-based metric
-            if 'resi_seq' in df.columns:
-                merge_cols.extend(['resi_seq', 'resn_seq'])
+            if 'resi_mut' in df.columns:
+                merge_cols.extend(['resi_mut', 'resn_mut'])
                 if 'resm' in df.columns:
                     merge_cols.append('resm')
             elif 'resi_struct' in df.columns:

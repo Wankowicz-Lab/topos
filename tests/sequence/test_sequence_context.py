@@ -192,6 +192,6 @@ def test_merge_mutation_scores(tmp_path):
         assert "Found 1 mismatches out of 4 residues" in str(w[-1].message)
 
         assert len(merged_df) == 8 # 1 row for each mutant, plus 1 for residue in chain B
-        assert set(merged_df.columns) == {'resn_struct', 'resi_struct', 'resn_seq', 'resi_seq', 'resm', 'type', 'effect', 'chain', 'mut_info', 'struct_info'}
+        assert set(merged_df.columns) == {'resn_struct', 'resi_struct', 'resn_mut', 'resi_mut', 'resm', 'type', 'effect', 'chain', 'mut_info', 'struct_info'}
         assert merged_df['mut_info'].tolist() == [False, True, True, True, True, True, True, True]
         assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True]

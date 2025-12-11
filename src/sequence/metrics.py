@@ -9,7 +9,7 @@ from src.structure.structure_context import Context, register_metric
 from typing import List, Optional
 
 # columns to keep for sequence feature calculation to enable merging back to full table
-KEEP_COLS = ['chain', 'resi_seq', 'resn_seq', 'resm']
+KEEP_COLS = ['chain', 'resi_mut', 'resn_mut', 'resm']
 
 @register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
                  requires={'resm'}, tags={'sequence'})
@@ -46,15 +46,15 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     # Determine if position effects are already calculated or need to be computed from data
     if 'pos_effect' in seq_data.columns:
         # exclude synonymous mutations, which have undefined position effects, and subset
-        pos_scores = seq_data[['resi_seq', 'pos_effect', 'type']]
-        pos_scores = pos_scores.loc[pos_scores.type != 'synonymous', ['resi_seq', 'pos_effect']]
+        pos_scores = seq_data[['resi_mut', 'pos_effect', 'type']]
+        pos_scores = pos_scores.loc[pos_scores.type != 'synonymous', ['resi_mut', 'pos_effect']]
         pos_scores = pos_scores.drop_duplicates()
 
     else:
         # compute position effects from individual mutation effects, removing synonymous mutations
-        pos_counts = seq_data[['resi_seq', 'effect', 'type']]
-        pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi_seq', 'effect']]
-        pos_scores = pos_counts.groupby('resi_seq')['effect'].mean().reset_index()
+        pos_counts = seq_data[['resi_mut', 'effect', 'type']]
+        pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi_mut', 'effect']]
+        pos_scores = pos_counts.groupby('resi_mut')['effect'].mean().reset_index()
         pos_scores.rename(columns={'effect': 'pos_effect'}, inplace=True)
 
     # define cutoffs for position effects
@@ -68,7 +68,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     )
 
     # map quartile labels and raw effect scores back to original residues
-    pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi_seq', how='left')
+    pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi_mut', how='left')
 
     return pos_scores
 
@@ -95,22 +95,12 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table[keep_cols].copy()
 
-    # Determine which residue name column to use (prefer seq, fall back to struct)
-    if 'resn_seq' in keep_cols:
-        resn_col = 'resn_seq'
-    else:
-        # When no mutation data is available, use structure column and add it to keep_cols
-        resn_col = 'resn_struct'
-        if resn_col not in keep_cols:
-            keep_cols.append(resn_col)
-            aaindex_scores = residue_table[keep_cols].copy()
-
     # Create a dictionary mapping AAIndex feature to its values, truncating first two metadata columns
     feature_dict = {f: aaindex_data.loc[aaindex_data.accession == f].iloc[0][2:]
                     for f in aaindex_data.accession.unique()}
 
     for aa_feature, feature_values in feature_dict.items():
-        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores[resn_col].map(feature_values)
+        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
 
         # calculate for mutant only if mutation column exists
         if 'resm' in keep_cols:
@@ -142,7 +132,7 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     b_matrix = bl.BLOSUM(blosum_threshold)
 
     def get_blosum_score(row):
-        wt = convert_amino_acid(row['resn_seq'])
+        wt = convert_amino_acid(row['resn_mut'])
         mut = convert_amino_acid(row['resm'])
         return b_matrix[wt][mut]
 

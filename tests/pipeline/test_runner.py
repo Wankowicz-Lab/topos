@@ -82,10 +82,10 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
         make_muts=True
     )
 
-    mut_dataset = residue_table[['resn_seq', 'resi_seq', 'resm', 'effect', 'type']]
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
-        'resn_seq': 'wildtype',
-        'resi_seq': 'position',
+        'resn_mut': 'wildtype',
+        'resi_mut': 'position',
         'resm': 'mutation',
         'effect': 'effect',
         'type': 'type'
@@ -95,7 +95,7 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
 
     # Create synthetic mmcif file to match mutation data
-    residues = residue_table[['resn_seq', 'resi_seq']].drop_duplicates()['resn_seq']
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
@@ -156,10 +156,10 @@ def test_runner_run_metric(tmp_path):
     residue_table['pdbtm_region'] = 'membrane_spanning'
     residue_table['pdbtm_region_detailed'] = 'TM1'
 
-    mut_dataset = residue_table[['resn_seq', 'resi_seq', 'resm', 'effect', 'type']]
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
-        'resn_seq': 'wildtype',
-        'resi_seq': 'position',
+        'resn_mut': 'wildtype',
+        'resi_mut': 'position',
         'resm': 'mutation',
         'effect': 'effect',
         'type': 'type'
@@ -169,7 +169,7 @@ def test_runner_run_metric(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
 
     # Create synthetic mmcif file to match mutation data
-    residues = residue_table[['resn_seq', 'resi_seq']].drop_duplicates()['resn_seq']
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
@@ -205,7 +205,7 @@ def test_runner_run_metric(tmp_path):
         result = myrunner.run(metrics=[metric])
 
         returned_cols = result.columns.tolist()
-        expected_cols = ['chain', 'resi_seq', 'resn_seq', 'resi_struct', 'resn_struct', 'resm']
+        expected_cols = ['chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'resm']
 
         if metric == 'aaindex_scores':
             # aaindex scores add columns for each index
@@ -310,31 +310,31 @@ def test_runner__merge_features_with_muts():
     )
 
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=[True, False])
-    residue_table_struct_only = residue_table[['chain', 'resi_struct', 'resn_struct']].drop_duplicates().reset_index(drop=True)
+    residue_table_no_muts = residue_table[['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']].drop_duplicates().reset_index(drop=True)
 
-    # df1 has structure-level features from a subset of the residues  
-    df1_keep_resis = np.random.choice(residue_table_struct_only['resi_struct'], size=7, replace=False)
-    df1 = residue_table_struct_only[residue_table_struct_only['resi_struct'].isin(df1_keep_resis)].copy()
+    # df1 has residue level features from a subset of the residues  
+    df1_keep_resis = np.random.choice(residue_table_no_muts['resi_struct'], size=7, replace=False)
+    df1 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df1_keep_resis)].copy()
     df1 = df1[['chain', 'resi_struct', 'resn_struct']]
     df1['feature1'] = np.random.rand(len(df1))
 
     # df2 has mutation-level features for all mutations from a subset of positions in chain A
-    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_seq'], size=3, replace=False)
-    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_seq'].isin(df2_keep_resis))].copy()
-    df2 = df2[['chain', 'resi_seq', 'resn_seq', 'resm']]
+    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_mut'], size=3, replace=False)
+    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_mut'].isin(df2_keep_resis))].copy()
+    df2 = df2[['chain', 'resi_mut', 'resn_mut', 'resm']]
     df2['feature2'] = np.random.rand(len(df2))
 
-    # df3 has structure level features from residues in Chain B
-    df3_keep_resis = np.random.choice(residue_table_struct_only.loc[residue_table_struct_only['chain']=='B']['resi_struct'],
+    # df3 has residue level features from residues in Chain B
+    df3_keep_resis = np.random.choice(residue_table_no_muts.loc[residue_table_no_muts['chain']=='B']['resi_struct'],
                                       size=5, replace=False)
-    df3 = residue_table_struct_only[residue_table_struct_only['resi_struct'].isin(df3_keep_resis)].copy()
+    df3 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df3_keep_resis)].copy()
     df3 = df3[['chain', 'resi_struct', 'resn_struct']]
     df3['feature3'] = np.random.rand(len(df3))
 
     # df4 has a subset of mutations at each position
     df4_keep_resis = np.random.choice(len(residue_table), size=40, replace=False)
     df4 = residue_table.iloc[df4_keep_resis].copy()
-    df4 = df4[['chain', 'resi_seq', 'resn_seq', 'resm']]
+    df4 = df4[['chain', 'resi_mut', 'resn_mut', 'resm']]
     df4['feature4'] = np.random.rand(len(df4))
 
     result_frames = [df1, df2, df3, df4]
@@ -355,7 +355,7 @@ def test_runner__merge_features_with_muts():
     assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
 
     # Check sequence-based features
-    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_seq'].isin(df2_keep_resis))
+    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_mut'].isin(df2_keep_resis))
     assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
     assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
 
@@ -363,8 +363,8 @@ def test_runner__merge_features_with_muts():
     assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
     assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
 
-    df4 = df4.set_index(['chain', 'resi_seq', 'resn_seq', 'resm'])
-    merged_df = merged_df.set_index(['chain', 'resi_seq', 'resn_seq', 'resm'])
+    df4 = df4.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
+    merged_df = merged_df.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
