@@ -150,17 +150,11 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     """
 
     res_starts = struc.get_residue_starts(context.aa)
-    chains = context.aa.chain_id[res_starts]
-    resi = context.aa.res_id[res_starts]
-    resn = context.aa.res_name[res_starts]
     sse_vals = calculate_secondary_structure(context.aa)
 
-    ss_df = pd.DataFrame({
-        "chain": chains,
-        "resi": resi,
-        'resn': resn,
-        "sse": sse_vals
-    })
+    # Get metadata columns (chain, resi_struct, resn_struct)
+    ss_df = get_metadata_cols(context.aa)
+    ss_df["sse"] = sse_vals
 
     if context.config.membrane_protein:
         ss_output = pdbtm.define_secondary_structure(context.residue_table, ss_df)

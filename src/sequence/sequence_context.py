@@ -259,8 +259,8 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     -------
     pd.DataFrame
         Merged DataFrame with mutation scores and structural features. Contains
-        columns for chain, resi, resn, resm, type, effect, seq_info, and
-        struct_info.
+        columns for chain, resi_mut, resn_mut, resm, resi_struct, resn_struct,
+        type, effect, mut_info, and struct_info.
     """
     aligner = PairwiseAligner()
 
@@ -305,11 +305,10 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     residue_table = pd.concat([residue_table, merged_df], axis=0).reset_index(drop=True)
 
     # Determine which rows have sequence and structure info
-    residue_table['seq_info'] = ~residue_table['resn_mut'].isna()
+    residue_table['mut_info'] = ~residue_table['resn_mut'].isna()
     residue_table['struct_info'] = ~residue_table['resn_struct'].isna()
 
     # drop extra columns if present
-    # TODO: update resi_mut and resm_mut for the rest of the repo
-    res_table = residue_table[['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'seq_info', 'struct_info']]
+    res_table = residue_table[['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info']]
 
     return res_table
