@@ -259,8 +259,8 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     -------
     pd.DataFrame
         Merged DataFrame with mutation scores and structural features. Contains
-        columns for chain, resi, resn, resm, type, effect, seq_info, and
-        struct_info.
+        columns for chain, resi_seq, resn_seq, resm, resi_struct, resn_struct,
+        type, effect, mut_info, and struct_info.
     """
     aligner = PairwiseAligner()
 
@@ -294,10 +294,10 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
 
    # Add chain information and rename columns
     merged_df['chain'] = chain
-    merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
+    merged_df.rename(columns={'resn_df1': 'resn_seq', 'resi_df1': 'resi_seq', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
 
     # Add mutation information into merged_df
-    merged_df = merged_df.merge(mutation_scores, how='outer', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
+    merged_df = merged_df.merge(mutation_scores, how='outer', left_on=['resi_seq', 'resn_seq'], right_on=['resi', 'resn'])
 
     # Remove rows from mutation chain from residue table, update with merged rows
     residue_table = residue_table[residue_table['chain'] != chain]
@@ -305,11 +305,10 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     residue_table = pd.concat([residue_table, merged_df], axis=0).reset_index(drop=True)
 
     # Determine which rows have sequence and structure info
-    residue_table['seq_info'] = ~residue_table['resn_mut'].isna()
+    residue_table['mut_info'] = ~residue_table['resn_seq'].isna()
     residue_table['struct_info'] = ~residue_table['resn_struct'].isna()
 
     # drop extra columns if present
-    # TODO: update resi_mut and resm_mut for the rest of the repo
-    res_table = residue_table[['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'seq_info', 'struct_info']]
+    res_table = residue_table[['chain', 'resi_seq', 'resn_seq', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info']]
 
     return res_table

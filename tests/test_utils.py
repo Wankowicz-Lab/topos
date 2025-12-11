@@ -104,21 +104,25 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
 
         if make_mut:
             chain_list = [chain_id] * num_residue * 20
-            resi_list = np.repeat(range(start_resi, start_resi + num_residue), 20)
-            resn_list = np.repeat([_random_AA_seq(num_residue)], 20)
+            resi_seq_list = np.repeat(range(start_resi, start_resi + num_residue), 20)
+            resi_struct_list = resi_seq_list.copy()
+            resn_seq_list = np.repeat([_random_AA_seq(num_residue)], 20)
+            resn_struct_list = resn_seq_list.copy()
             resm_list = AA_LIST * num_residue
             eff_list = np.random.normal(loc=0.0, scale=1.0, size=num_residue * 20)
             type_list = ['missense'] * num_residue * 20
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
-                'resi': resi_list,
-                'resn': resn_list,
+                'resi_seq': resi_seq_list,
+                'resn_seq': resn_seq_list,
+                'resi_struct': resi_struct_list,
+                'resn_struct': resn_struct_list,
                 'resm': resm_list,
                 'effect': eff_list,
                 'type': type_list,
                 'struct_info': True,
-                'seq_info': True
+                'mut_info': True
             })
         else:
             chain_list = [chain_id] * num_residue
@@ -127,10 +131,10 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
-                'resi': resi_list,
-                'resn': resn_list,
+                'resi_struct': resi_list,
+                'resn_struct': resn_list,
                 'struct_info': True,
-                'seq_info': False
+                'mut_info': False
             })
         data.append(chain_df)
 

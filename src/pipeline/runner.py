@@ -110,9 +110,11 @@ class Runner:
                 chain=self.context.config.mutation_data_chain,
                 alignment_cutoff=self.context.config.alignment_cutoff
             )
-        # Otherwise add resm_mut and resi_mut columns with existing values for downstream sequence metrics to use
+        # Otherwise add column names to align with mutation data case
         else:
-            pass
+            self.context.residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
+            self.context.residue_table['mut_info'] = False
+            self.context.residue_table['struct_info'] = True
 
 
 
@@ -187,7 +189,7 @@ class Runner:
         return merged
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
-        """Merge feature DataFrames on chain, resi, resn, and resm columns.
+        """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
 
         Parameters
         ----------
@@ -202,13 +204,32 @@ class Runner:
         pd.DataFrame
             Merged DataFrame.
         """
-        # Get all unique rows based on chain, resi, resn, resm to merge on
-        keep_cols = ['resi', 'chain', 'resn']
-        keep_cols += ['resm'] if mutations else []
+        # Get all unique rows to merge on - use struct columns if available, seq columns otherwise
+        if 'resi_struct' in self.context.residue_table.columns:
+            keep_cols = ['chain', 'resi_struct', 'resn_struct']
+        else:
+            keep_cols = ['chain', 'resi_seq', 'resn_seq']
+        
+        # Add sequence columns if mutations are present
+        if mutations and 'resi_seq' in self.context.residue_table.columns:
+            if 'resi_seq' not in keep_cols:
+                keep_cols.extend(['resi_seq', 'resn_seq'])
+            keep_cols.append('resm')
+        
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
         for df in dfs:
-            merge_cols = ['resi', 'chain', 'resn'] + (['resm'] if 'resm' in df.columns else [])
+            # Determine merge columns based on what's available in the df
+            merge_cols = ['chain']
+            
+            # Check if this is a sequence-based or structure-based metric
+            if 'resi_seq' in df.columns:
+                merge_cols.extend(['resi_seq', 'resn_seq'])
+                if 'resm' in df.columns:
+                    merge_cols.append('resm')
+            elif 'resi_struct' in df.columns:
+                merge_cols.extend(['resi_struct', 'resn_struct'])
+            
             merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
 
         return merged_df

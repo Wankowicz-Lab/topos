@@ -157,8 +157,8 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
 
     ss_df = pd.DataFrame({
         "chain": chains,
-        "resi": resi,
-        'resn': resn,
+        "resi_struct": resi,
+        'resn_struct': resn,
         "sse": sse_vals
     })
 
