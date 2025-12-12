@@ -146,6 +146,16 @@ class Config(BaseModel):
         Path to CSV file containing mutagenesis data.
     mutation_data_chain : Optional[str]
         Chain identifier for mutagenesis data alignment.
+    mutation_residue_col_name : str
+        Column name for wildtype residues in mutation data (default: "wildtype").
+    mutation_residue_idx_name : str
+        Column name for residue positions in mutation data (default: "position").
+    mutation_col_name : str
+        Column name for mutant residues in mutation data (default: "mutation").
+    mutation_type_col_name : str
+        Column name for mutation types in mutation data (default: "type").
+    mutation_score_col_name : str
+        Column name for mutation effect scores in mutation data (default: "effect").
     aaindex_path : Path
         Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
     """
@@ -168,6 +178,11 @@ class Config(BaseModel):
     mutation_data_path: Optional[Path] = None
     mutation_data_chain: Optional[str] = None
     alignment_cutoff: float = 0.95
+    mutation_residue_col_name: str = "wildtype"
+    mutation_residue_idx_name: str = "position"
+    mutation_col_name: str = "mutation"
+    mutation_type_col_name: str = "type"
+    mutation_score_col_name: str = "effect"
 
     # sequence features
     aaindex_path: Path = 'data/aaindex_parsed_small.csv'

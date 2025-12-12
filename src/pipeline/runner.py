@@ -105,9 +105,16 @@ class Runner:
 
         # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
-            # TODO: pass keyword args for column names
-            self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(self.context.config.mutation_data_path)
 
+            self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(
+                path=self.context.config.mutation_data_path,
+                residue_col_name=self.context.config.mutation_residue_col_name,
+                residue_idx_name=self.context.config.mutation_residue_idx_name,
+                mutation_col_name=self.context.config.mutation_col_name,
+                mutation_type_col_name=self.context.config.mutation_type_col_name,
+                score_col_name=self.context.config.mutation_score_col_name
+            )
+  
             if self.context.config.mutation_data_chain not in self.context.residue_table['chain'].unique():
                 raise ValueError(f"Specified mutation_data_chain '{self.context.config.mutation_data_chain}' not "
                                  f"found in structure chains {self.context.residue_table['chain'].unique()}")
