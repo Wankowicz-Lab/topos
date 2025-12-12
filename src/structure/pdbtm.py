@@ -260,8 +260,8 @@ def add_pdbtm_regions(residue_table: pd.DataFrame, pdbtm_regions: pd.DataFrame) 
     for _, region in pdbtm_regions.iterrows():
         mask = (
             (residue_table['chain'] == region['chain']) &
-            (residue_table['resi_struct'] >= region['pdb_beg']) &
-            (residue_table['resi_struct'] <= region['pdb_end'])
+            (residue_table['resi'] >= region['pdb_beg']) &
+            (residue_table['resi'] <= region['pdb_end'])
         )
 
         # Assign descriptive region type instead of 1 letter code

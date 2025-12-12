@@ -92,6 +92,8 @@ def test_annotate_pdbtm_detailed():
 
 def test_add_pdbtm_regions():
     residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=False, start_resis=[1, 3])
+    # rename columns, resi_struct hasn't been created in pipeline yet
+    residue_table.rename(columns={'resi_struct': 'resi', 'resn_struct': 'resn'}, inplace=True)
     pdbtm_regions = pd.DataFrame({
         'chain': ['A', 'A', 'B', 'B'],
         'type': ['membrane_spanning', 'cytoplasmic', 'extracellular', 'extracellular'],
@@ -104,7 +106,6 @@ def test_add_pdbtm_regions():
                               ['extracellular_1'] * 4 + ['extracellular_2'])
 
     merged = pdbtm.add_pdbtm_regions(residue_table, pdbtm_regions)
-    print(merged)
 
     assert merged['pdbtm_region'].tolist() == expected_region
     assert merged['pdbtm_region_detailed'].tolist() == expected_region_detail
