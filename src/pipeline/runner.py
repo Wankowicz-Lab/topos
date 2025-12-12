@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from os import WCONTINUED
+
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
