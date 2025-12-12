@@ -270,7 +270,7 @@ def load_structure(
         Path to the PDB file.
     model : int, optional
         Model number to load. Default is 1. Use None to load all models.
-    altloc_policy : {'occupancy', 'all'}, optional
+    altloc_policy : {'highest', 'all'}, optional
         Policy for handling alternate locations. 'highest' keeps the
         highest occupancy conformer, 'all' keeps all conformers.
         Default is 'highest'.
