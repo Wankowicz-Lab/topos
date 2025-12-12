@@ -114,7 +114,7 @@ def test_calculate_membrane_distance():
     z_values = list(range(-25, 25, 5))
     coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
     aa_list = random.choices(AA_LIST, k=len(z_values))
-    arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A', altloc='')
 
     class MockContext:
         def __init__(self, array):
@@ -136,7 +136,7 @@ def test_define_secondary_structure():
     residue_table['pdbtm_region'] = 'membrane_spanning'
     residue_table['pdbtm_region_detailed'] = 'TM1'
     aa_list = residue_table.resn.tolist()
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
 
     context = Context(array=arr, config=Config())
     context.residue_table = residue_table
@@ -155,7 +155,7 @@ def test_define_secondary_structure():
 def test_calculate_sasa():  
     # Create a simple chain with a few residues
     aa_list = ['ALA', 'GLY', 'SER']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
     context = Context(array=arr)
     
     # Calculate SASA - should return a DataFrame with 'sasa' column
@@ -169,7 +169,7 @@ def test_calculate_sasa():
 def test_KD_values():  
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
     context = Context(array=arr)
     
     kd_df = metrics.calculate_kyte_doolittle(context)
@@ -190,7 +190,7 @@ def test_KD_values():
 def test_calculate_residue_packing():
     # Create a chain with a few residues that can be close together
     aa_list = ['ALA', 'GLY', 'ALA', 'LEU']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
     context = Context(array=arr)
     
     # Calculate packing metrics
