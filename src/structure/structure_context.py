@@ -198,7 +198,7 @@ class Context:
     aa : struc.AtomArray, optional
         Amino acid atoms only (filtered from array).
     residue_table : pd.DataFrame, optional
-        DataFrame with chain, resi, resn for each residue.
+        DataFrame with chain, resi, resn, altloc for each residue. Residues with no altlocs have blanks
     kdtree : Any, optional
         KD-tree for spatial queries (built on demand).
     neighbor_cache : dict
@@ -252,7 +252,8 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
     resn   = array.res_name[res_starts]
-    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
+    altloc = array.altloc[res_starts
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 
 def load_structure(
