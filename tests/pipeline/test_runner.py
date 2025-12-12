@@ -112,10 +112,10 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     )
 
     # Use custom column names different from defaults
-    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
-        'resn': 'wt_residue',  # custom name instead of 'wildtype'
-        'resi': 'res_position',  # custom name instead of 'position'
+        'resn_mut': 'wt_residue',  # custom name instead of 'wildtype'
+        'resi_mut': 'res_position',  # custom name instead of 'position'
         'resm': 'mut_residue',  # custom name instead of 'mutation'
         'effect': 'fitness_score',  # custom name instead of 'effect'
         'type': 'mut_type'  # custom name instead of 'type'
@@ -125,7 +125,7 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
 
     # Create synthetic mmcif file to match mutation data
-    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
