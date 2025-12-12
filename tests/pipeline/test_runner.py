@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import random
+import tomli_w
 
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
@@ -101,9 +102,63 @@ def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
 
 
 def test_runner_initialization_overrides_mutation_data(tmp_path):
-    config_path = tmp_path / 'config.toml'
-    _make_config_file(config_path, mutation_data_chain='A')
+    """Test that mutation data can be loaded with custom column names specified in config."""
+    # Create a mock mutation dataset with CUSTOM column names
+    residue_table = _make_residue_table(
+        num_chains=1,
+        num_residues=10,
+        start_resis=1,
+        make_muts=True
+    )
 
+    # Use custom column names different from defaults
+    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = mut_dataset.rename(columns={
+        'resn': 'wt_residue',  # custom name instead of 'wildtype'
+        'resi': 'res_position',  # custom name instead of 'position'
+        'resm': 'mut_residue',  # custom name instead of 'mutation'
+        'effect': 'fitness_score',  # custom name instead of 'effect'
+        'type': 'mut_type'  # custom name instead of 'type'
+    })
+
+    mut_data_path = tmp_path / 'mut_data.csv'
+    mut_dataset.to_csv(mut_data_path, index=False)
+
+    # Create synthetic mmcif file to match mutation data
+    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
+
+    # Create config file WITH custom column names
+    config_path = tmp_path / 'config.toml'
+    config_dict = {
+        'pdb_id': '8SMV',
+        'mutation_data_chain': 'A',
+        'mutation_data_path': str(mut_data_path),
+        'mutation_residue_col_name': 'wt_residue',
+        'mutation_residue_idx_name': 'res_position',
+        'mutation_col_name': 'mut_residue',
+        'mutation_type_col_name': 'mut_type',
+        'mutation_score_col_name': 'fitness_score'
+    }
+    with config_path.open("wb") as f:
+        tomli_w.dump(config_dict, f)
+
+    mut_runner = runner.Runner(
+        pdb_path=mmcif_path,
+        config_path=config_path
+    )
+    assert mut_runner.context.config.pdb_path == mmcif_path
+    assert mut_runner.context.config.mutation_data_path == mut_data_path
+    # Check that 'effect' column exists (standardized name after loading)
+    assert 'effect' in mut_runner.context.residue_table.columns.tolist()
+    # Verify the config has the custom column names
+    assert mut_runner.context.config.mutation_residue_col_name == 'wt_residue'
+    assert mut_runner.context.config.mutation_score_col_name == 'fitness_score'
+
+
+def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
+    """Test that an appropriate error is raised when column names are incorrect."""
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
         num_chains=1,
@@ -112,6 +167,7 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
         make_muts=True
     )
 
+    # Create mutation data with standard column names
     mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
         'resn': 'wildtype',
@@ -129,16 +185,27 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
-    mut_runner = runner.Runner(
-        pdb_id='8SMV',
-        pdb_path=mmcif_path,
-        membrane_protein=True,
-        mutation_data_path=mut_data_path,
-        config_path=config_path
-    )
-    assert mut_runner.context.config.pdb_path == mmcif_path
-    assert mut_runner.context.config.mutation_data_path == mut_data_path
-    assert 'effect' in mut_runner.context.residue_table.columns.tolist()
+    # Create config file with INCORRECT column names
+    config_path = tmp_path / 'config.toml'
+    config_dict = {
+        'pdb_id': '8SMV',
+        'mutation_data_chain': 'A',
+        'mutation_data_path': str(mut_data_path),
+        'mutation_residue_col_name': 'wrong_wt_col',  # incorrect column name
+        'mutation_residue_idx_name': 'position',
+        'mutation_col_name': 'mutation',
+        'mutation_type_col_name': 'type',
+        'mutation_score_col_name': 'effect'
+    }
+    with config_path.open("wb") as f:
+        tomli_w.dump(config_dict, f)
+
+    # Verify that appropriate error is raised with detailed message
+    with pytest.raises(ValueError, match=r"Columns \['wrong_wt_col'\] not found in mutation scores file"):
+        runner.Runner(
+            pdb_path=mmcif_path,
+            config_path=config_path
+        )
 
 
 def test_runner__merge_config(tmp_path):

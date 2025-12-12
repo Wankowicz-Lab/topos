@@ -8,11 +8,11 @@ from src.sequence.utils import convert_amino_acid
 
 def load_mutation_scores(
     path: Union[str, Path],
-    residue_col_name: str = "wildtype",
-    residue_idx_name: str = "position",
-    mutation_col_name: str = "mutation",
-    mutation_type_col_name: str = "type",
-    score_col_name: str = "effect",
+    residue_col_name: str,
+    residue_idx_name: str,
+    mutation_col_name: str,
+    mutation_type_col_name: str,
+    score_col_name: str,
 ) -> pd.DataFrame:
     """
     Load mutation scores from a CSV file and standardize column names.
@@ -21,16 +21,16 @@ def load_mutation_scores(
     ----------
     path : str or Path
         Path to the CSV file containing mutation scores.
-    residue_col_name : str, optional
-        Name of the column containing wildtype residues. Default is "wildtype".
-    residue_idx_name : str, optional
-        Name of the column containing residue positions. Default is "position".
-    mutation_col_name : str, optional
-        Name of the column containing mutant residues. Default is "mutation".
-    mutation_type_col_name : str, optional
-        Name of the column containing mutation types. Default is "type".
-    score_col_name : str, optional
-        Name of the column containing mutation effect scores. Default is "effect".
+    residue_col_name : str
+        Name of the column containing wildtype residues.
+    residue_idx_name : str
+        Name of the column containing residue positions.
+    mutation_col_name : str
+        Name of the column containing mutant residues.
+    mutation_type_col_name : str
+        Name of the column containing mutation types.
+    score_col_name : str
+        Name of the column containing mutation effect scores.
 
     Returns
     -------
@@ -54,7 +54,16 @@ def load_mutation_scores(
     required_cols = [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
-        raise ValueError(f"Columns {missing_cols} not found in mutation scores file at {path}.")
+        raise ValueError(
+            f"Columns {missing_cols} not found in mutation scores file at {path}.\n"
+            f"Expected columns based on config settings:\n"
+            f"  - Wildtype residue column: '{residue_col_name}'\n"
+            f"  - Residue position column: '{residue_idx_name}'\n"
+            f"  - Mutant residue column: '{mutation_col_name}'\n"
+            f"  - Mutation type column: '{mutation_type_col_name}'\n"
+            f"  - Mutation score column: '{score_col_name}'\n"
+            f"Available columns in file: {list(df.columns)}"
+        )
     df = df.rename(columns={
         residue_col_name: "resn",
         residue_idx_name: "resi",
