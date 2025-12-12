@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from os import WCONTINUED
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
@@ -148,7 +149,7 @@ class Runner:
         return Config(**base_dict)
 
 
-    def run(self, metrics: List[str] = None) -> pd.DataFrame:
+    def run(self, metrics: List[str] = None) -> None:
         """Compute specified metrics and return as a merged DataFrame.
 
         Parameters
@@ -179,7 +180,7 @@ class Runner:
             self.context.extras[m] = df
 
         # merge all results into one DataFrame
-        mutations = self.mutation_data_path is not None
+        mutations = self.context.config.mutation_data_path is not None
         self.features = self._merge_features(result_frames, mutations=mutations)
 
 
@@ -221,12 +222,15 @@ class Runner:
         """
 
         if output_dir is None:
-            if self.config_path is None and self.context.config.output_dir is None:
+            if self.context.config.output_dir is not None:
+                output_dir = self.context.config.output_dir
+            elif self.config_path is not None:
+                output_dir = Path(self.config_path).parent
+            else:
                 raise ValueError("If output_dir is not provided, config_path must be provided to determine output location.")
-            output_dir = Path(self.config_path).parent
-        else:
-            output_dir = Path(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=True)
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         # Save features
         merged_path = output_dir / f"{self.context.config.pdb_id}_features.csv"
@@ -234,7 +238,7 @@ class Runner:
 
         # Save metadata from residue table
         metadata_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut',
-                         'resm', 'struct_info', 'seq_info']
+                        'struct_info', 'seq_info'] + ['resm'] if self.context.config.mutation_data_path is not None else []
 
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{self.context.config.pdb_id}_metadata.csv"

@@ -172,7 +172,7 @@ class Config(BaseModel):
     aaindex_path: Path = 'data/aaindex_parsed_small.csv'
 
     # pipeline parameters
-    output_path: Optional[Path] = None
+    output_dir: Optional[Path] = None
 
     def model_post_init(self, __context):
         if self.mutation_data_path is not None:
