@@ -288,7 +288,7 @@ def load_structure(
     if isinstance(arr, struc.AtomArray) and altloc_policy != "all":
         if "altloc_id" in arr.get_annotation_categories():
             if altloc_policy == "highest" and "highest" in arr.get_annotation_categories():
-                keep = _keep_highest_occ_per_atom(arr)
+                keep = _keep_highest_occ_per_atom(arr) #if this is not selected, all altloc will exist in the array
             arr = arr[keep]
     return arr
 
