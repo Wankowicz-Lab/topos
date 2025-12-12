@@ -252,7 +252,7 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
     resn   = array.res_name[res_starts]
-    altloc = array.altloc[res_starts
+    altloc = array.altloc[res_starts]
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 
