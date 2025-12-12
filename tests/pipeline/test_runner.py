@@ -464,3 +464,120 @@ def test_runner__merge_features_with_muts():
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
+
+
+
+def test_runner_expand_batch_arguments_single_value():
+    batch_df = pd.DataFrame({
+        'name': ['protein1', 'protein2'],
+        'pdb_id': ['1abc', '2xyz'],
+        'membrane_protein': [False, True],
+        'mutation_data_path': [None, 'mut_data.csv'],
+        'config_path': ['config.toml1', 'config.toml2']
+    })
+    batch_runner = runner.Runner(pdb_id='8smv')
+    expanded_args = batch_runner.expand_batch_arguments(batch_df)
+
+    assert len(expanded_args) == 2
+    for i, row in batch_df.iterrows():
+        assert expanded_args[i]['pdb_id'] == row['pdb_id']
+        assert expanded_args[i]['membrane_protein'] == row['membrane_protein']
+        assert expanded_args[i]['mutation_data_path'] == row['mutation_data_path']
+        assert expanded_args[i]['config_path'] == row['config_path']
+
+
+def test_runner_expand_arguments_misssing_vals():
+    batch_df = pd.DataFrame({
+        'name': ['protein1'],
+        'pdb_id': ['1abc'],
+        'membrane_protein': [False],
+        'mutation_data_path': [pd.NA],
+        'config_path': ['config.toml1']
+    })
+    batch_runner = runner.Runner(pdb_id='8smv')
+    expanded_args = batch_runner.expand_batch_arguments(batch_df)
+
+    assert len(expanded_args) == 1
+    assert expanded_args[0]['pdb_id'] == '1abc'
+    assert expanded_args[0]['membrane_protein'] is False
+    assert expanded_args[0]['mutation_data_path'] is None
+    assert expanded_args[0]['config_path'] == 'config.toml1'
+
+
+def test_runner_expand_batch_arguments_multiple_values():
+    # Create batch dataframe with multiple PDB IDs in some entries
+    batch_df_multiple_pdb = pd.DataFrame({
+        'name': ['protein1', 'protein2', 'protein1'],
+        'pdb_id': ['1abc|1def', '2xyz', '3ghi|3jkl|3lmo'],
+        'membrane_protein': [False, True, False],
+        'mutation_data_path': ['mut_data.csv1', 'mut_data.csv2', 'mut_data.csv3'],
+        'config_path': ['config.toml', 'config.toml', 'config.toml']
+    })
+
+    batch_runner = runner.Runner(pdb_id='8smv')
+    expanded_args = batch_runner.expand_batch_arguments(batch_df_multiple_pdb)
+
+    assert len(expanded_args) == 6  # protein1 expands to 2 entries, protein2 is 1 entry, protein3 expands to 3 entries
+
+    # Check that each expanded entry matches the correct PDB ID and other parameters
+    output_idx = 0
+    for i, row in batch_df_multiple_pdb.iterrows():
+        pdb_ids = row['pdb_id'].split('|')
+        for pdb_id in pdb_ids:
+            assert expanded_args[output_idx]['pdb_id'] == pdb_id
+            assert expanded_args[output_idx]['membrane_protein'] == row['membrane_protein']
+            assert expanded_args[output_idx]['mutation_data_path'] == row['mutation_data_path']
+            assert expanded_args[output_idx]['config_path'] == row['config_path']
+            output_idx += 1
+
+    # Create batch dataframe with multiple mutation data paths in some entries
+    batch_df_multiple_mut = pd.DataFrame({
+        'name': ['protein1', 'protein2', 'protein1'],
+        'pdb_id': ['1abc', '2xyz', '3ghi'],
+        'membrane_protein': [False, True, False],
+        'mutation_data_path': ['mut1.csv|mut2.csv', 'mut3.csv', 'mut4.csv|mut5.csv|mut6.csv'],
+        'config_path': ['config.toml', 'config.toml', 'config.toml']
+    })
+
+    expanded_args_mut = batch_runner.expand_batch_arguments(batch_df_multiple_mut)
+    assert len(expanded_args_mut) == 6  # protein1 expands to 2 entries, protein2 is 1 entry, protein3 expands to 3 entries
+
+    # Check that each expanded entry matches the correct mutation data path and other parameters
+    output_idx = 0
+    for i, row in batch_df_multiple_mut.iterrows():
+        mut_paths = row['mutation_data_path'].split('|')
+        for mut_path in mut_paths:
+            assert expanded_args_mut[output_idx]['pdb_id'] == row['pdb_id']
+            assert expanded_args_mut[output_idx]['membrane_protein'] == row['membrane_protein']
+            assert expanded_args_mut[output_idx]['mutation_data_path'] == mut_path
+            assert expanded_args_mut[output_idx]['config_path'] == row['config_path']
+            output_idx += 1
+
+
+def test_runner_expand_batch_arguments_product_expansion():
+    # Create batch dataframe with multiple PDB IDs and mutation data paths
+    batch_df_product = pd.DataFrame({
+        'name': ['protein1'],
+        'pdb_id': ['1abc|1def'],
+        'membrane_protein': [False],
+        'mutation_data_path': ['mut1.csv|mut2.csv'],
+        'config_path': ['config.toml']
+    })
+
+    batch_runner = runner.Runner(pdb_id='8smv')
+    expanded_args = batch_runner.expand_batch_arguments(batch_df_product)
+
+    assert len(expanded_args) == 4  # 2 PDB IDs x 2 mutation data paths = 4 combinations
+
+    expected_combinations = [
+        ('1abc', 'mut1.csv'),
+        ('1abc', 'mut2.csv'),
+        ('1def', 'mut1.csv'),
+        ('1def', 'mut2.csv')
+    ]
+
+    for i, (expected_pdb, expected_mut) in enumerate(expected_combinations):
+        assert expanded_args[i]['pdb_id'] == expected_pdb
+        assert expanded_args[i]['mutation_data_path'] == expected_mut
+        assert expanded_args[i]['membrane_protein'] is False
+        assert expanded_args[i]['config_path'] == 'config.toml'
