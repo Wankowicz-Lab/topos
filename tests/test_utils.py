@@ -109,6 +109,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
             resm_list = AA_LIST * num_residue
             eff_list = np.random.normal(loc=0.0, scale=1.0, size=num_residue * 20)
             type_list = ['missense'] * num_residue * 20
+            altloc_list = [''] * num_residue * 20
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
@@ -117,6 +118,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
                 'resm': resm_list,
                 'effect': eff_list,
                 'type': type_list,
+                'altloc': altloc_list,
                 'struct_info': True,
                 'seq_info': True
             })
@@ -124,11 +126,13 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
             chain_list = [chain_id] * num_residue
             resi_list = range(start_resi, start_resi + num_residue)
             resn_list = _random_AA_seq(num_residue)
+            altloc_list = [''] * num_residue
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
                 'resi': resi_list,
                 'resn': resn_list,
+                'altloc': altloc_list,
                 'struct_info': True,
                 'seq_info': False
             })
