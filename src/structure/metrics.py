@@ -196,6 +196,7 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
+    altlocs = array.altloc[res_starts] 
     
     n_res = len(res_starts)
     bb_counts = np.zeros(n_res, dtype=float)
