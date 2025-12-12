@@ -213,13 +213,16 @@ class Runner:
 
 
     def save_results(self, output_dir: Path = None):
-        """Run the pipeline and save results to CSV files.
+        """Save results to CSV files.
 
         Parameters
         ----------
         output_dir : Optional[Path] = None
-            Directory to save output files. Defaults to current working directory.
+            Directory to save output files. If not provided, uses output_dir from config,
+            or the directory of config_path if available.
         """
+        if not hasattr(self, 'features'):
+            raise ValueError("No features to save. Please call run() first.")
 
         if output_dir is None:
             if self.context.config.output_dir is not None:
