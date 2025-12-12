@@ -180,8 +180,8 @@ class Runner:
 
         # merge all results into one DataFrame
         mutations = self.mutation_data_path is not None
-        merged = self._merge_features(result_frames, mutations=mutations)
-        return merged
+        self.features = self._merge_features(result_frames, mutations=mutations)
+
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
         """Merge feature DataFrames on chain, resi, resn, and resm columns.
@@ -210,3 +210,32 @@ class Runner:
 
         return merged_df
 
+
+    def save_results(self, output_dir: Path = None):
+        """Run the pipeline and save results to CSV files.
+
+        Parameters
+        ----------
+        output_dir : Optional[Path] = None
+            Directory to save output files. Defaults to current working directory.
+        """
+
+        if output_dir is None:
+            if self.config_path is None and self.context.config.output_dir is None:
+                raise ValueError("If output_dir is not provided, config_path must be provided to determine output location.")
+            output_dir = Path(self.config_path).parent
+        else:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save features
+        merged_path = output_dir / f"{self.context.config.pdb_id}_features.csv"
+        self.features.to_csv(merged_path, index=False)
+
+        # Save metadata from residue table
+        metadata_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut',
+                         'resm', 'struct_info', 'seq_info']
+
+        output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
+        metadata_path = output_dir / f"{self.context.config.pdb_id}_metadata.csv"
+        output_df.to_csv(metadata_path, index=False)
