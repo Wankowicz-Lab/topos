@@ -271,7 +271,7 @@ def _make_chain(aa_list, chain_id="A", coords=None):
 
     residues = []
     for i, aa in enumerate(aa_list, start=1):
-        res = _make_residue(aa, res_id=i, chain_id=chain_id, coords=coords[i-1] if coords else None)
+        res = _make_residue(aa, res_id=i, chain_id=chain_id, altloc='', coords=coords[i-1] if coords else None)
         residues.append(res)
 
     return struc.concatenate(residues)
