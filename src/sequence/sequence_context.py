@@ -1,4 +1,4 @@
-import numpy as np
+
 import warnings
 from pathlib import Path
 from typing import Union
@@ -93,7 +93,7 @@ def load_mutation_scores(
 
 def alignment_to_index_map(alignment):
     """
-    Convert alignment.coordinates into explicit per-residue index mapping to allow indexing into padndas df.
+    Convert alignment.coordinates into explicit per-residue index mapping to allow indexing into pandas df.
 
     Parameters
     ----------
@@ -187,7 +187,7 @@ def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -
     Returns
     -------
     None
-        Prints a summary of alignment quality metrics.
+        Issues warnings for alignment quality metrics.
     """
     total_residues = len(merged)
     mismatch_mask = (merged['resn_df1'].notna()) & (merged['resn_df2'].notna()) & (merged['resn_df1'] != merged['resn_df2'])
@@ -292,7 +292,7 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     # Evaluate alignment quality
     evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=alignment_cutoff)
 
-   # Add chain information and rename columns
+    # Add chain information and rename columns
     merged_df['chain'] = chain
     merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
 
