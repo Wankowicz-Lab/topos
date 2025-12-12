@@ -84,6 +84,8 @@ def test_altloc_compatible():
     
     # Different altloc should not be compatible
     assert utils.altloc_compatible("A", "B") == False
+    assert utils.altloc_compatible("A", "b") == False
+    assert utils.altloc_compatible("a", "B") == False
 
 
 def test_build_sites_biotite():
