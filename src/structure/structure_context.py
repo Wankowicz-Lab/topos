@@ -258,7 +258,7 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
 def load_structure(
     path: Union[str, Path],
     model: Optional[int] = 1,
-    altloc_policy: Literal["occupancy", "all"] = "occupancy",
+    altloc_policy: Literal["highest", "all"] = "highest",
     pdb_ext: str = "pdb"
 ) -> struc.AtomArray:
     """
@@ -271,9 +271,9 @@ def load_structure(
     model : int, optional
         Model number to load. Default is 1. Use None to load all models.
     altloc_policy : {'occupancy', 'all'}, optional
-        Policy for handling alternate locations. 'occupancy' keeps the
+        Policy for handling alternate locations. 'highest' keeps the
         highest occupancy conformer, 'all' keeps all conformers.
-        Default is 'occupancy'.
+        Default is 'highest'.
     pdb_ext : str, optional
         File extension hint. Default is 'pdb'.
 
@@ -287,10 +287,8 @@ def load_structure(
     arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
     if isinstance(arr, struc.AtomArray) and altloc_policy != "all":
         if "altloc_id" in arr.get_annotation_categories():
-            if altloc_policy == "occupancy" and "occupancy" in arr.get_annotation_categories():
+            if altloc_policy == "highest" and "highest" in arr.get_annotation_categories():
                 keep = _keep_highest_occ_per_atom(arr)
-            else:
-                keep = _keep_first_altloc_per_atom(arr)
             arr = arr[keep]
     return arr
 
@@ -303,10 +301,3 @@ def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
         keep[idx[int(np.argmax(occ))]] = True
     return keep
 
-
-def _keep_first_altloc_per_atom(array: struc.AtomArray) -> np.ndarray:
-    """Keep the first alternate location for each unique atom position."""
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id", "res_id", "atom_name"]):
-        keep[idx[0]] = True
-    return keep
