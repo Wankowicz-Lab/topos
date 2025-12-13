@@ -18,8 +18,12 @@ def batch_process(batch_file_path: str) -> pd.DataFrame:
     Parameters
     ----------
     batch_file_path : str
-        Path to a text file containing one protein per line, specifying the name, PDB ID(s),
-        mutation_data_path(s), and config file.
+        Path to a CSV file containing batch specifications. The CSV file must contain the following columns:
+            - name: Name of the protein.
+            - pdb_id: PDB ID(s) for the protein (multiple IDs can be separated by '|').
+            - membrane_protein: Boolean or indicator if the protein is a membrane protein.
+            - mutation_data_path: Path(s) to mutation data file(s) (multiple paths can be separated by '|').
+            - config_path: Path to the configuration file for the run.
 
     Returns
     -------
