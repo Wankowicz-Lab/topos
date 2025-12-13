@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.pipeline import runner
+
 from src.pipeline.batch_processing import batch_process, expand_batch_arguments
 
 
@@ -28,7 +28,7 @@ def test_batch_process(monkeypatch, tmp_path):
 
 
     monkeypatch.setattr('src.pipeline.batch_processing.Runner', FakeRunner)
-    processed = batch_process(batch_file_path)
+    _ = batch_process(batch_file_path)
 
     for idx, call in enumerate(calls):
         assert call['pdb_id'] == ['1abc', '123', '8smv'][idx]

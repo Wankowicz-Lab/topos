@@ -5,7 +5,7 @@ import pytest
 import random
 import tomli_w
 
-from pathlib import Path
+
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
 

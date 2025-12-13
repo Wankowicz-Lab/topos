@@ -82,17 +82,13 @@ def expand_batch_arguments(batch_df: pd.DataFrame) -> List[Dict[str, Any]]:
 
         # Create all combinations of pdb_ids and mutation_paths if multiple are provided
         combos = list(itertools.product(pdb_ids, mutation_paths))
-        if len(combos) > 1:
-            pdb_ids, mutation_paths = zip(*combos)
-            pdb_ids = list(pdb_ids)
-            mutation_paths = list(mutation_paths)
 
-        for pdb_id, mut_path in zip(pdb_ids, mutation_paths):
+        for pdb_id, mut_path in combos:
             args = {
                 'name': row.get('name'),
                 'pdb_id': pdb_id,
                 'membrane_protein': row.get('membrane_protein'),
-                'mutation_data_path': None if pd.isna(mut_path) else mut_path, # handle NaN,
+                'mutation_data_path': None if pd.isna(mut_path) else mut_path, # handle NaN
                 'config_path': row.get('config_path')
             }
             expanded_args.append(args)

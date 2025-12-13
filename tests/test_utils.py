@@ -384,7 +384,7 @@ def _make_aaindex_data(accessions):
 
     return aaindex_data
 
-def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein',membrane_protein=False,
+def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membrane_protein=False,
                       mutation_data_path=None,
                       mutation_data_chain=None, aaindex_path=None) -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
