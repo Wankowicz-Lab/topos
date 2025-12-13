@@ -5,6 +5,7 @@ import pytest
 import random
 import tomli_w
 
+from pathlib import Path
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
 
@@ -466,6 +467,45 @@ def test_runner__merge_features_with_muts():
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
 
 
+def test_runner_batch_process(monkeypatch, tmp_path):
+    # Create batch file with two entries
+    batch_df = pd.DataFrame({
+                'name': ['protein1', 'protein2'],
+                'pdb_id': ['1abc|123', '8smv'],
+                'membrane_protein': [False, True],
+                'mutation_data_path': [pd.NA, 'mut_data.csv'],
+                'config_path': ['config.toml1', 'config.toml2']
+            })
+    batch_file_path = tmp_path / 'batch_file.csv'
+    batch_df.to_csv(batch_file_path, index=False)
+
+    # Mock Runner to track calls and return a simple dataframe
+    calls = []
+    class FakeRunner:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+
+        def run(self):
+            return pd.DataFrame({'result_summary': ['custom']})
+
+
+    monkeypatch.setattr('src.pipeline.runner.Runner', FakeRunner)
+    processed = runner.batch_process(batch_file_path)
+
+    for idx, call in enumerate(calls):
+        assert call['pdb_id'] == ['1abc', '123', '8smv'][idx]
+
+        # 1st and 2nd entries of all other params are the same, with third being from 2nd row
+        duped_idx = 0 if idx < 2 else 1
+        assert call['membrane_protein'] == batch_df.iloc[duped_idx]['membrane_protein']
+        assert call['config_path'] == batch_df.iloc[duped_idx]['config_path']
+
+        mut_path = batch_df.iloc[duped_idx]['mutation_data_path']
+        if pd.isna(mut_path):
+            assert call['mutation_data_path'] is None
+        else:
+            assert call['mutation_data_path'] == mut_path
+
 
 def test_runner_expand_batch_arguments_single_value():
     batch_df = pd.DataFrame({
@@ -475,8 +515,7 @@ def test_runner_expand_batch_arguments_single_value():
         'mutation_data_path': [None, 'mut_data.csv'],
         'config_path': ['config.toml1', 'config.toml2']
     })
-    batch_runner = runner.Runner(pdb_id='8smv')
-    expanded_args = batch_runner.expand_batch_arguments(batch_df)
+    expanded_args = runner.expand_batch_arguments(batch_df)
 
     assert len(expanded_args) == 2
     for i, row in batch_df.iterrows():
@@ -486,7 +525,7 @@ def test_runner_expand_batch_arguments_single_value():
         assert expanded_args[i]['config_path'] == row['config_path']
 
 
-def test_runner_expand_arguments_misssing_vals():
+def test_runner_expand_batch_arguments_misssing_vals():
     batch_df = pd.DataFrame({
         'name': ['protein1'],
         'pdb_id': ['1abc'],
@@ -494,8 +533,7 @@ def test_runner_expand_arguments_misssing_vals():
         'mutation_data_path': [pd.NA],
         'config_path': ['config.toml1']
     })
-    batch_runner = runner.Runner(pdb_id='8smv')
-    expanded_args = batch_runner.expand_batch_arguments(batch_df)
+    expanded_args = runner.expand_batch_arguments(batch_df)
 
     assert len(expanded_args) == 1
     assert expanded_args[0]['pdb_id'] == '1abc'
@@ -514,8 +552,7 @@ def test_runner_expand_batch_arguments_multiple_values():
         'config_path': ['config.toml', 'config.toml', 'config.toml']
     })
 
-    batch_runner = runner.Runner(pdb_id='8smv')
-    expanded_args = batch_runner.expand_batch_arguments(batch_df_multiple_pdb)
+    expanded_args = runner.expand_batch_arguments(batch_df_multiple_pdb)
 
     assert len(expanded_args) == 6  # protein1 expands to 2 entries, protein2 is 1 entry, protein3 expands to 3 entries
 
@@ -539,7 +576,7 @@ def test_runner_expand_batch_arguments_multiple_values():
         'config_path': ['config.toml', 'config.toml', 'config.toml']
     })
 
-    expanded_args_mut = batch_runner.expand_batch_arguments(batch_df_multiple_mut)
+    expanded_args_mut = runner.expand_batch_arguments(batch_df_multiple_mut)
     assert len(expanded_args_mut) == 6  # protein1 expands to 2 entries, protein2 is 1 entry, protein3 expands to 3 entries
 
     # Check that each expanded entry matches the correct mutation data path and other parameters
@@ -564,8 +601,7 @@ def test_runner_expand_batch_arguments_product_expansion():
         'config_path': ['config.toml']
     })
 
-    batch_runner = runner.Runner(pdb_id='8smv')
-    expanded_args = batch_runner.expand_batch_arguments(batch_df_product)
+    expanded_args = runner.expand_batch_arguments(batch_df_product)
 
     assert len(expanded_args) == 4  # 2 PDB IDs x 2 mutation data paths = 4 combinations
 
