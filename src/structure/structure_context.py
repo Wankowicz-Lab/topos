@@ -130,6 +130,8 @@ class Config(BaseModel):
 
     Attributes
     ----------
+    name: Optional[str]
+        Name of the protein
     pdb_id : Optional[str]
         PDB identifier for fetching structure from RCSB.
     pdb_path : Optional[Path]
@@ -165,6 +167,7 @@ class Config(BaseModel):
     model_config = {"validate_assignment": True}
 
     # structure data
+    name: Optional[str] = None
     pdb_id: Optional[str] = None
     pdb_path: Optional[Path] = None
     pdb_ext: Optional[str] = None

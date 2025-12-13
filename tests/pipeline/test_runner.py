@@ -35,16 +35,21 @@ def test_runner_initialization_from_config(tmp_path):
     assert base_runner.context.config.pdb_path is not None
     assert base_runner.context.config.pdb_ext == 'cif'
     assert base_runner.context.config.mutation_data_path is None
+    assert base_runner.context.config.name == 'test_protein'
 
     with pytest.raises(ValueError, match="Either pdb_id or config_path must be provided."):
         _ = runner.Runner()
+
+    with pytest.raises(ValueError, match="Either name or config_path must be provided."):
+        _ = runner.Runner(pdb_id='test')
 
 
 def test_runner_initialization_from_pdb_id():
     pdb_id = '8smv'
 
     id_runner = runner.Runner(
-        pdb_id=pdb_id)
+        pdb_id=pdb_id,
+        name='test')
 
     assert id_runner.context.array is not None
     assert id_runner.context is not None
@@ -86,6 +91,7 @@ def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
     with pytest.warns(UserWarning, match="Failed to fetch PDBTM annotation"):
         membrane_runner = runner.Runner(
             pdb_id=pdb_id,
+            name='test_membrane_protein',
             pdb_path=mmcif_path,
             membrane_protein=True
         )
@@ -130,10 +136,11 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
-    # Create config file WITH custom column names
+    # Create config file with custom column names
     config_path = tmp_path / 'config.toml'
     config_dict = {
         'pdb_id': '8SMV',
+        'name': 'test_protein',
         'mutation_data_chain': 'A',
         'mutation_data_path': str(mut_data_path),
         'mutation_residue_col_name': 'wt_residue',
@@ -190,6 +197,7 @@ def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
     config_path = tmp_path / 'config.toml'
     config_dict = {
         'pdb_id': '8SMV',
+        'name': 'test_protein',
         'mutation_data_chain': 'A',
         'mutation_data_path': str(mut_data_path),
         'mutation_residue_col_name': 'wrong_wt_col',  # incorrect column name
@@ -327,6 +335,7 @@ def test_runner_run_metric_no_mutations(tmp_path):
 
     myrunner = runner.Runner(
         pdb_id=pdb_id,
+        name='test_no_mutations',
         pdb_path=None,
         membrane_protein=False,
         mutation_data_path=None
@@ -345,6 +354,7 @@ def test_runner__merge_features():
 
     myrunner = runner.Runner(
         pdb_id=pdb_id,
+        name='test_merge_features',
         pdb_path=None,
         membrane_protein=False,
         mutation_data_path=None
@@ -402,6 +412,7 @@ def test_runner__merge_features_with_muts():
 
     myrunner = runner.Runner(
         pdb_id=pdb_id,
+        name='test_merge_features_with_muts',
         pdb_path=None,
         membrane_protein=False,
         mutation_data_path=None
