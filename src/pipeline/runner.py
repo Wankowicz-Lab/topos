@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
-import itertools
 from pathlib import Path
 import pandas as pd
 import tomli

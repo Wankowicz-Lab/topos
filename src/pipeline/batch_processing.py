@@ -9,7 +9,11 @@ from src.pipeline.runner import Runner
 
 
 def batch_process(batch_file_path: str) -> pd.DataFrame:
-    """Process multiple PDB entries specified in a batch file.
+    """Process multiple proteins specified in a batch file.
+
+    Each row in the batch file should contain the necessary parameters for processing a protein,
+    including name, PDB ID(s), mutation data path(s), and config file. If multiple PDB IDs or mutation
+    data paths are provided in a single row (separated by '|'), separate entries will be created for each.
 
     Parameters
     ----------
@@ -51,6 +55,9 @@ def batch_process(batch_file_path: str) -> pd.DataFrame:
 def expand_batch_arguments(batch_df: pd.DataFrame) -> List[Dict[str, Any]]:
     """Expand batch DataFrame rows into individual argument dictionaries.
 
+    If multiple PDB IDs or mutation data paths are provided in a single row (separated by '|'),
+    this function creates separate entries for each combination.
+
     Parameters
     ----------
     batch_df : pd.DataFrame
@@ -65,7 +72,6 @@ def expand_batch_arguments(batch_df: pd.DataFrame) -> List[Dict[str, Any]]:
     required_cols = ['name', 'pdb_id', 'membrane_protein', 'mutation_data_path', 'config_path']
     for col in required_cols:
         if col not in batch_df.columns:
-            print(batch_df.columns)
             raise ValueError(f"Batch file is missing required column: {col}")
 
     # Loop through each row

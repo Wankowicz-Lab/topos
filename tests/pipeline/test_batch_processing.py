@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from src.pipeline import runner
 from src.pipeline.batch_processing import batch_process, expand_batch_arguments
@@ -36,12 +37,16 @@ def test_batch_process(monkeypatch, tmp_path):
         duped_idx = 0 if idx < 2 else 1
         assert call['membrane_protein'] == batch_df.iloc[duped_idx]['membrane_protein']
         assert call['config_path'] == batch_df.iloc[duped_idx]['config_path']
+        assert call['name'] == batch_df.iloc[duped_idx]['name']
 
         mut_path = batch_df.iloc[duped_idx]['mutation_data_path']
         if pd.isna(mut_path):
             assert call['mutation_data_path'] is None
         else:
             assert call['mutation_data_path'] == mut_path
+
+    with pytest.raises(FileNotFoundError, match="Batch file not found at"):
+        batch_process(tmp_path / 'non_existent_file.csv')
 
 
 def test_expand_batch_arguments_single_value():
@@ -62,7 +67,13 @@ def test_expand_batch_arguments_single_value():
         assert expanded_args[i]['config_path'] == row['config_path']
 
 
-def test_expand_batch_arguments_misssing_vals():
+    # Check that missing columns raise errors
+    incomplete_batch_df = batch_df.drop(columns=['pdb_id'])
+    with pytest.raises(ValueError, match="Batch file is missing required column: pdb_id"):
+        expand_batch_arguments(incomplete_batch_df)
+
+
+def test_expand_batch_arguments_empty_vals():
     batch_df = pd.DataFrame({
         'name': ['protein1'],
         'pdb_id': ['1abc'],
