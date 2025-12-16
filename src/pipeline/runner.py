@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
@@ -161,7 +162,7 @@ class Runner:
         return Config(**base_dict)
 
 
-    def run(self, metrics: List[str] = None) -> pd.DataFrame:
+    def run(self, metrics: List[str] = None) -> None:
         """Compute specified metrics and return as a merged DataFrame.
 
         Parameters
@@ -192,10 +193,10 @@ class Runner:
             self.context.extras[m] = df
 
         # merge all results into one DataFrame
-        mutations = self.mutation_data_path is not None
+        mutations = self.context.config.mutation_data_path is not None
         # TODO: decide where name should get added to features. Here or in the save_output function?
-        merged = self._merge_features(result_frames, mutations=mutations)
-        return merged
+        self.features = self._merge_features(result_frames, mutations=mutations)
+
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
         """Merge feature DataFrames on chain, resi, resn, and resm columns.
@@ -223,3 +224,47 @@ class Runner:
             merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
 
         return merged_df
+
+
+    def save_results(self, output_dir: Path = None, output_prefix: str = None) -> None:
+        """Save results to CSV files.
+
+        Parameters
+        ----------
+        output_dir : Optional[Path] = None
+            Directory to save output files. If not provided, uses output_dir from config,
+            or the directory of config_path if available.
+        output_prefix : Optional[str] = None
+            Prefix for output file names.
+        """
+        if not hasattr(self, 'features'):
+            raise ValueError("No features to save. Please call run() first.")
+
+        if output_dir is None:
+            if self.context.config.output_dir is not None:
+                output_dir = self.context.config.output_dir
+            elif self.config_path is not None:
+                output_dir = Path(self.config_path).parent
+            else:
+                raise ValueError("If output_dir is not provided, config_path must be provided to determine output location.")
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate prefix
+        if output_prefix is not None:
+            prefix = output_prefix + "_" + self.context.config.pdb_id
+        else:
+            prefix = self.context.config.pdb_id
+
+        # Save features
+        merged_path = output_dir / f"{prefix}_features.csv"
+        self.features.to_csv(merged_path, index=False)
+
+        # Save metadata from residue table
+        metadata_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut',
+                        'struct_info', 'seq_info'] + ['resm'] if self.context.config.mutation_data_path is not None else []
+
+        output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
+        metadata_path = output_dir / f"{prefix}_metadata.csv"
+        output_df.to_csv(metadata_path, index=False)
