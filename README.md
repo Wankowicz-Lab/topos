@@ -49,7 +49,6 @@ The easiest way to control the behavior of the runner is by modifying the config
 |-----------|-------------|---------|
 | `pdb_id` | The PDB ID of the structure | - |
 | `pdb_path` | The path to the PDB file. Only one of `pdb_id` or `pdb_path` needs to be provided | - |
-| `vdw_radii` | Setting that controls how automatic radii are set | `"ProtOr"` |
 | `membrane_protein` | Whether or not the protein is a membrane protein. If it is, calculates additional features | `false` |
 | `membrane_thickness` | The thickness of the membrane in Angstroms, used for calculating distances from the center of the membrane | `15` |
 
