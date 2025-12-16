@@ -138,8 +138,6 @@ class Config(BaseModel):
         File extension of the structure file.
     membrane_protein : Optional[bool]
         Whether the protein is a membrane protein (affects analysis methods).
-    vdw_radii : str
-        Van der Waals radii set to use for calculations (default: "ProtOr").
     membrane_thickness : Optional[float]
         Half-thickness of membrane in Angstroms (default: 15).
     mutation_data_path : Optional[Path]
@@ -171,7 +169,6 @@ class Config(BaseModel):
     membrane_protein: Optional[bool] = False
 
     # structure parameters
-    vdw_radii: str = "ProtOr"
     membrane_thickness: Optional[float] = 15
 
     # mutagenesis data
