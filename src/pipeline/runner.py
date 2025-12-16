@@ -22,6 +22,7 @@ from src.structure.structure_context import _REGISTRY, Config
 @dataclass
 class Runner:
     pdb_id: Optional[str] = None
+    name: Optional[str] = None
     pdb_path: Optional[Path] = None
     membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
@@ -33,6 +34,10 @@ class Runner:
         if self.pdb_id is None and self.config_path is None:
             raise ValueError("Either pdb_id or config_path must be provided.")
 
+        # Ensure that either name or config_path is provided
+        if self.name is None and self.config_path is None:
+            raise ValueError("Either name or config_path must be provided.")
+
         # Create override dictionary from input parameters
         overrides = {}
         if self.pdb_id is not None:
@@ -43,6 +48,8 @@ class Runner:
             overrides['membrane_protein'] = self.membrane_protein
         if self.mutation_data_path is not None:
             overrides['mutation_data_path'] = self.mutation_data_path
+        if self.name is not None:
+            overrides['name'] = self.name
 
         # Set up config
         if self.config_path is None:
@@ -188,6 +195,7 @@ class Runner:
         # merge all results into one DataFrame
         mutations = self.context.config.mutation_data_path is not None
         self.features = self._merge_features(result_frames, mutations=mutations)
+        self.features['name'] = self.context.config.name
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
