@@ -34,10 +34,17 @@ b2ar_runner = runner.Runner(pbd_id=pdb_id, config_path=config_path)
 
 # Provide a list of specific metrics to calculate
 metrics = ['define_secondary_structure', 'sasa', 'kyte_doolittle', 'calculate_blosum_score'] 
-computed_metrics = b2ar_runner.run(metrics=metrics)
+b2ar_runner.run(metrics=metrics)
 
 # Or calculate using all available metrics
-all_computed_metrics = b2ar_runner.run()
+b2ar_runner.run()
+
+# Access the metrics directly
+metrics = b2ar_runner.features
+
+# Save metrics and associated metadata to specified directory
+output_dir = 'examples/B2AR_DMS_example/'
+b2ar_runner.save_results(output_dir)
 ```
 
 ### Config file
@@ -71,6 +78,14 @@ The easiest way to control the behavior of the runner is by modifying the config
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `aaindex_path` | Path to the data file containing amino acid indices | `"data/aaindex_parsed_small.csv"` | 
+
+
+#### Pipeline Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `output_dir` | Path to the directory where output files will be saved | `"examples/B2AR_DMS_example/output"` | 
+| `output_prefix` | Prefix to append to generated output files | - | 
 
 
 ### Development and Testing
