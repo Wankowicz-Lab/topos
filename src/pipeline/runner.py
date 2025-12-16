@@ -194,8 +194,8 @@ class Runner:
 
         # merge all results into one DataFrame
         mutations = self.context.config.mutation_data_path is not None
-        # TODO: decide where name should get added to features. Here or in the save_output function?
         self.features = self._merge_features(result_frames, mutations=mutations)
+        self.features['name'] = self.context.config.name
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:

@@ -311,7 +311,7 @@ def test_runner_run_metric(tmp_path):
         myrunner.run(metrics=[metric])
 
         returned_cols = myrunner.features.columns.tolist()
-        expected_cols = ['chain', 'resi', 'resn', 'resm']
+        expected_cols = ['chain', 'resi', 'resn', 'resm', 'name']
 
         if metric == 'aaindex_scores':
             # aaindex scores add columns for each index
