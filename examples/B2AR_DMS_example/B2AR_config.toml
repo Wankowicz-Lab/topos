@@ -4,7 +4,6 @@ pdb_path = ""
 membrane_protein = true
 
 # Structure parameters 
-vdw_radii = "ProtOr"
 membrane_thickness = 15
 
 # Mutagenesis data

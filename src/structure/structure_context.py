@@ -130,6 +130,8 @@ class Config(BaseModel):
 
     Attributes
     ----------
+    name: Optional[str]
+        Name of the protein
     pdb_id : Optional[str]
         PDB identifier for fetching structure from RCSB.
     pdb_path : Optional[Path]
@@ -138,8 +140,6 @@ class Config(BaseModel):
         File extension of the structure file.
     membrane_protein : Optional[bool]
         Whether the protein is a membrane protein (affects analysis methods).
-    vdw_radii : str
-        Van der Waals radii set to use for calculations (default: "ProtOr").
     membrane_thickness : Optional[float]
         Half-thickness of membrane in Angstroms (default: 15).
     mutation_data_path : Optional[Path]
@@ -165,13 +165,13 @@ class Config(BaseModel):
     model_config = {"validate_assignment": True}
 
     # structure data
+    name: Optional[str] = None
     pdb_id: Optional[str] = None
     pdb_path: Optional[Path] = None
     pdb_ext: Optional[str] = None
     membrane_protein: Optional[bool] = False
 
     # structure parameters
-    vdw_radii: str = "ProtOr"
     membrane_thickness: Optional[float] = 15
 
     # mutagenesis data
