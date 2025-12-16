@@ -88,7 +88,7 @@ def load_mutation_scores(
         df['resm'] = df['resm'].apply(convert_amino_acid)
 
     # check that mutation types are named in a standard way
-    valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins'}
+    valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins', 'stop'}
     found_types = set(df['type'].unique())
     if not found_types.issubset(valid_types):
         invalid_types = found_types - valid_types
