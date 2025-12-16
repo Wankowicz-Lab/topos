@@ -13,3 +13,7 @@ mutation_data_chain = "A"
 
 # Sequence parameters
 aaindex_path = "data/aaindex_parsed_small.csv"
+
+# Pipeline parameters
+output_dir = "examples/B2AR_DMS_example/output"
+output_prefix = ""
