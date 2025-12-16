@@ -10,6 +10,7 @@ membrane_thickness = 15
 # Mutagenesis data
 mutation_data_path = "examples/B2AR_DMS_example/B2AR_processed_scores.csv"
 mutation_data_chain = "A"
+alignment_cutoff = 0.95
 # Column names in mutagenesis data file (defaults shown, can be customized)
 # mutation_residue_col_name = "wildtype"
 # mutation_residue_idx_name = "position"
