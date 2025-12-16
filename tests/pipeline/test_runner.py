@@ -299,9 +299,9 @@ def test_runner_run_metric(tmp_path):
     for metric in metrics:
         meta, func = _REGISTRY[metric]
         provides, requires = meta.provides, meta.requires
-        result = myrunner.run(metrics=[metric])
+        myrunner.run(metrics=[metric])
 
-        returned_cols = result.columns.tolist()
+        returned_cols = myrunner.features.columns.tolist()
         expected_cols = ['chain', 'resi', 'resn', 'resm']
 
         if metric == 'aaindex_scores':
@@ -314,10 +314,13 @@ def test_runner_run_metric(tmp_path):
         assert set(expected_cols) == set(returned_cols)
 
     # run all metrics
-    all_result = myrunner.run(metrics=list(metrics))
+    myrunner.run(metrics=list(metrics))
+    all_result = myrunner.features
     assert len(all_result) == len(residue_table)
 
-    all_result_default = myrunner.run()
+    # run with default (all metrics)
+    myrunner.run()
+    all_result_default = myrunner.features
     pd.testing.assert_frame_equal(all_result, all_result_default)
 
 
@@ -332,11 +335,11 @@ def test_runner_run_metric_no_mutations(tmp_path):
     )
 
     # run all metrics
-    all_result = myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
+    myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
 
     # Check that all residues are present and no 'resm' column
-    assert len(all_result) == len(myrunner.context.residue_table)
-    assert 'resm' not in all_result.columns.tolist()
+    assert len(myrunner.features) == len(myrunner.context.residue_table)
+    assert 'resm' not in myrunner.features.columns.tolist()
 
 
 def test_runner__merge_features():
@@ -464,3 +467,71 @@ def test_runner__merge_features_with_muts():
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
+
+
+def test_runner_save_results(tmp_path):
+    # Create data to save
+    features_df = pd.DataFrame({
+        'chain': ['A', 'A', 'B'],
+        'resi_struct': [1, 2, 8],
+        'resn_struct': ['ALA', 'VAL', 'GLY'],
+        'resi_mut': [1, 2, np.nan],
+        'resn_mut': ['ALA', 'VAL', np.nan],
+        'resm': ['ARG', 'SER', np.nan],
+        'struct_info': [True, True, True],
+        'seq_info': [True, True, False],
+        'feature1': [0.1, 0.2, 0.3],
+        'feature2': [0.4, 0.5, 0.6]
+    })
+
+    residue_table = _make_residue_table()
+
+    # Create runner
+    pdb_id = '8smv'
+
+    save_runner = runner.Runner(
+        pdb_id=pdb_id)
+    save_runner.features = features_df
+    save_runner.context.residue_table = residue_table
+
+    manual_output_dir = tmp_path / 'output'
+    save_runner.save_results(output_dir=manual_output_dir)
+
+    # Check that files are created
+    features_path = manual_output_dir / f"{pdb_id}_features.csv"
+    metadata_path = manual_output_dir / f"{pdb_id}_metadata.csv"
+    assert features_path.exists()
+    assert metadata_path.exists()
+
+    # Check that files are created with custom prefix
+    custom_prefix = 'testprefix'
+    expected_prefix = custom_prefix + '_' + pdb_id
+    save_runner.save_results(output_dir=manual_output_dir, output_prefix=custom_prefix)
+
+    features_path = manual_output_dir / f"{expected_prefix}_features.csv"
+    metadata_path = manual_output_dir / f"{expected_prefix}_metadata.csv"
+    assert features_path.exists()
+    assert metadata_path.exists()
+
+    with pytest.raises(ValueError, match="If output_dir is not provided, config_path must be provided to determine output location."):
+        save_runner.save_results(output_dir=None)
+
+    # Now test with config_path provided
+    config_path = tmp_path / 'input_dir/config.toml'
+    save_runner.config_path = config_path
+    save_runner.save_results(output_dir=None)
+
+    features_path = config_path.parent / f"{pdb_id}_features.csv"
+    metadata_path = config_path.parent / f"{pdb_id}_metadata.csv"
+    assert features_path.exists()
+    assert metadata_path.exists()
+
+    # Now test with output_dir provided in config
+    output_dir_in_config = tmp_path / 'config_output'
+    save_runner.context.config.output_dir = output_dir_in_config
+    save_runner.save_results(output_dir=None)
+
+    features_path = output_dir_in_config / f"{pdb_id}_features.csv"
+    metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
+    assert features_path.exists()
+    assert metadata_path.exists()
