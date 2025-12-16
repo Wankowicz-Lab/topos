@@ -50,6 +50,8 @@ The PDB ID of the structure
 pdb_path  
 The path to the PDB file. Only one of pdb_id or pdb_path needs to be provided
 
+
+## Structural features
 membrane_protein  
 Whether or not the protein is a membrane protein. If it is, calculates additional features
 
@@ -59,6 +61,10 @@ Setting that controls how automatic radii are set (defaults to ProtOr)
 membrane_thickness  
 The thickness of the membrane, used for calculating distances from the center of the membrane (defaults to 15 Angstrom)
 
+altloc_policy
+If you would like to consider [alternative conformers](https://pdb101.rcsb.org/learn/guide-to-understanding-pdb-data/dealing-with-coordinates) in structural metrics sleect all for altloc_policy (defaults to highest occupancy altloc)
+
+## Sequence features
 mutation_data_path  
 The path to .csv file containing mutation data
 
