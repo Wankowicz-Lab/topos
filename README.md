@@ -30,7 +30,7 @@ from src.pipeline import runner
 # Set up pipeline using B2AR example data
 pdb_id = '4LDE'
 config_path = 'examples/B2AR_DMS_example/B2AR_config.toml'
-b2ar_runner = runner.Runner(pbd_id=pdb_id, config_path=config_path)
+b2ar_runner = runner.Runner(pdb_id=pdb_id, config_path=config_path)
 
 # Provide a list of specific metrics to calculate
 metrics = ['define_secondary_structure', 'sasa', 'kyte_doolittle', 'calculate_blosum_score'] 
