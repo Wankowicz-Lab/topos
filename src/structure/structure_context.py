@@ -14,6 +14,7 @@ import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
 from pydantic import BaseModel
+from .pdbtm import add_pdbtm_regions, fetch_pdbtm_annotation
 
 
 # ---------------- Registry ----------------
@@ -238,6 +239,10 @@ class Context:
     def __post_init__(self):
         self.neighbor_cache = {}
         self.extras = {} if self.extras is None else self.extras
+        
+        if self.config is None:
+            self.config = Config()
+
         if isinstance(self.array, struc.AtomArray):
             aa = self.array[struc.filter_amino_acids(self.array)]
         else:
@@ -245,11 +250,13 @@ class Context:
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
         self.residue_table = residue_table(aa)
-        if self.membrane_protein:
-            self.residue_table = add_membrane_context(self.residue_table)
-
-        if self.config is None:
-            self.config = Config()
+        
+        if self.config.membrane_protein and self.config.pdb_id:
+            try:
+                self.residue_table = add_membrane_context(self.residue_table, self.config.pdb_id)
+            except Exception:
+                # If fetching fails, we silently continue; specialized runners/callers can handle reporting
+                pass
 
         if self.config.aaindex_path is not None:
             aa_index = pd.read_csv(self.config.aaindex_path)
@@ -275,21 +282,23 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     resn   = array.res_name[res_starts]
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
 
-def add_membrane_context(df):
+def add_membrane_context(df, pdb_id):
     """
     Add membrane annotations to residue table
-    
+
     Parameters
     ----------
     df : Residue table populated with chain, residue, resn information
+    pdb_id : str
+        PDB ID for fetching PDBTM annotations
     
     Returns
     -------
     pd.DataFrame
         DataFrame with columns 'chain', 'resi', 'resn' for each residue, plus 'pdbtm_region' and 'pdbtm_region_detailed' columns
     """
-    add_pdbtm_regions(df)
-    return df
+    regions, _ = fetch_pdbtm_annotation(pdb_id)
+    return add_pdbtm_regions(df, regions)
 
 def load_structure(
     path: Union[str, Path],
