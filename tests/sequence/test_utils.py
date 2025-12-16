@@ -60,8 +60,8 @@ def test_convert_amino_acid_whitespace():
 def test_amino_acid_mappings_bidirectional():
     """Test that the AA mappings are complete and bidirectional."""
     # All 20 standard amino acids should be present
-    assert len(AA_3_TO_1) == 20
-    assert len(AA_1_TO_3) == 20
+    assert len(AA_3_TO_1) == 23
+    assert len(AA_1_TO_3) == 23
     
     # Bidirectionality
     for three, one in AA_3_TO_1.items():
