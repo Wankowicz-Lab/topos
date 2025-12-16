@@ -40,7 +40,7 @@ b2ar_runner.run(metrics=metrics)
 b2ar_runner.run()
 
 # Access the metrics directly
-metrics = b2ar_runner.metrics
+metrics = b2ar_runner.features
 
 # Save metrics and associated metadata to specified directory
 output_dir = 'examples/B2AR_DMS_example/'
