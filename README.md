@@ -79,6 +79,14 @@ The easiest way to control the behavior of the runner is by modifying the config
 | `aaindex_path` | Path to the data file containing amino acid indices | `"data/aaindex_parsed_small.csv"` | 
 
 
+#### Pipeline Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `output_dir` | Path to the directory where output files will be saved | `"examples/B2AR_DMS_example/output"` | 
+| `output_prefix` | Prefix to append to generated output files | - | 
+
+
 ### Development and Testing
 
 To install with development/testing dependencies:
