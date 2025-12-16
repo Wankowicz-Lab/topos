@@ -436,6 +436,16 @@ def test_runner_save_results(tmp_path):
     assert features_path.exists()
     assert metadata_path.exists()
 
+    # Check that files are created with custom prefix
+    custom_prefix = 'testprefix'
+    expected_prefix = custom_prefix + '_' + pdb_id
+    save_runner.save_results(output_dir=manual_output_dir, output_prefix=custom_prefix)
+
+    features_path = manual_output_dir / f"{expected_prefix}_features.csv"
+    metadata_path = manual_output_dir / f"{expected_prefix}_metadata.csv"
+    assert features_path.exists()
+    assert metadata_path.exists()
+
     with pytest.raises(ValueError, match="If output_dir is not provided, config_path must be provided to determine output location."):
         save_runner.save_results(output_dir=None)
 

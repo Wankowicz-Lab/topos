@@ -212,7 +212,7 @@ class Runner:
         return merged_df
 
 
-    def save_results(self, output_dir: Path = None):
+    def save_results(self, output_dir: Path = None, output_prefix: str = None) -> None:
         """Save results to CSV files.
 
         Parameters
@@ -220,6 +220,8 @@ class Runner:
         output_dir : Optional[Path] = None
             Directory to save output files. If not provided, uses output_dir from config,
             or the directory of config_path if available.
+        output_prefix : Optional[str] = None
+            Prefix for output file names.
         """
         if not hasattr(self, 'features'):
             raise ValueError("No features to save. Please call run() first.")
@@ -235,8 +237,14 @@ class Runner:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Generate prefix
+        if output_prefix is not None:
+            prefix = output_prefix + "_" + self.context.config.pdb_id
+        else:
+            prefix = self.context.config.pdb_id
+
         # Save features
-        merged_path = output_dir / f"{self.context.config.pdb_id}_features.csv"
+        merged_path = output_dir / f"{prefix}_features.csv"
         self.features.to_csv(merged_path, index=False)
 
         # Save metadata from residue table
@@ -244,5 +252,5 @@ class Runner:
                         'struct_info', 'seq_info'] + ['resm'] if self.context.config.mutation_data_path is not None else []
 
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
-        metadata_path = output_dir / f"{self.context.config.pdb_id}_metadata.csv"
+        metadata_path = output_dir / f"{prefix}_metadata.csv"
         output_df.to_csv(metadata_path, index=False)

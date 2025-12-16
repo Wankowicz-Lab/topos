@@ -173,6 +173,7 @@ class Config(BaseModel):
 
     # pipeline parameters
     output_dir: Optional[Path] = None
+    output_prefix: Optional[str] = None
 
     def model_post_init(self, __context):
         if self.mutation_data_path is not None:
