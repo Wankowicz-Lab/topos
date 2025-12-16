@@ -252,11 +252,7 @@ class Context:
         self.residue_table = residue_table(aa)
         
         if self.config.membrane_protein and self.config.pdb_id:
-            try:
-                self.residue_table = add_membrane_context(self.residue_table, self.config.pdb_id)
-            except Exception:
-                # If fetching fails, we silently continue; specialized runners/callers can handle reporting
-                pass
+           self.residue_table = add_membrane_context(self.residue_table, self.config.pdb_id)
 
         if self.config.aaindex_path is not None:
             aa_index = pd.read_csv(self.config.aaindex_path)
