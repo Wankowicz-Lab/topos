@@ -245,6 +245,8 @@ class Context:
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
         self.residue_table = residue_table(aa)
+        if self.membrane_protein:
+            self.residue_table = add_membrane_context(self.residue_table)
 
         if self.config is None:
             self.config = Config()
@@ -286,8 +288,7 @@ def add_membrane_context(df):
     pd.DataFrame
         DataFrame with columns 'chain', 'resi', 'resn' for each residue, plus 'pdbtm_region' and 'pdbtm_region_detailed' columns
     """
-    if self.membrane_protein:
-        add_pdbtm_regions(df)
+    add_pdbtm_regions(df)
     return df
 
 def load_structure(
