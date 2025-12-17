@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import pytest
+import warnings
 
 from src.sequence.sequence_context import load_mutation_scores, merge_mutation_scores
 
@@ -81,3 +82,35 @@ def test_merge_mutation_scores(tmp_path):
 
     with pytest.raises(ValueError, match="Mismatch between mutation scores and structure residues"):
         merge_mutation_scores(mutation_scores_df, residue_table_invalid, chain='A')
+
+
+def test_load_mutation_scores_1letter_mutation_conversion(tmp_path):
+    """Test conversion of 1-letter mutation codes to 3-letter codes (lines 87-88)."""
+    # Create mutation scores with 3-letter wildtype and 1-letter mutant codes
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG', 'THR', 'GLU'],  # 3-letter wildtype codes
+        'resi_col': [1, 2, 3],
+        'resm_col': ['A', 'C', 'D'],  # All 1-letter mutant codes
+        'type_col': ['missense', 'missense', 'nonsense'],
+        'effect_col': [0.5, -1.2, 0.3]
+    })
+    
+    test_file_path = os.path.join(tmp_path, 'test_mutation_1letter_mut.csv')
+    test_df.to_csv(test_file_path, index=False)
+    
+    # Load using the function
+    loaded_df = load_mutation_scores(
+        path=test_file_path,
+        residue_col_name='resn_col',
+        residue_idx_name='resi_col',
+        mutation_col_name='resm_col',
+        mutation_type_col_name='type_col',
+        score_col_name='effect_col'
+    )
+    
+    # Verify that 'resn' is still 3-letter codes
+    assert all(len(resn) == 3 for resn in loaded_df['resn'])
+    
+    # Verify that 1-letter mutant codes are converted to 3-letter codes
+    # This tests lines 87-88 where convert_amino_acid is applied to mutation column
+    assert loaded_df['resm'].tolist() == ['ALA', 'CYS', 'ASP']

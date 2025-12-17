@@ -1,6 +1,7 @@
 """Tests for sequence metrics module."""
 import numpy as np
 import pandas as pd
+import pytest
 import random
 
 from src.sequence import metrics
@@ -189,3 +190,19 @@ def test_calculate_blosum_score():
     for idx, row in blosum_df.iterrows():
         expected_score = b_matrix[convert_amino_acid(row['resn'])][convert_amino_acid(row['resm'])]
         assert blosum_df.at[idx, 'blosum90'] == expected_score
+
+
+def test_calculate_position_effect_quartiles_multichain_error():
+    """Test that ValueError is raised when residue table contains data from more than one chain."""
+    # Create test residue table with multiple chains
+    residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=True)
+    
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+    
+    # Verify that ValueError is raised with appropriate message
+    with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
+        metrics.calculate_position_effect_quartiles(context)
