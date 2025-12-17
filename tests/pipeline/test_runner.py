@@ -647,9 +647,9 @@ def test_runner_mutation_data_chain_merging(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
     
     # Create synthetic mmcif file with chain A
-    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    residues = residue_table['resn'].drop_duplicates().tolist()
     mmcif_path = tmp_path / "test_structure.cif"
-    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
     
     # Create config with mutation_data_chain specified
     config_path = tmp_path / 'config.toml'
