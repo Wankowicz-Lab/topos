@@ -1,0 +1,169 @@
+> import warnings
+> from pathlib import Path
+> from typing import Union
+  
+> import pandas as pd
+> from src.sequence.utils import convert_amino_acid
+  
+  
+> def load_mutation_scores(
+>     path: Union[str, Path],
+>     residue_col_name: str,
+>     residue_idx_name: str,
+>     mutation_col_name: str,
+>     mutation_type_col_name: str,
+>     score_col_name: str,
+> ) -> pd.DataFrame:
+>     """
+>     Load mutation scores from a CSV file and standardize column names.
+  
+>     Parameters
+>     ----------
+>     path : str or Path
+>         Path to the CSV file containing mutation scores.
+>     residue_col_name : str
+>         Name of the column containing wildtype residues.
+>     residue_idx_name : str
+>         Name of the column containing residue positions.
+>     mutation_col_name : str
+>         Name of the column containing mutant residues.
+>     mutation_type_col_name : str
+>         Name of the column containing mutation types.
+>     score_col_name : str
+>         Name of the column containing mutation effect scores.
+  
+>     Returns
+>     -------
+>     pd.DataFrame
+>         DataFrame with standardized column names: 'resn', 'resi', 'resm',
+>         'type', and 'effect'.
+  
+>     Raises
+>     ------
+>     ValueError
+>         If required columns are missing or if the residue column contains
+>         codes that are neither 1-letter nor 3-letter amino acid codes.
+  
+>     Warns
+>     -----
+>     UserWarning
+>         If mutation types contain unexpected values.
+>     """
+>     df = pd.read_csv(path)
+  
+>     required_cols = [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]
+>     missing_cols = [col for col in required_cols if col not in df.columns]
+>     if missing_cols:
+!         raise ValueError(
+!             f"Columns {missing_cols} not found in mutation scores file at {path}.\n"
+!             f"Expected columns based on config settings:\n"
+!             f"  - Wildtype residue column: '{residue_col_name}'\n"
+!             f"  - Residue position column: '{residue_idx_name}'\n"
+!             f"  - Mutant residue column: '{mutation_col_name}'\n"
+!             f"  - Mutation type column: '{mutation_type_col_name}'\n"
+!             f"  - Mutation score column: '{score_col_name}'\n"
+!             f"Available columns in file: {list(df.columns)}"
+!         )
+>     df = df.rename(columns={
+>         residue_col_name: "resn",
+>         residue_idx_name: "resi",
+>         mutation_col_name: "resm",
+>         mutation_type_col_name: "type",
+>         score_col_name: "effect"
+>     })
+  
+      # make sure that residue and mutation columns are valid
+>     residue_lens = df['resn'].str.len().unique()
+>     if len(residue_lens) != 1 or residue_lens[0] not in (1, 3):
+!         raise ValueError("Residue column must contain either 1-letter or 3-letter amino acid codes.")
+  
+      # mutation column may contain a range of possible lengths because of stops and indels
+>     mutation_lens = df['resm'].str.len().unique()
+  
+      # convert to 3-letter codes if necessary
+>     if residue_lens[0] == 1:
+!         df['resn'] = df['resn'].apply(convert_amino_acid)
+  
+>     if 1 in mutation_lens:
+>         df['resm'] = df['resm'].apply(convert_amino_acid)
+  
+      # check that mutation types are named in a standard way
+>     valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins'}
+>     found_types = set(df['type'].unique())
+>     if not found_types.issubset(valid_types):
+>         invalid_types = found_types - valid_types
+>         warnings.warn(f"Mutation types contain unexpected values. Expected types include {valid_types}. "
+>                       f"Found invalid types: {invalid_types}.")
+  
+>     return df
+  
+  
+> def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame, chain: str) -> pd.DataFrame:
+>     """
+>     Merge mutation scores with structural context based on residue positions.
+  
+>     Parameters
+>     ----------
+>     mutation_scores : pd.DataFrame
+>         DataFrame containing mutation scores with 'resi' and 'resn' columns.
+>     residue_table : pd.DataFrame
+>         DataFrame containing structural residue information with 'chain',
+>         'resi', and 'resn' columns.
+>     chain : str
+>         Chain identifier to filter structural context.
+  
+>     Returns
+>     -------
+>     pd.DataFrame
+>         Merged DataFrame with mutation scores and structural features. Contains
+>         columns for chain, resi, resn, resm, type, effect, seq_info, and
+>         struct_info.
+  
+>     Raises
+>     ------
+>     ValueError
+>         If there is a mismatch between mutation scores and structure residues
+>         for the specified chain.
+>     """
+      # Extract residue information from context
+!     res_table = residue_table.copy()
+  
+      # test merge to make sure sequence is aligned with structure
+!     res_test = res_table.loc[res_table['chain'] == chain, ["resn", "resi"]].reset_index(drop=True)
+!     mutation_test = mutation_scores[['resn', 'resi']].drop_duplicates().reset_index(drop=True)
+  
+!     merge_test = pd.merge(res_test, mutation_test,
+!                               left_on=['resi', 'resn'],
+!                               right_on=['resi', 'resn'],
+!                               how='outer')
+  
+      # If sequence is aligned between mutation data and structure, there should only be one row for each unique residue index
+!     if len(merge_test) > len(merge_test.resi.unique()):
+!         raise ValueError(f"Mismatch between mutation scores and structure residues for chain {chain}. "
+!                       f"Check that the sequence used for mutation data matches the structure.")
+  
+!     res_table['struct_info'] = True
+!     res_table_chain = res_table[res_table['chain'] == chain].reset_index(drop=True)
+      # Copy to avoid modifying the caller's DataFrame when adding seq_info column
+!     mutation_scores = mutation_scores.copy()
+!     mutation_scores['seq_info'] = True
+  
+      # Merge mutation scores with structural residue table
+!     merged_df = pd.merge(mutation_scores, res_table_chain,
+!                          left_on=['resi', 'resn'],
+!                          right_on=['resi', 'resn'],
+!                          how='outer')
+  
+!     merged_df.loc[merged_df['struct_info'].isna(), 'struct_info'] = False
+!     merged_df.loc[merged_df['seq_info'].isna(), 'seq_info'] = False
+!     merged_df['chain'] = chain
+  
+      # Remove previous rows from residue table and update with merged data
+!     res_table = res_table[res_table['chain'] != chain]
+!     res_table['seq_info'] = False
+!     res_table = pd.concat([res_table, merged_df], axis=0).reset_index(drop=True)
+  
+      # drop extra columns if present
+!     res_table = res_table[['chain', 'resi', 'resn', 'resm', 'type', 'effect', 'seq_info', 'struct_info']]
+  
+!     return res_table

@@ -548,3 +548,134 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+
+def test_runner_config_file_not_found(tmp_path):
+    """Test that FileNotFoundError is raised when config file doesn't exist."""
+    # Path to a non-existent config file
+    config_path = tmp_path / 'nonexistent_config.toml'
+    
+    with pytest.raises(FileNotFoundError, match="Configuration file not found at"):
+        runner.Runner(config_path=config_path)
+
+
+def test_runner_config_invalid_toml(tmp_path):
+    """Test that ValueError is raised when config file has invalid TOML syntax."""
+    # Create a config file with invalid TOML syntax
+    config_path = tmp_path / 'invalid_config.toml'
+    with config_path.open("w") as f:
+        f.write("pdb_id = 8smv\n")  # Missing quotes around string value
+        f.write("name = invalid toml syntax\n")  # Missing quotes
+        f.write("[broken section\n")  # Missing closing bracket
+    
+    with pytest.raises(ValueError, match="Invalid TOML in configuration file"):
+        runner.Runner(config_path=config_path)
+
+
+def test_runner_load_pdb_format(tmp_path):
+    """Test loading structure with PDB format (not just CIF)."""
+    # Create a simple PDB file
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    pdb_path = tmp_path / "test_structure.pdb"
+    
+    # Write a minimal valid PDB file
+    pdb_content = []
+    atom_id = 1
+    for res_idx, res_name in enumerate(residues, start=1):
+        # Add backbone atoms for each residue
+        for atom_name in ['N', 'CA', 'C', 'O']:
+            x, y, z = float(atom_id), 0.0, 0.0
+            pdb_content.append(
+                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
+            )
+            atom_id += 1
+    pdb_content.append("END\n")
+    
+    with pdb_path.open("w") as f:
+        f.writelines(pdb_content)
+    
+    # Test that both .pdb and .cif extensions work
+    test_runner = runner.Runner(
+        pdb_id='TEST',
+        name='test_pdb_format',
+        pdb_path=pdb_path
+    )
+    
+    assert test_runner.context.array is not None
+    assert test_runner.context.config.pdb_ext == 'pdb'
+    assert test_runner.context.config.pdb_path == pdb_path
+
+
+def test_runner_load_cif_format(tmp_path):
+    """Test loading structure with CIF format to verify extension handling."""
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    cif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
+    
+    test_runner = runner.Runner(
+        pdb_id='TEST',
+        name='test_cif_format',
+        pdb_path=cif_path
+    )
+    
+    assert test_runner.context.array is not None
+    assert test_runner.context.config.pdb_ext == 'cif'
+    assert test_runner.context.config.pdb_path == cif_path
+
+
+def test_runner_mutation_data_chain_merging(tmp_path):
+    """Test that mutation data is correctly merged when mutation_data_chain is specified."""
+    # Create mutation data for chain A
+    residue_table = _make_residue_table(
+        num_chains=1,
+        num_residues=5,
+        start_resis=1,
+        make_muts=True
+    )
+    
+    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = mut_dataset.rename(columns={
+        'resn': 'wildtype',
+        'resi': 'position',
+        'resm': 'mutation',
+        'effect': 'effect',
+        'type': 'type'
+    })
+    
+    mut_data_path = tmp_path / 'mut_data.csv'
+    mut_dataset.to_csv(mut_data_path, index=False)
+    
+    # Create synthetic mmcif file with chain A
+    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
+    
+    # Create config with mutation_data_chain specified
+    config_path = tmp_path / 'config.toml'
+    config_dict = {
+        'pdb_id': 'TEST',
+        'name': 'test_protein',
+        'mutation_data_chain': 'A',  # This is the key parameter to test
+        'mutation_data_path': str(mut_data_path),
+    }
+    with config_path.open("wb") as f:
+        tomli_w.dump(config_dict, f)
+    
+    # Initialize runner with mutation data chain specified
+    test_runner = runner.Runner(
+        pdb_path=mmcif_path,
+        config_path=config_path
+    )
+    
+    # Verify that mutation data was merged correctly
+    assert 'resm' in test_runner.context.residue_table.columns
+    assert 'effect' in test_runner.context.residue_table.columns
+    assert 'type' in test_runner.context.residue_table.columns
+    
+    # Verify that seq_info is True for chain A residues with mutation data
+    chain_a_data = test_runner.context.residue_table[test_runner.context.residue_table['chain'] == 'A']
+    assert chain_a_data['seq_info'].any()
+    
+    # Verify that mutation data is present
+    assert not chain_a_data['resm'].isna().all()
