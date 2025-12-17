@@ -164,6 +164,20 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     assert mut_runner.context.config.mutation_residue_col_name == 'wt_residue'
     assert mut_runner.context.config.mutation_score_col_name == 'fitness_score'
 
+    # Now test with invalid chain specified in config
+    bad_config = config_dict.copy()
+    bad_config['mutation_data_chain'] = 'B'  # chain not in mmcif
+    bad_config_path = tmp_path / 'bad_config.toml'
+
+    with bad_config_path.open("wb") as f:
+        tomli_w.dump(bad_config, f)
+
+    with pytest.raises(ValueError, match="Specified mutation_data_chain 'B' not found in structure chains"):
+        _ = runner.Runner(
+            pdb_path=mmcif_path,
+            config_path=bad_config_path
+        )
+
 
 def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
     """Test that an appropriate error is raised when column names are incorrect."""
