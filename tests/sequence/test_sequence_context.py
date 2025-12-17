@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import pytest
+import warnings
 
 from src.sequence.sequence_context import load_mutation_scores, merge_mutation_scores
 
@@ -156,7 +157,6 @@ def test_load_mutation_scores_invalid_mutation_type_warning(tmp_path):
     test_df.to_csv(test_file_path, index=False)
     
     # Verify that warning is issued
-    import warnings
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         loaded_df = load_mutation_scores(

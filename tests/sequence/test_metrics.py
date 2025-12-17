@@ -1,6 +1,7 @@
 """Tests for sequence metrics module."""
 import numpy as np
 import pandas as pd
+import pytest
 import random
 
 from src.sequence import metrics
@@ -203,6 +204,5 @@ def test_calculate_position_effect_quartiles_multichain_error():
     context = MockContext(residue_table)
     
     # Verify that ValueError is raised with appropriate message
-    import pytest
     with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
         metrics.calculate_position_effect_quartiles(context)

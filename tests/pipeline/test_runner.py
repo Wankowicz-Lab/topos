@@ -564,9 +564,9 @@ def test_runner_config_invalid_toml(tmp_path):
     # Create a config file with invalid TOML syntax
     config_path = tmp_path / 'invalid_config.toml'
     with config_path.open("w") as f:
-        f.write("pdb_id = 8smv\n")  # Missing quotes around string value
-        f.write("name = invalid toml syntax\n")  # Missing quotes
-        f.write("[broken section\n")  # Missing closing bracket
+        f.write("pdb_id = 8smv\n")  # Invalid: missing quotes around string value
+        f.write("name = invalid toml syntax\n")  # Invalid: missing quotes around string value
+        f.write("[broken section\n")  # Invalid: missing closing bracket
     
     with pytest.raises(ValueError, match="Invalid TOML in configuration file"):
         runner.Runner(config_path=config_path)
