@@ -7,7 +7,7 @@ import random
 from src.sequence import metrics
 from src.sequence.utils import convert_amino_acid
 
-from tests.test_utils import _make_residue_table, _make_aaindex_data
+from tests.test_utils import _make_residue_table, _make_aaindex_data, AA_LIST
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)
@@ -167,6 +167,84 @@ def test_calculate_aaindex_scores_with_muts():
                 assert np.isnan(aaindex_df.at[idx, f'AAIndex_{acc}_diff'])
             else:
                 assert aaindex_df.at[idx, f'AAIndex_{acc}_diff'] == expected_diff
+
+
+def test_calculate_kidera_factor_scores_no_muts():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
+
+    # create mock kidera data
+    kidera_data = pd.DataFrame({
+        'factor': ['f' + str(i) for i in range(1, 11)],
+        'description': ['desc' + str(i) for i in range(1, 11)],
+        **{f'{aa}': np.random.rand(10) for aa in AA_LIST}
+    })
+
+    class MockContext:
+        def __init__(self, residue_table, kidera_data):
+            self.residue_table = residue_table
+            self.extras = {'kidera': kidera_data}
+
+    context = MockContext(residue_table, kidera_data)
+
+    # calculate kidera factor scores
+    kidera_df = metrics.calculate_kidera_factor_scores(context)
+
+    # check that kidera scores are added
+    output_cols = [f'kidera_f{i}_wt' for i in range(1, 11)]
+    for col in output_cols:
+        assert col in kidera_df.columns
+
+    # verify that values are correct for wildtype
+    for i in range(1, 11):
+        factor_values = kidera_data.set_index('factor').loc[f'f{i}']
+        for idx, row in kidera_df.iterrows():
+            expected_value = factor_values.get(row['resn_mut'], np.nan)
+            assert kidera_df.at[idx, f'kidera_f{i}_wt'] == expected_value
+
+
+def test_calculate_kidera_factor_scores_with_muts():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+
+    # create mock kidera data
+    kidera_data = pd.DataFrame({
+        'factor': ['f' + str(i) for i in range(1, 11)],
+        'description': ['desc' + str(i) for i in range(1, 11)],
+        **{f'{aa}': np.random.rand(10) for aa in AA_LIST}
+    })
+
+    class MockContext:
+        def __init__(self, residue_table, kidera_data):
+            self.residue_table = residue_table
+            self.extras = {'kidera': kidera_data}
+    context = MockContext(residue_table, kidera_data)
+
+    # calculate kidera factor scores
+    kidera_df = metrics.calculate_kidera_factor_scores(context)
+
+    # check that kidera scores are added
+    output_cols = []
+    for i in range(1, 11):
+        output_cols.extend([f'kidera_f{i}_wt', f'kidera_f{i}_mut', f'kidera_f{i}_diff'])
+
+    for col in output_cols:
+        assert col in kidera_df.columns
+
+    # verify that values are correct for wildtype, mutant, and diff
+    for i in range(1, 11):
+        factor_values = kidera_data.set_index('factor').loc[f'f{i}']
+        for idx, row in kidera_df.iterrows():
+            expected_wt = factor_values.get(row['resn_mut'], np.nan)
+            expected_mut = factor_values.get(row['resm'], np.nan)
+            expected_diff = expected_mut - expected_wt if not (np.isnan(expected_wt) or np.isnan(expected_mut)) else np.nan
+
+            assert kidera_df.at[idx, f'kidera_f{i}_wt'] == expected_wt
+            assert kidera_df.at[idx, f'kidera_f{i}_mut'] == expected_mut
+            if np.isnan(expected_diff):
+                assert np.isnan(kidera_df.at[idx, f'kidera_f{i}_diff'])
+            else:
+                assert kidera_df.at[idx, f'kidera_f{i}_diff'] == expected_diff
 
 
 def test_calculate_blosum_score():
