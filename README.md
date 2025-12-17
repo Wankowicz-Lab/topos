@@ -33,7 +33,7 @@ import src.sequence.metrics
 # Set up pipeline using B2AR example data
 pdb_id = '4LDE'
 config_path = 'examples/B2AR_DMS_example/B2AR_config.toml'
-b2ar_runner = runner.Runner(pbd_id=pdb_id, config_path=config_path)
+b2ar_runner = runner.Runner(pdb_id=pdb_id, config_path=config_path)
 
 # Provide a list of specific metrics to calculate
 metrics = ['define_secondary_structure', 'sasa', 'kyte_doolittle', 'calculate_blosum_score'] 
@@ -68,6 +68,7 @@ The easiest way to control the behavior of the runner is by modifying the config
 |-----------|-------------|---------|
 | `mutation_data_path` | Path to CSV file containing mutation data | - |
 | `mutation_data_chain` | The chain of the PDB file that corresponds to the sequence being mutated in the mutation data | - |
+| `alignment_cutoff` | Minimum sequence identity needed between structural and mutation data to avoid raising an error | 0.95 |
 | `mutation_residue_col_name` | Column name for wildtype residues in mutation data CSV | `"wildtype"` |
 | `mutation_residue_idx_name` | Column name for residue positions in mutation data CSV | `"position"` |
 | `mutation_col_name` | Column name for mutant residues in mutation data CSV | `"mutation"` |

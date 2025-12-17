@@ -9,7 +9,7 @@ from src.structure.structure_context import Context, register_metric
 from typing import List, Optional
 
 # columns to keep for sequence feature calculation to enable merging back to full table
-KEEP_COLS = ['chain', 'resi', 'resn', 'resm']
+KEEP_COLS = ['chain', 'resi_mut', 'resn_mut', 'resm']
 
 @register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
                  requires={'resm'}, tags={'sequence'})
@@ -37,7 +37,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     if percentiles is None:
         percentiles = [25, 50, 75]
     # subset to only include positions with mutation data
-    seq_data = context.residue_table.loc[context.residue_table.seq_info, :]
+    seq_data = context.residue_table.loc[context.residue_table.mut_info, :]
 
     # ensure that only a single chain is provided
     if len(seq_data.chain.unique()) > 1:
@@ -46,15 +46,15 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     # Determine if position effects are already calculated or need to be computed from data
     if 'pos_effect' in seq_data.columns:
         # exclude synonymous mutations, which have undefined position effects, and subset
-        pos_scores = seq_data[['resi', 'pos_effect', 'type']]
-        pos_scores = pos_scores.loc[pos_scores.type != 'synonymous', ['resi', 'pos_effect']]
+        pos_scores = seq_data[['resi_mut', 'pos_effect', 'type']]
+        pos_scores = pos_scores.loc[pos_scores.type != 'synonymous', ['resi_mut', 'pos_effect']]
         pos_scores = pos_scores.drop_duplicates()
 
     else:
         # compute position effects from individual mutation effects, removing synonymous mutations
-        pos_counts = seq_data[['resi', 'effect', 'type']]
-        pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi', 'effect']]
-        pos_scores = pos_counts.groupby('resi')['effect'].mean().reset_index()
+        pos_counts = seq_data[['resi_mut', 'effect', 'type']]
+        pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi_mut', 'effect']]
+        pos_scores = pos_counts.groupby('resi_mut')['effect'].mean().reset_index()
         pos_scores.rename(columns={'effect': 'pos_effect'}, inplace=True)
 
     # define cutoffs for position effects
@@ -68,7 +68,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     )
 
     # map quartile labels and raw effect scores back to original residues
-    pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi', how='left')
+    pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi_mut', how='left')
 
     return pos_scores
 
@@ -100,7 +100,7 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
                     for f in aaindex_data.accession.unique()}
 
     for aa_feature, feature_values in feature_dict.items():
-        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores['resn'].map(feature_values)
+        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
 
         # calculate for mutant only if mutation column exists
         if 'resm' in keep_cols:
@@ -128,11 +128,11 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
         DataFrame with 'blosum90' along with residue metadata.
     """
     residue_table, blosum_threshold = context.residue_table, 90
-    blosum_scores = residue_table.loc[residue_table.seq_info, KEEP_COLS].copy()
+    blosum_scores = residue_table.loc[residue_table.mut_info, KEEP_COLS].copy()
     b_matrix = bl.BLOSUM(blosum_threshold)
 
     def get_blosum_score(row):
-        wt = convert_amino_acid(row['resn'])
+        wt = convert_amino_acid(row['resn_mut'])
         mut = convert_amino_acid(row['resm'])
         return b_matrix[wt][mut]
 

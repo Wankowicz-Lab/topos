@@ -119,10 +119,10 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     )
 
     # Use custom column names different from defaults
-    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
-        'resn': 'wt_residue',  # custom name instead of 'wildtype'
-        'resi': 'res_position',  # custom name instead of 'position'
+        'resn_mut': 'wt_residue',  # custom name instead of 'wildtype'
+        'resi_mut': 'res_position',  # custom name instead of 'position'
         'resm': 'mut_residue',  # custom name instead of 'mutation'
         'effect': 'fitness_score',  # custom name instead of 'effect'
         'type': 'mut_type'  # custom name instead of 'type'
@@ -132,7 +132,7 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
 
     # Create synthetic mmcif file to match mutation data
-    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
@@ -164,6 +164,20 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     assert mut_runner.context.config.mutation_residue_col_name == 'wt_residue'
     assert mut_runner.context.config.mutation_score_col_name == 'fitness_score'
 
+    # Now test with invalid chain specified in config
+    bad_config = config_dict.copy()
+    bad_config['mutation_data_chain'] = 'B'  # chain not in mmcif
+    bad_config_path = tmp_path / 'bad_config.toml'
+
+    with bad_config_path.open("wb") as f:
+        tomli_w.dump(bad_config, f)
+
+    with pytest.raises(ValueError, match="Specified mutation_data_chain 'B' not found in structure chains"):
+        _ = runner.Runner(
+            pdb_path=mmcif_path,
+            config_path=bad_config_path
+        )
+
 
 def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
     """Test that an appropriate error is raised when column names are incorrect."""
@@ -176,10 +190,10 @@ def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
     )
 
     # Create mutation data with standard column names
-    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
-        'resn': 'wildtype',
-        'resi': 'position',
+        'resn_mut': 'wildtype',
+        'resi_mut': 'position',
         'resm': 'mutation',
         'effect': 'effect',
         'type': 'type'
@@ -189,7 +203,7 @@ def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
 
     # Create synthetic mmcif file to match mutation data
-    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
@@ -262,10 +276,10 @@ def test_runner_run_metric(tmp_path):
     residue_table['pdbtm_region'] = 'membrane_spanning'
     residue_table['pdbtm_region_detailed'] = 'TM1'
 
-    mut_dataset = residue_table[['resn', 'resi', 'resm', 'effect', 'type']]
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
-        'resn': 'wildtype',
-        'resi': 'position',
+        'resn_mut': 'wildtype',
+        'resi_mut': 'position',
         'resm': 'mutation',
         'effect': 'effect',
         'type': 'type'
@@ -275,7 +289,7 @@ def test_runner_run_metric(tmp_path):
     mut_dataset.to_csv(mut_data_path, index=False)
 
     # Create synthetic mmcif file to match mutation data
-    residues = residue_table[['resn', 'resi']].drop_duplicates()['resn']
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
 
@@ -311,7 +325,8 @@ def test_runner_run_metric(tmp_path):
         myrunner.run(metrics=[metric])
 
         returned_cols = myrunner.features.columns.tolist()
-        expected_cols = ['chain', 'resi', 'resn', 'resm', 'name']
+        expected_cols = ['chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'resm', 'name']
+
 
         if metric == 'aaindex_scores':
             # aaindex scores add columns for each index
@@ -344,12 +359,19 @@ def test_runner_run_metric_no_mutations(tmp_path):
         mutation_data_path=None
     )
 
+    # Check that resi_mut and resn_mut columns exist and equal resi_struct and resn_struct
+    assert 'resi_mut' in myrunner.context.residue_table.columns
+    assert 'resn_mut' in myrunner.context.residue_table.columns
+    assert (myrunner.context.residue_table['resi_mut'] == myrunner.context.residue_table['resi_struct']).all()
+    assert (myrunner.context.residue_table['resn_mut'] == myrunner.context.residue_table['resn_struct']).all()
+
     # run all metrics
     myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
 
     # Check that all residues are present and no 'resm' column
     assert len(myrunner.features) == len(myrunner.context.residue_table)
     assert 'resm' not in myrunner.features.columns.tolist()
+
 
 
 def test_runner__merge_features():
@@ -366,22 +388,22 @@ def test_runner__merge_features():
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=False)
 
     # df1 has residue level features from a subset of the residues
-    df1_keep_resis = np.random.choice(residue_table['resi'], size=7, replace=False)
-    df1 = residue_table[residue_table['resi'].isin(df1_keep_resis)].copy()
-    df1 = df1[['chain', 'resi', 'resn']]
+    df1_keep_resis = np.random.choice(residue_table['resi_struct'], size=7, replace=False)
+    df1 = residue_table[residue_table['resi_struct'].isin(df1_keep_resis)].copy()
+    df1 = df1[['chain', 'resi_struct', 'resn_struct']]
     df1['feature1'] = np.random.rand(len(df1))
 
     # df2 has residue-level features from a subset of positions in chain A
-    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi'], size=3, replace=False)
-    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi'].isin(df2_keep_resis))].copy()
-    df2 = df2[['chain', 'resi', 'resn']]
+    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_struct'], size=3, replace=False)
+    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_struct'].isin(df2_keep_resis))].copy()
+    df2 = df2[['chain', 'resi_struct', 'resn_struct']]
     df2['feature2'] = np.random.rand(len(df2))
 
     # df3 has residue level features from residues in Chain B
-    df3_keep_resis = np.random.choice(residue_table.loc[residue_table['chain']=='B']['resi'],
+    df3_keep_resis = np.random.choice(residue_table.loc[residue_table['chain']=='B']['resi_struct'],
                                       size=5, replace=False)
-    df3 = residue_table[residue_table['resi'].isin(df3_keep_resis)].copy()
-    df3 = df3[['chain', 'resi', 'resn']]
+    df3 = residue_table[residue_table['resi_struct'].isin(df3_keep_resis)].copy()
+    df3 = df3[['chain', 'resi_struct', 'resn_struct']]
     df3['feature3'] = np.random.rand(len(df3))
 
     result_frames = [df1, df2, df3]
@@ -397,15 +419,15 @@ def test_runner__merge_features():
     assert len(merged_df) == len(residue_table)
 
     # Check that df values are correctly merged
-    df1_mask = merged_df['resi'].isin(df1_keep_resis)
+    df1_mask = merged_df['resi_struct'].isin(df1_keep_resis)
     assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
     assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
 
-    df2_mask = (merged_df['chain']=='A') & (merged_df['resi'].isin(df2_keep_resis))
+    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_struct'].isin(df2_keep_resis))
     assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
     assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
 
-    df3_mask = merged_df['resi'].isin(df3_keep_resis)
+    df3_mask = merged_df['resi_struct'].isin(df3_keep_resis)
     assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
     assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
 
@@ -422,31 +444,31 @@ def test_runner__merge_features_with_muts():
     )
 
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=[True, False])
-    residue_table_no_muts = residue_table[['chain', 'resi', 'resn']].drop_duplicates().reset_index(drop=True)
+    residue_table_no_muts = residue_table[['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']].drop_duplicates().reset_index(drop=True)
 
-    # df1 has residue level features from a subset of the residues
-    df1_keep_resis = np.random.choice(residue_table_no_muts['resi'], size=7, replace=False)
-    df1 = residue_table_no_muts[residue_table_no_muts['resi'].isin(df1_keep_resis)].copy()
-    df1 = df1[['chain', 'resi', 'resn']]
+    # df1 has residue level features from a subset of the residues  
+    df1_keep_resis = np.random.choice(residue_table_no_muts['resi_struct'], size=7, replace=False)
+    df1 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df1_keep_resis)].copy()
+    df1 = df1[['chain', 'resi_struct', 'resn_struct']]
     df1['feature1'] = np.random.rand(len(df1))
 
     # df2 has mutation-level features for all mutations from a subset of positions in chain A
-    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi'], size=3, replace=False)
-    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi'].isin(df2_keep_resis))].copy()
-    df2 = df2[['chain', 'resi', 'resn', 'resm']]
+    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_mut'], size=3, replace=False)
+    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_mut'].isin(df2_keep_resis))].copy()
+    df2 = df2[['chain', 'resi_mut', 'resn_mut', 'resm']]
     df2['feature2'] = np.random.rand(len(df2))
 
     # df3 has residue level features from residues in Chain B
-    df3_keep_resis = np.random.choice(residue_table_no_muts.loc[residue_table_no_muts['chain']=='B']['resi'],
+    df3_keep_resis = np.random.choice(residue_table_no_muts.loc[residue_table_no_muts['chain']=='B']['resi_struct'],
                                       size=5, replace=False)
-    df3 = residue_table_no_muts[residue_table_no_muts['resi'].isin(df3_keep_resis)].copy()
-    df3 = df3[['chain', 'resi', 'resn']]
+    df3 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df3_keep_resis)].copy()
+    df3 = df3[['chain', 'resi_struct', 'resn_struct']]
     df3['feature3'] = np.random.rand(len(df3))
 
     # df4 has a subset of mutations at each position
     df4_keep_resis = np.random.choice(len(residue_table), size=40, replace=False)
     df4 = residue_table.iloc[df4_keep_resis].copy()
-    df4 = df4[['chain', 'resi', 'resn', 'resm']]
+    df4 = df4[['chain', 'resi_mut', 'resn_mut', 'resm']]
     df4['feature4'] = np.random.rand(len(df4))
 
     result_frames = [df1, df2, df3, df4]
@@ -461,21 +483,22 @@ def test_runner__merge_features_with_muts():
     assert len(merged_df) == len(residue_table)
     assert 'resm' in merged_df.columns.tolist()
 
-    # Check that df values are correctly merged
-    df1_mask = merged_df['resi'].isin(df1_keep_resis)
+    # Check that df values are correctly merged for structure-based features
+    df1_mask = merged_df['resi_struct'].isin(df1_keep_resis)
     assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
     assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
 
-    df2_mask = (merged_df['chain']=='A') & (merged_df['resi'].isin(df2_keep_resis))
+    # Check sequence-based features
+    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_mut'].isin(df2_keep_resis))
     assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
     assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
 
-    df3_mask = merged_df['resi'].isin(df3_keep_resis)
+    df3_mask = merged_df['resi_struct'].isin(df3_keep_resis)
     assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
     assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
 
-    df4 = df4.set_index(['chain', 'resi', 'resn', 'resm'])
-    merged_df = merged_df.set_index(['chain', 'resi', 'resn', 'resm'])
+    df4 = df4.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
+    merged_df = merged_df.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
@@ -548,3 +571,77 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+
+def test_runner_config_file_not_found(tmp_path):
+    """Test that FileNotFoundError is raised when config file doesn't exist."""
+    # Path to a non-existent config file
+    config_path = tmp_path / 'nonexistent_config.toml'
+    
+    with pytest.raises(FileNotFoundError, match="Configuration file not found at"):
+        runner.Runner(config_path=config_path)
+
+
+def test_runner_config_invalid_toml(tmp_path):
+    """Test that ValueError is raised when config file has invalid TOML syntax."""
+    # Create a config file with invalid TOML syntax
+    config_path = tmp_path / 'invalid_config.toml'
+    with config_path.open("w") as f:
+        f.write("pdb_id = 8smv\n")  # Invalid: missing quotes around string value
+        f.write("name = invalid toml syntax\n")  # Invalid: missing quotes around string value
+        f.write("[broken section\n")  # Invalid: missing closing bracket
+    
+    with pytest.raises(ValueError, match="Invalid TOML in configuration file"):
+        runner.Runner(config_path=config_path)
+
+
+def test_runner_load_pdb_format(tmp_path):
+    """Test loading structure with PDB format (not just CIF)."""
+    # Create a simple PDB file
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    pdb_path = tmp_path / "test_structure.pdb"
+    
+    # Write a minimal valid PDB file
+    pdb_content = []
+    atom_id = 1
+    for res_idx, res_name in enumerate(residues, start=1):
+        # Add backbone atoms for each residue
+        for atom_name in ['N', 'CA', 'C', 'O']:
+            x, y, z = float(atom_id), 0.0, 0.0
+            pdb_content.append(
+                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
+            )
+            atom_id += 1
+    pdb_content.append("END\n")
+    
+    with pdb_path.open("w") as f:
+        f.writelines(pdb_content)
+    
+    # Test that both .pdb and .cif extensions work
+    test_runner = runner.Runner(
+        pdb_id='TEST',
+        name='test_pdb_format',
+        pdb_path=pdb_path
+    )
+    
+    assert test_runner.context.array is not None
+    assert test_runner.context.config.pdb_ext == 'pdb'
+    assert test_runner.context.config.pdb_path == pdb_path
+
+
+def test_runner_load_cif_format(tmp_path):
+    """Test loading structure with CIF format to verify extension handling."""
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    cif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
+    
+    test_runner = runner.Runner(
+        pdb_id='TEST',
+        name='test_cif_format',
+        pdb_path=cif_path
+    )
+    
+    assert test_runner.context.array is not None
+    assert test_runner.context.config.pdb_ext == 'cif'
+    assert test_runner.context.config.pdb_path == cif_path

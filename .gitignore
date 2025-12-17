@@ -25,6 +25,7 @@ wheels/
 .coverage
 coverage.xml
 htmlcov/
+*.py,cover
 
 # IDEs
 .vscode/
