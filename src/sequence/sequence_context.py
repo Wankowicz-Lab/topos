@@ -318,6 +318,8 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     residue_table['struct_info'] = ~residue_table['resn_struct'].isna()
 
     # drop extra columns if present
-    res_table = residue_table[['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info']]
+    keep_cols = ['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info']
+    keep_cols += ['pdbtm_region', 'pdbtm_region_detailed'] if 'pdbtm_region' in residue_table.columns else []
+    residue_table = residue_table[keep_cols]
 
-    return res_table
+    return residue_table
