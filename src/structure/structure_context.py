@@ -14,7 +14,6 @@ import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
 from pydantic import BaseModel
-from .pdbtm import add_pdbtm_regions, fetch_pdbtm_annotation
 
 
 # ---------------- Registry ----------------
@@ -252,9 +251,6 @@ class Context:
         self.aa = aa
         self.residue_table = residue_table(aa)
         
-        if self.config.membrane_protein and self.config.pdb_id:
-           self.residue_table = add_membrane_context(self.residue_table, self.config.pdb_id)
-
         if self.config.aaindex_path is not None:
             aa_index = pd.read_csv(self.config.aaindex_path)
             self.extras['aaindex'] = aa_index
