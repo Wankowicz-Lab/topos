@@ -279,24 +279,6 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     resn   = array.res_name[res_starts]
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
 
-def add_membrane_context(df, pdb_id):
-    """
-    Add membrane annotations to residue table
-
-    Parameters
-    ----------
-    df : Residue table populated with chain, residue, resn information
-    pdb_id : str
-        PDB ID for fetching PDBTM annotations
-    
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with columns 'chain', 'resi', 'resn' for each residue, plus 'pdbtm_region' and 'pdbtm_region_detailed' columns
-    """
-    regions, _ = fetch_pdbtm_annotation(pdb_id)
-    return add_pdbtm_regions(df, regions)
-
 def load_structure(
     path: Union[str, Path],
     model: Optional[int] = 1,
