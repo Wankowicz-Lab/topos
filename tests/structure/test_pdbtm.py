@@ -92,6 +92,8 @@ def test_annotate_pdbtm_detailed():
 
 def test_add_pdbtm_regions():
     residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=False, start_resis=[1, 3])
+    # rename columns, resi_struct hasn't been created in pipeline yet
+    residue_table.rename(columns={'resi_struct': 'resi', 'resn_struct': 'resn'}, inplace=True)
     pdbtm_regions = pd.DataFrame({
         'chain': ['A', 'A', 'B', 'B'],
         'type': ['membrane_spanning', 'cytoplasmic', 'extracellular', 'extracellular'],
@@ -104,7 +106,6 @@ def test_add_pdbtm_regions():
                               ['extracellular_1'] * 4 + ['extracellular_2'])
 
     merged = pdbtm.add_pdbtm_regions(residue_table, pdbtm_regions)
-    print(merged)
 
     assert merged['pdbtm_region'].tolist() == expected_region
     assert merged['pdbtm_region_detailed'].tolist() == expected_region_detail
@@ -134,14 +135,14 @@ def test_define_secondary_structure():
 
     ss_df = pd.DataFrame({
         'chain': ['A'] * len(ss_annotation),
-        'resi': list(range(1, len(ss_annotation) + 1)),
+        'resi_struct': list(range(1, len(ss_annotation) + 1)),
         'sse': ss_annotation
     })
 
     residue_table = pd.DataFrame({
         'chain': ['A'] * len(pdbtm_region),
-        'resi': list(range(1, len(pdbtm_region) + 1)),
-        'resn': ['ALA'] * len(ss_annotation),
+        'resi_struct': list(range(1, len(pdbtm_region) + 1)),
+        'resn_struct': ['ALA'] * len(ss_annotation),
         'pdbtm_region': pdbtm_region,
         'pdbtm_region_detailed': pdbtm_region_detailed
     })

@@ -103,7 +103,7 @@ class Runner:
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
-            except (RuntimeError, ValueError, IndexError, KeyError) as e:
+            except RuntimeError as e:
                 warnings.warn(
                     f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. "
                     "Membrane features will not be calculated. Setting membrane_protein to False.",
@@ -111,7 +111,9 @@ class Runner:
                 )
                 self.context.config.membrane_protein = False
 
+        # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
+
             self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(
                 path=self.context.config.mutation_data_path,
                 residue_col_name=self.context.config.mutation_residue_col_name,
@@ -120,11 +122,25 @@ class Runner:
                 mutation_type_col_name=self.context.config.mutation_type_col_name,
                 score_col_name=self.context.config.mutation_score_col_name
             )
+  
+            if self.context.config.mutation_data_chain not in self.context.residue_table['chain'].unique():
+                raise ValueError(f"Specified mutation_data_chain '{self.context.config.mutation_data_chain}' not "
+                                 f"found in structure chains {self.context.residue_table['chain'].unique()}")
+
             self.context.residue_table = sequence_context.merge_mutation_scores(
                 mutation_scores=self.context.extras['mutation_data'],
                 residue_table=self.context.residue_table,
-                chain=self.context.config.mutation_data_chain
+                chain=self.context.config.mutation_data_chain,
+                alignment_cutoff=self.context.config.alignment_cutoff
             )
+        # Otherwise create mutation columns from structure data
+        else:
+            self.context.residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
+            self.context.residue_table['resn_mut'] = self.context.residue_table['resn_struct']
+            self.context.residue_table['resi_mut'] = self.context.residue_table['resi_struct']
+            self.context.residue_table['mut_info'] = True
+            self.context.residue_table['struct_info'] = True
+
 
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:
@@ -199,7 +215,7 @@ class Runner:
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
-        """Merge feature DataFrames on chain, resi, resn, and resm columns.
+        """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
 
         Parameters
         ----------
@@ -214,13 +230,26 @@ class Runner:
         pd.DataFrame
             Merged DataFrame.
         """
-        # Get all unique rows based on chain, resi, resn, resm to merge on
-        keep_cols = ['resi', 'chain', 'resn']
+        # Get all unique rows to merge on
+        keep_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
+        
+        # Add mutation columns if mutations are present
         keep_cols += ['resm'] if mutations else []
+        
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
         for df in dfs:
-            merge_cols = ['resi', 'chain', 'resn'] + (['resm'] if 'resm' in df.columns else [])
+            # Determine merge columns based on what's available in the df
+            merge_cols = ['chain']
+            
+            # Check if this is a sequence-based or structure-based metric
+            if 'resi_mut' in df.columns:
+                merge_cols.extend(['resi_mut', 'resn_mut'])
+                if 'resm' in df.columns:
+                    merge_cols.append('resm')
+            elif 'resi_struct' in df.columns:
+                merge_cols.extend(['resi_struct', 'resn_struct'])
+            
             merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
 
         return merged_df

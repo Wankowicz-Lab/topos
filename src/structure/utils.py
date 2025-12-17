@@ -17,7 +17,7 @@ import biotite.structure as struc
 
 def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     """
-    Extract metadata columns (chain, resi, resn) from an AtomArray.
+    Extract metadata columns (chain, resi_struct, resn_struct) from an AtomArray.
 
     Parameters
     ----------
@@ -27,14 +27,14 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'chain', 'resi', 'resn' for each residue
+        DataFrame with columns 'chain', 'resi_struct', 'resn_struct' for each residue
         in the structure.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi = array.res_id[res_starts]
     resn = array.res_name[res_starts]
-    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
+    return pd.DataFrame({"chain": chains, "resi_struct": resi, "resn_struct": resn})
 
 
 #________________HYDROGEN BONDS__________________________

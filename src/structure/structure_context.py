@@ -177,6 +177,7 @@ class Config(BaseModel):
     # mutagenesis data
     mutation_data_path: Optional[Path] = None
     mutation_data_chain: Optional[str] = None
+    alignment_cutoff: float = 0.95
     mutation_residue_col_name: str = "wildtype"
     mutation_residue_idx_name: str = "position"
     mutation_col_name: str = "mutation"

@@ -324,7 +324,7 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
     ss_df['ss_group'] = make_contiguous_group_labels(ss_df['sse'].tolist())
 
     residue_table['ss_domains'] = pd.NA
-    residue_table = residue_table.merge(ss_df[['chain', 'resi', 'ss_group']], on=['chain', 'resi'], how='left')
+    residue_table = residue_table.merge(ss_df[['chain', 'resi_struct', 'ss_group']], on=['chain', 'resi_struct'], how='left')
 
     membrane_spanning = residue_table.loc[residue_table['pdbtm_region'] == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
 
@@ -371,4 +371,4 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
             if np.sum(ss_mask) > 0:
                 residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
 
-    return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']].drop_duplicates()
+    return residue_table[['chain', 'resi_struct', 'resn_struct', 'ss_group', 'ss_domains']].drop_duplicates()

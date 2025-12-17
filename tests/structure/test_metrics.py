@@ -135,7 +135,7 @@ def test_define_secondary_structure():
     residue_table = _make_residue_table(num_chains=1, make_muts=False)
     residue_table['pdbtm_region'] = 'membrane_spanning'
     residue_table['pdbtm_region_detailed'] = 'TM1'
-    aa_list = residue_table.resn.tolist()
+    aa_list = residue_table.resn_struct.tolist()
     arr = _make_chain(aa_list=aa_list, chain_id='A')
 
     context = Context(array=arr, config=Config())
