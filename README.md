@@ -77,6 +77,7 @@ The easiest way to control the behavior of the runner is by modifying the config
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `aaindex_path` | Path to the data file containing amino acid indices | `"data/aaindex_parsed_small.csv"` | 
+| `kidera_path` | Path to the data file containing kidera factors | `"data/kidera_factors.csv"` | 
 
 
 #### Pipeline Parameters
