@@ -315,6 +315,9 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
 
     # Add mutation information into merged_df
     merged_df = merged_df.merge(mutation_scores, how='left', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
+    
+    # Drop duplicate columns from the merge (resi and resn are duplicates of resi_mut and resn_mut)
+    merged_df.drop(columns=['resi', 'resn'], inplace=True, errors='ignore')
 
     # Remove rows from mutation chain from residue table, update with merged rows
     residue_table = residue_table[residue_table['chain'] != chain]

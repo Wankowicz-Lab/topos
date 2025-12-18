@@ -45,13 +45,9 @@ def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[st
     
     if mutation_chain is not None:
         # Create custom sort key: mutation_data_chain first, then alphabetical
-        def chain_sort_key(chain):
-            if chain == mutation_chain:
-                return (0, chain)  # mutation chain comes first
-            else:
-                return (1, chain)  # other chains alphabetically
-        
-        residue_table['_chain_sort'] = residue_table['chain'].apply(chain_sort_key)
+        residue_table['_chain_sort'] = residue_table['chain'].apply(
+            lambda c: (0, c) if c == mutation_chain else (1, c)
+        )
         residue_table = residue_table.sort_values(
             ['_chain_sort', 'align_pos'], 
             kind='mergesort'
@@ -194,7 +190,8 @@ class Runner:
             self.context.residue_table['mut_info'] = True
             self.context.residue_table['struct_info'] = True
             
-            # Add align_pos for consistency (just sequential within each chain)
+            # Add align_pos for consistency (sequential across all chains since no alignment is performed)
+            # This ensures all code paths have align_pos, even though it doesn't represent an alignment position
             self.context.residue_table['align_pos'] = range(len(self.context.residue_table))
             
             # Sort residue table alphabetically by chain
