@@ -602,7 +602,8 @@ def test_runner_save_results(tmp_path):
 
     save_runner = runner.Runner(
         pdb_id=pdb_id,
-        name='test_save_results')
+        name='test_save_results',
+        membrane_protein=True)
     save_runner.features = features_df
     save_runner.context.residue_table = residue_table
 
@@ -620,6 +621,7 @@ def test_runner_save_results(tmp_path):
 
     saved_metadata = pd.read_csv(metadata_path)
     assert set(saved_metadata['resi_mut']) == set(residue_table['resi_mut'])
+    assert set(saved_metadata['pdbtm_region']) == set(residue_table['pdbtm_region'])
 
     # Check that files are created with custom prefix
     custom_prefix = 'testprefix'
