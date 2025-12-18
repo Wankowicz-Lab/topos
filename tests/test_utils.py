@@ -141,6 +141,10 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
         data.append(chain_df)
 
     residue_table = pd.concat(data, ignore_index=True)
+    
+    # Add align_pos for consistency with actual residue tables
+    residue_table['align_pos'] = range(len(residue_table))
+    
     return residue_table
 
 
