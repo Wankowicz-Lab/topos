@@ -514,7 +514,7 @@ def test_runner_save_results(tmp_path):
         'resn_mut': ['ALA', 'VAL', np.nan],
         'resm': ['ARG', 'SER', np.nan],
         'struct_info': [True, True, True],
-        'seq_info': [True, True, False],
+        'mut_info': [True, True, False],
         'feature1': [0.1, 0.2, 0.3],
         'feature2': [0.4, 0.5, 0.6]
     })
@@ -538,6 +538,12 @@ def test_runner_save_results(tmp_path):
     metadata_path = manual_output_dir / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+    saved_features = pd.read_csv(features_path)
+    pd.testing.assert_frame_equal(saved_features, features_df)
+
+    saved_metadata = pd.read_csv(metadata_path)
+    assert set(saved_metadata['resi_mut']) == set(residue_table['resi_mut'])
 
     # Check that files are created with custom prefix
     custom_prefix = 'testprefix'
