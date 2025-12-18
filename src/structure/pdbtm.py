@@ -1,10 +1,12 @@
 import numpy as np
 import requests
 import pandas as pd
+import logging
 from lxml import etree
 from typing import Tuple, Dict, List
 from itertools import groupby
 
+logger = logging.getLogger(__name__)
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
@@ -135,6 +137,7 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     xml_url = f"{API_BASE}/{pdb}.xml"
     headers = {"Accept": "application/xml, */*"}
 
+    logger.info("Initiating PDBTM API request")
     try:
         r = requests.get(xml_url, timeout=timeout, headers=headers)
         r.raise_for_status()

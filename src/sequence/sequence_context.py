@@ -1,11 +1,14 @@
 
 import warnings
+import logging
 from pathlib import Path
 from typing import Union
 
 from Bio.Align import PairwiseAligner
 import pandas as pd
 from src.sequence.utils import convert_amino_acid
+
+logger = logging.getLogger(__name__)
 
 
 def load_mutation_scores(
@@ -51,6 +54,7 @@ def load_mutation_scores(
     UserWarning
         If mutation types contain unexpected values.
     """
+    logger.info("Loading mutation scores")
     df = pd.read_csv(path)
 
     required_cols = [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]
@@ -290,6 +294,7 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     res_seq = "".join(res_seq_short.tolist())
 
     # Perform alignment
+    logger.info("Performing sequence alignment")
     alignment = aligner.align(mut_seq, res_seq)[0]
 
     # Create mapping to link dataframes based on alignment

@@ -6,10 +6,12 @@ from pathlib import Path
 import pandas as pd
 import tomli
 import warnings
+import logging
 
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile, get_structure
+import biotite.structure as struc
 
 from src.structure import structure_context
 from src.sequence import sequence_context
@@ -22,6 +24,8 @@ import src.sequence.metrics
 import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Runner:
@@ -33,6 +37,7 @@ class Runner:
     config_path: Optional[Path|str] = None
 
     def __post_init__(self):
+        logger.info("Initializing pipeline")
 
         # Ensure that either pdb_id or config_path is provided
         if self.pdb_id is None and self.config_path is None:
@@ -63,6 +68,7 @@ class Runner:
 
             # load config from file
             try:
+                logger.info("Loading configuration")
                 with self.config_path.open("rb") as f:
                     config_dict = tomli.load(f)
                     # convert empty strings to None
@@ -78,6 +84,7 @@ class Runner:
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
         if config.pdb_path is None:
+            logger.info("Fetching PDB structure from RCSB")
             obj = rcsb.fetch(config.pdb_id, format="cif")
             tmp_file = NamedTemporaryFile(delete=False, suffix=".cif")
             tmp_file.write(obj.getvalue().encode("utf-8"))
@@ -87,11 +94,13 @@ class Runner:
 
         # Otherwise just add parameters directly from config
         else:
+            logger.info("Using local PDB file")
             config.pdb_path = Path(config.pdb_path)
             config.pdb_ext = config.pdb_path.suffix.lstrip(".")
 
         # Load structure using appropriate parser
         # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
+        logger.info("Loading structure")
         if config.pdb_ext in ("cif", "mmcif"):
             mm = CIFFile.read(config.pdb_path)
             arr = get_structure(mm, model=1, extra_fields=["b_factor", "occupancy"])
@@ -100,10 +109,12 @@ class Runner:
             arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
 
         # create context object
+        logger.info("Creating context object")
         self.context = structure_context.Context(arr, config=config)
 
         if self.context.config.membrane_protein:
             try:
+                logger.info("Fetching PDBTM annotation")
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
@@ -117,6 +128,7 @@ class Runner:
 
         # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
+            logger.info("Loading mutation data")
 
             self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(
                 path=self.context.config.mutation_data_path,
@@ -203,7 +215,8 @@ class Runner:
         result_frames = []
         for m in order:
             meta, func = _REGISTRY[m]
-
+            
+            logger.info(f"Calculating metric: {m}")
             df = func(self.context)
 
             # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)
@@ -213,6 +226,7 @@ class Runner:
             self.context.extras[m] = df
 
         # merge all results into one DataFrame
+        logger.info("Merging features")
         mutations = self.context.config.mutation_data_path is not None
         self.features = self._merge_features(result_frames, mutations=mutations)
         self.features['name'] = self.context.config.name
@@ -291,6 +305,7 @@ class Runner:
             prefix = self.context.config.pdb_id
 
         # Save features
+        logger.info("Saving results")
         merged_path = output_dir / f"{prefix}_features.csv"
         self.features.to_csv(merged_path, index=False)
 

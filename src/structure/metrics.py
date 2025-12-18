@@ -6,6 +6,7 @@ including SASA, hydropathy, membrane distance, secondary structure,
 hydrogen bonds, and packing metrics.
 """
 from __future__ import annotations
+import logging
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
@@ -13,6 +14,8 @@ from .structure_context import Context, register_metric
 from . import pdbtm
 from .utils import residue_key, is_heavy, get_metadata_cols
 from .utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as _detect_hbonds
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
@@ -48,6 +51,8 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'sasa' along with residue metadata.
     """
+    logger.info("Calculating SASA")
+    
     # Calculate atom-wise SASA
     array = context.aa
     atom_sasa = struc.sasa(array=array, vdw_radii="ProtOr")
@@ -77,6 +82,7 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'kyte_doolittle' along with residue metadata.
     """
+    logger.info("Calculating Kyte-Doolittle hydropathy")
 
     kd_scale = {
         "ILE": 4.5, "VAL": 4.2, "LEU": 3.8, "PHE": 2.8, "CYS": 2.5,
@@ -115,6 +121,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'distance_from_membrane_edge' along with residue metadata.
     """
+    logger.info("Calculating membrane distance")
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
     array, membrane_thickness = context.array, context.config.membrane_thickness
@@ -148,7 +155,8 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'ss_group', 'ss_domains' along with residue metadata.
     """
-
+    logger.info("Calculating secondary structure")
+    
     res_starts = struc.get_residue_starts(context.aa)
     sse_vals = calculate_secondary_structure(context.aa)
 
@@ -182,11 +190,13 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'bb_hbond_count', 'sc_hbond_count', 'total_hbond_count' along with residue metadata.
     """
+    logger.info("Calculating hydrogen bond metrics")
+    
     array = context.array
+    res_starts = struc.get_residue_starts(array)
     donors, acceptors = _build_sites_biotite(array)
     hbonds = _detect_hbonds(donors, acceptors)
     
-    res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
@@ -261,6 +271,8 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     pd.DataFrame
         DataFrame with 'packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density' along with residue metadata.
     """
+    logger.info("Calculating packing metrics")
+    
     array = context.array
     # Residue indexing for original array
     res_starts = struc.get_residue_starts(array)
