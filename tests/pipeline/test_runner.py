@@ -657,3 +657,187 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+
+def test_sort_residue_table():
+    """Test that _sort_residue_table works correctly."""
+    # Test 1: Sorting with mutation_chain specified
+    df_with_mutation = pd.DataFrame({
+        'chain': ['C', 'B', 'A', 'B', 'A', 'C'],
+        'align_pos': [2, 0, 1, 3, 4, 5],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU']
+    })
+    
+    sorted_df = runner._sort_residue_table(df_with_mutation, mutation_chain='B')
+    
+    # Check that chain B comes first
+    chains = sorted_df['chain'].tolist()
+    assert chains[0] == 'B' and chains[1] == 'B', "Mutation chain B should come first"
+    
+    # Check that within each chain, residues are sorted by align_pos
+    chain_b_align_pos = sorted_df[sorted_df['chain'] == 'B']['align_pos'].tolist()
+    assert chain_b_align_pos == sorted(chain_b_align_pos), "Within chain B, should be sorted by align_pos"
+    
+    # Check that other chains are alphabetically ordered
+    assert chains == ['B', 'B', 'A', 'A', 'C', 'C'], "Should be B first, then A, then C"
+    
+    # Test 2: Sorting without mutation_chain (alphabetical)
+    sorted_df_alpha = runner._sort_residue_table(df_with_mutation, mutation_chain=None)
+    chains_alpha = sorted_df_alpha['chain'].tolist()
+    assert chains_alpha == ['A', 'A', 'B', 'B', 'C', 'C'], "Should be alphabetically sorted when no mutation_chain"
+    
+    # Check sorting within each chain
+    for chain in ['A', 'B', 'C']:
+        chain_align_pos = sorted_df_alpha[sorted_df_alpha['chain'] == chain]['align_pos'].tolist()
+        assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
+
+
+def test_merge_features_output_is_sorted(tmp_path):
+    """Test that _merge_features output is sorted appropriately."""
+    # Create a residue table with mutation data
+    residue_table = _make_residue_table(
+        num_chains=2,
+        num_residues=5,
+        start_resis=[1, 10],
+        make_muts=True
+    )
+    
+    # Add mutation data columns
+    mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
+    mut_dataset = mut_dataset.rename(columns={
+        'resn_mut': 'wildtype',
+        'resi_mut': 'position',
+        'resm': 'mutation',
+        'effect': 'effect',
+        'type': 'type'
+    })
+    
+    mut_data_path = tmp_path / 'mut_data.csv'
+    mut_dataset.to_csv(mut_data_path, index=False)
+    
+    # Create synthetic mmcif file
+    residues = residue_table[['resn_mut', 'resi_mut']].drop_duplicates()['resn_mut']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()[:5], "B": residues.tolist()[:5]})
+    
+    # Make config file
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_path=mut_data_path, mutation_data_chain='A')
+    
+    myrunner = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        membrane_protein=False,
+        mutation_data_path=mut_data_path,
+        config_path=config_path
+    )
+    
+    # Create some feature dataframes
+    feature_df1 = pd.DataFrame({
+        'chain': ['A', 'B', 'A', 'B'],
+        'resi_mut': [1, 10, 2, 11],
+        'resn_mut': ['ALA', 'GLY', 'SER', 'THR'],
+        'feature1': [0.1, 0.2, 0.3, 0.4]
+    })
+    
+    feature_df2 = pd.DataFrame({
+        'chain': ['A', 'B', 'A', 'B'],
+        'resi_mut': [1, 10, 2, 11],
+        'resn_mut': ['ALA', 'GLY', 'SER', 'THR'],
+        'feature2': [0.5, 0.6, 0.7, 0.8]
+    })
+    
+    # Call _merge_features
+    merged = myrunner._merge_features([feature_df1, feature_df2], mutations=True)
+    
+    # Check that output is sorted with mutation_chain 'A' first
+    chains = merged['chain'].tolist()
+    # Find where chain changes from A to B
+    first_b_index = next((i for i, c in enumerate(chains) if c == 'B'), None)
+    if first_b_index is not None:
+        # All A's should come before all B's
+        assert all(c == 'A' for c in chains[:first_b_index]), "All A chains should come before B chains"
+        assert all(c == 'B' for c in chains[first_b_index:]), "All B chains should come after A chains"
+
+
+def test_residue_table_sorted_after_initialization(tmp_path):
+    """Test that residue_table is sorted appropriately after runner initializes."""
+    # Test 1: With mutation data
+    residue_table = _make_residue_table(
+        num_chains=3,
+        num_residues=5,
+        start_resis=[1, 10, 20],
+        make_muts=True
+    )
+    
+    mut_dataset = residue_table[residue_table['chain'] == 'A'][['resn_mut', 'resi_mut', 'resm', 'effect', 'type']].head(10)
+    mut_dataset = mut_dataset.rename(columns={
+        'resn_mut': 'wildtype',
+        'resi_mut': 'position',
+        'resm': 'mutation',
+        'effect': 'effect',
+        'type': 'type'
+    })
+    
+    mut_data_path = tmp_path / 'mut_data.csv'
+    mut_dataset.to_csv(mut_data_path, index=False)
+    
+    # Create synthetic mmcif file
+    residues_a = residue_table[residue_table['chain'] == 'A']['resn_mut'].unique()[:5]
+    residues_b = residue_table[residue_table['chain'] == 'B']['resn_mut'].unique()[:5]
+    residues_c = residue_table[residue_table['chain'] == 'C']['resn_mut'].unique()[:5]
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", 
+                     chains={"A": residues_a.tolist(), "B": residues_b.tolist(), "C": residues_c.tolist()})
+    
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_path=mut_data_path, mutation_data_chain='A')
+    
+    myrunner = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        membrane_protein=False,
+        mutation_data_path=mut_data_path,
+        config_path=config_path
+    )
+    
+    # Check that residue_table has align_pos column
+    assert 'align_pos' in myrunner.context.residue_table.columns, "residue_table should have align_pos column"
+    
+    # Check that mutation chain A comes first
+    chains = myrunner.context.residue_table['chain'].tolist()
+    unique_chains = []
+    for c in chains:
+        if not unique_chains or unique_chains[-1] != c:
+            unique_chains.append(c)
+    
+    assert unique_chains[0] == 'A', "Mutation chain A should come first"
+    
+    # Check that within each chain, align_pos is sorted
+    for chain in myrunner.context.residue_table['chain'].unique():
+        chain_df = myrunner.context.residue_table[myrunner.context.residue_table['chain'] == chain]
+        align_pos_values = chain_df['align_pos'].tolist()
+        assert align_pos_values == sorted(align_pos_values), f"Within chain {chain}, align_pos should be sorted"
+    
+    # Test 2: Without mutation data (alphabetical sorting)
+    mmcif_path_no_mut = tmp_path / "test_structure_no_mut.cif"
+    _write_mmcif_file(file_path=mmcif_path_no_mut, pdb_id="TEST2", 
+                     chains={"C": ['ALA', 'GLY', 'SER'], "A": ['THR', 'VAL', 'LEU'], "B": ['MET', 'PHE', 'TYR']})
+    
+    myrunner_no_mut = runner.Runner(
+        pdb_id='test2',
+        name='test_no_mut',
+        pdb_path=mmcif_path_no_mut,
+        membrane_protein=False,
+        mutation_data_path=None
+    )
+    
+    # Check that chains are alphabetically sorted
+    chains_no_mut = myrunner_no_mut.context.residue_table['chain'].tolist()
+    unique_chains_no_mut = []
+    for c in chains_no_mut:
+        if not unique_chains_no_mut or unique_chains_no_mut[-1] != c:
+            unique_chains_no_mut.append(c)
+    
+    assert unique_chains_no_mut == sorted(unique_chains_no_mut), "Chains should be alphabetically sorted when no mutation data"
