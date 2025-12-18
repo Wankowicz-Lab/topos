@@ -211,7 +211,7 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
     
-    n_res = len(res_starts)
+    n_res = num_residues
     bb_counts = np.zeros(n_res, dtype=float)
     sc_counts = np.zeros(n_res, dtype=float)
     total_counts = np.zeros(n_res, dtype=float)
