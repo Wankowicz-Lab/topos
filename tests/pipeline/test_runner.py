@@ -520,6 +520,8 @@ def test_runner_save_results(tmp_path):
     })
 
     residue_table = _make_residue_table()
+    residue_table['pdbtm_region'] = 'membrane_spanning'
+    residue_table['pdbtm_region_detailed'] = 'TM1'
 
     # Create runner
     pdb_id = '8smv'
