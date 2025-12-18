@@ -231,6 +231,80 @@ def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
         )
 
 
+def test_runner_initialization_bad_config(tmp_path):
+    """Test that FileNotFoundError is raised when config file doesn't exist."""
+    # Path to a non-existent config file
+    config_path = tmp_path / 'nonexistent_config.toml'
+
+    with pytest.raises(FileNotFoundError, match="Configuration file not found at"):
+        runner.Runner(config_path=config_path)
+
+
+def test_runner_initialization_invalid_config(tmp_path):
+    """Test that ValueError is raised when config file has invalid TOML syntax."""
+    # Create a config file with invalid TOML syntax
+    config_path = tmp_path / 'invalid_config.toml'
+    with config_path.open("w") as f:
+        f.write("pdb_id = 8smv\n")  # Invalid: missing quotes around string value
+        f.write("name = invalid toml syntax\n")  # Invalid: missing quotes around string value
+        f.write("[broken section\n")  # Invalid: missing closing bracket
+
+    with pytest.raises(ValueError, match="Invalid TOML in configuration file"):
+        runner.Runner(config_path=config_path)
+
+
+def test_runner_initialization_load_pdb_format(tmp_path):
+    """Test loading structure with PDB format (not just CIF)."""
+    # Create a simple PDB file
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    pdb_path = tmp_path / "test_structure.pdb"
+
+    # Write a minimal valid PDB file
+    pdb_content = []
+    atom_id = 1
+    for res_idx, res_name in enumerate(residues, start=1):
+        # Add backbone atoms for each residue
+        for atom_name in ['N', 'CA', 'C', 'O']:
+            x, y, z = float(atom_id), 0.0, 0.0
+            pdb_content.append(
+                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
+            )
+            atom_id += 1
+    pdb_content.append("END\n")
+
+    with pdb_path.open("w") as f:
+        f.writelines(pdb_content)
+
+    # Test that both .pdb and .cif extensions work
+    test_runner = runner.Runner(
+        pdb_id='TEST',
+        name='test_pdb_format',
+        pdb_path=pdb_path
+    )
+
+    assert test_runner.context.array is not None
+    assert test_runner.context.config.pdb_ext == 'pdb'
+    assert test_runner.context.config.pdb_path == pdb_path
+
+
+def test_runner_initialization_load_cif_format(tmp_path):
+    """Test loading structure with CIF format to verify extension handling."""
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    cif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
+
+    test_runner = runner.Runner(
+        pdb_id='TEST',
+        name='test_cif_format',
+        pdb_path=cif_path
+    )
+
+    assert test_runner.context.array is not None
+    assert test_runner.context.config.pdb_ext == 'cif'
+    assert test_runner.context.config.pdb_path == cif_path
+
+
 def test_runner__merge_config(tmp_path):
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_path=None)
@@ -514,19 +588,22 @@ def test_runner_save_results(tmp_path):
         'resn_mut': ['ALA', 'VAL', np.nan],
         'resm': ['ARG', 'SER', np.nan],
         'struct_info': [True, True, True],
-        'seq_info': [True, True, False],
+        'mut_info': [True, True, False],
         'feature1': [0.1, 0.2, 0.3],
         'feature2': [0.4, 0.5, 0.6]
     })
 
     residue_table = _make_residue_table()
+    residue_table['pdbtm_region'] = 'membrane_spanning'
+    residue_table['pdbtm_region_detailed'] = 'TM1'
 
     # Create runner
     pdb_id = '8smv'
 
     save_runner = runner.Runner(
         pdb_id=pdb_id,
-        name='test_save_results')
+        name='test_save_results',
+        membrane_protein=True)
     save_runner.features = features_df
     save_runner.context.residue_table = residue_table
 
@@ -538,6 +615,13 @@ def test_runner_save_results(tmp_path):
     metadata_path = manual_output_dir / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+    saved_features = pd.read_csv(features_path)
+    pd.testing.assert_frame_equal(saved_features, features_df)
+
+    saved_metadata = pd.read_csv(metadata_path)
+    assert set(saved_metadata['resi_mut']) == set(residue_table['resi_mut'])
+    assert set(saved_metadata['pdbtm_region']) == set(residue_table['pdbtm_region'])
 
     # Check that files are created with custom prefix
     custom_prefix = 'testprefix'
@@ -571,77 +655,3 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
-
-
-def test_runner_config_file_not_found(tmp_path):
-    """Test that FileNotFoundError is raised when config file doesn't exist."""
-    # Path to a non-existent config file
-    config_path = tmp_path / 'nonexistent_config.toml'
-    
-    with pytest.raises(FileNotFoundError, match="Configuration file not found at"):
-        runner.Runner(config_path=config_path)
-
-
-def test_runner_config_invalid_toml(tmp_path):
-    """Test that ValueError is raised when config file has invalid TOML syntax."""
-    # Create a config file with invalid TOML syntax
-    config_path = tmp_path / 'invalid_config.toml'
-    with config_path.open("w") as f:
-        f.write("pdb_id = 8smv\n")  # Invalid: missing quotes around string value
-        f.write("name = invalid toml syntax\n")  # Invalid: missing quotes around string value
-        f.write("[broken section\n")  # Invalid: missing closing bracket
-    
-    with pytest.raises(ValueError, match="Invalid TOML in configuration file"):
-        runner.Runner(config_path=config_path)
-
-
-def test_runner_load_pdb_format(tmp_path):
-    """Test loading structure with PDB format (not just CIF)."""
-    # Create a simple PDB file
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    pdb_path = tmp_path / "test_structure.pdb"
-    
-    # Write a minimal valid PDB file
-    pdb_content = []
-    atom_id = 1
-    for res_idx, res_name in enumerate(residues, start=1):
-        # Add backbone atoms for each residue
-        for atom_name in ['N', 'CA', 'C', 'O']:
-            x, y, z = float(atom_id), 0.0, 0.0
-            pdb_content.append(
-                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
-                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
-            )
-            atom_id += 1
-    pdb_content.append("END\n")
-    
-    with pdb_path.open("w") as f:
-        f.writelines(pdb_content)
-    
-    # Test that both .pdb and .cif extensions work
-    test_runner = runner.Runner(
-        pdb_id='TEST',
-        name='test_pdb_format',
-        pdb_path=pdb_path
-    )
-    
-    assert test_runner.context.array is not None
-    assert test_runner.context.config.pdb_ext == 'pdb'
-    assert test_runner.context.config.pdb_path == pdb_path
-
-
-def test_runner_load_cif_format(tmp_path):
-    """Test loading structure with CIF format to verify extension handling."""
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    cif_path = tmp_path / "test_structure.cif"
-    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
-    
-    test_runner = runner.Runner(
-        pdb_id='TEST',
-        name='test_cif_format',
-        pdb_path=cif_path
-    )
-    
-    assert test_runner.context.array is not None
-    assert test_runner.context.config.pdb_ext == 'cif'
-    assert test_runner.context.config.pdb_path == cif_path

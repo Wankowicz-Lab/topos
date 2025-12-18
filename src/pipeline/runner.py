@@ -16,6 +16,10 @@ from src.sequence import sequence_context
 from src.structure import pdbtm
 
 from typing import List, Optional, Dict, Any
+
+# import files containing metrics to register them in _REGISTRY
+import src.sequence.metrics
+import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
 
 
@@ -291,8 +295,9 @@ class Runner:
         self.features.to_csv(merged_path, index=False)
 
         # Save metadata from residue table
-        metadata_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut',
-                        'struct_info', 'seq_info'] + ['resm'] if self.context.config.mutation_data_path is not None else []
+        metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info'] +
+                         (['resm'] if self.context.config.mutation_data_path is not None else []) +
+                         (['pdbtm_region', 'pdbtm_region_detailed'] if self.context.config.membrane_protein else []))
 
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{prefix}_metadata.csv"
