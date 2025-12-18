@@ -45,6 +45,8 @@ def test_context(tmp_path):
     assert len(context.residue_table) == 3
     assert context.config is not None
     assert context.config.aaindex_path == 'data/aaindex_parsed_small.csv'
+    assert context.config.kidera_path == 'data/kidera_factors.csv'
+    assert context.extras['kidera'] is not None
 
     # Test loading AA index data
     aaindex_path = tmp_path / "aaindex.csv"
@@ -57,3 +59,4 @@ def test_context(tmp_path):
     assert 'aaindex' in context_with_aaindex.extras
     assert context_with_aaindex.extras['aaindex'].equals(aaindex_data)
     assert context_with_aaindex.config.membrane_protein is True
+

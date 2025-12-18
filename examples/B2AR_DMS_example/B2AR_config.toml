@@ -19,6 +19,7 @@ alignment_cutoff = 0.95
 
 # Sequence parameters
 aaindex_path = "data/aaindex_parsed_small.csv"
+kidera_path = "data/kidera_factors.csv"
 
 # Pipeline parameters
 output_dir = "examples/B2AR_DMS_example/output"

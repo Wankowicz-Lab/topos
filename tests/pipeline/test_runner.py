@@ -401,11 +401,13 @@ def test_runner_run_metric(tmp_path):
         returned_cols = myrunner.features.columns.tolist()
         expected_cols = ['chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'resm', 'name']
 
-
         if metric == 'aaindex_scores':
             # aaindex scores add columns for each index
             for acc in ['AA1', 'AA2']:
                 expected_cols.extend([f'AAIndex_{acc}_wt', f'AAIndex_{acc}_mut', f'AAIndex_{acc}_diff'])
+        elif metric == 'kidera_factors':
+            for factornum in range(1, 11):
+                expected_cols.extend([f'kidera_f{factornum}_wt', f'kidera_f{factornum}_mut', f'kidera_f{factornum}_diff'])
         else:
             expected_cols.extend(provides)
 

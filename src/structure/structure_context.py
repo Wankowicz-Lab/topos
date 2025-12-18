@@ -158,6 +158,8 @@ class Config(BaseModel):
         Column name for mutation effect scores in mutation data (default: "effect").
     aaindex_path : Path
         Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
+    kidera_path: Path
+        Path to Kidera factors data (default: 'data/kidera_factors.csv').
     """
 
 
@@ -186,6 +188,7 @@ class Config(BaseModel):
 
     # sequence features
     aaindex_path: Path = 'data/aaindex_parsed_small.csv'
+    kidera_path: Path = 'data/kidera_factors.csv'
 
     # pipeline parameters
     output_dir: Optional[Path] = None
@@ -202,6 +205,9 @@ class Config(BaseModel):
 
         if not Path(self.aaindex_path).is_file():
             raise ValueError(f"AA index data file not found at {self.aaindex_path}")
+
+        if not Path(self.kidera_path).is_file():
+            raise ValueError(f"Kidera factors data file not found at {self.kidera_path}")
 
 
 @dataclass
@@ -254,6 +260,10 @@ class Context:
         if self.config.aaindex_path is not None:
             aa_index = pd.read_csv(self.config.aaindex_path)
             self.extras['aaindex'] = aa_index
+
+        if self.config.kidera_path is not None:
+            kidera_factors = pd.read_csv(self.config.kidera_path)
+            self.extras['kidera'] = kidera_factors
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     """

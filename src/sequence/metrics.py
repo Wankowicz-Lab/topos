@@ -112,6 +112,46 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     return aaindex_scores
 
 
+@register_metric(name='kidera_factors', provides={'kidera_{factornum}_wt', 'kidera_{factornum}_mut',
+                                                  'kidera_{factornum}_diff'}, tags={'sequence'})
+def calculate_kidera_factor_scores(context: Context) -> pd.DataFrame:
+    """
+    Calculate kidera factor scores for each mutation in the scores DataFrame.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'kidera_{factornum}_wt', 'kidera_{factornum}_mut', 'kidera_{factornum}_diff', along with residue metadata.
+    """
+    # extract params
+    residue_table, kidera_data = context.residue_table, context.extras['kidera']
+
+    # remove resm if not present
+    keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
+    kidera_scores = residue_table[keep_cols].copy()
+
+    # Create a dictionary mapping kidera feature to its values, truncating first two metadata columns
+    feature_dict = {f: kidera_data.loc[kidera_data['factor'] == f].iloc[0][2:]
+                    for f in kidera_data['factor'].unique()}
+
+    for kidera_feature, feature_values in feature_dict.items():
+        kidera_scores[f'kidera_{kidera_feature}_wt'] = kidera_scores['resn_mut'].map(feature_values)
+
+        # calculate for mutant only if mutation column exists
+        if 'resm' in keep_cols:
+            kidera_scores[f'kidera_{kidera_feature}_mut'] = kidera_scores['resm'].map(feature_values)
+            kidera_scores[f'kidera_{kidera_feature}_diff'] = (
+                kidera_scores[f'kidera_{kidera_feature}_mut'] - kidera_scores[f'kidera_{kidera_feature}_wt']
+            )
+
+    return kidera_scores
+
+
 @register_metric(name='blosum_score', provides=['blosum90'], requires={'resm'}, tags={'sequence'})
 def calculate_blosum_score(context: Context) -> pd.DataFrame:
     """
