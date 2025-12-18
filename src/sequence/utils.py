@@ -21,7 +21,7 @@ AA_3_TO_1 = {
 AA_1_TO_3 = {v: k for k, v in AA_3_TO_1.items()}
 
 
-def convert_amino_acid(code: str, force_convert=False) -> str:
+def convert_amino_acid(code: str, force_convert: bool = False) -> str:
     """
     Convert between 1-letter and 3-letter amino acid codes.
 
@@ -30,7 +30,8 @@ def convert_amino_acid(code: str, force_convert=False) -> str:
     code : str
         Either a 1-letter or 3-letter amino acid code.
     force_convert : bool, optional
-        If True, forces conversion even if the code is unrecognized.
+        If True, forces conversion even if the code is unrecognized: 1-letter codes
+        will be repeated 3 times, and 3-letter codes will be converted to 'X'.
 
     Returns
     -------
