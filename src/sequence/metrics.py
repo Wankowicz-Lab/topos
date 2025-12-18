@@ -37,12 +37,12 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     ValueError
         If the residue table contains data from more than one chain.
     """
+    logger.info("Calculating position effect quartiles")
+    
     if percentiles is None:
         percentiles = [25, 50, 75]
     # subset to only include positions with mutation data
     seq_data = context.residue_table.loc[context.residue_table.mut_info, :]
-    num_positions = len(seq_data['resi_mut'].unique())
-    logger.info(f"Calculating position effect quartiles for {num_positions} positions")
 
     # ensure that only a single chain is provided
     if len(seq_data.chain.unique()) > 1:
@@ -75,7 +75,6 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     # map quartile labels and raw effect scores back to original residues
     pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi_mut', how='left')
 
-    logger.info(f"Position effect quartiles calculation completed for {num_positions} positions")
     return pos_scores
 
 @register_metric(name='aaindex_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
@@ -94,11 +93,10 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff' along with residue metadata.
     """
+    logger.info("Calculating AAIndex scores")
+    
     # extract params
     residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
-    num_residues = len(residue_table)
-    num_features = len(aaindex_data.accession.unique())
-    logger.info(f"Calculating AAIndex scores for {num_residues} residues with {num_features} features")
 
     # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
@@ -118,7 +116,6 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
                 aaindex_scores[f'AAIndex_{aa_feature}_mut'] - aaindex_scores[f'AAIndex_{aa_feature}_wt']
             )
 
-    logger.info(f"AAIndex scores calculation completed for {num_residues} residues")
     return aaindex_scores
 
 
@@ -138,11 +135,10 @@ def calculate_kidera_factor_scores(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'kidera_{factornum}_wt', 'kidera_{factornum}_mut', 'kidera_{factornum}_diff', along with residue metadata.
     """
+    logger.info("Calculating Kidera factors")
+    
     # extract params
     residue_table, kidera_data = context.residue_table, context.extras['kidera']
-    num_residues = len(residue_table)
-    num_factors = len(kidera_data['factor'].unique())
-    logger.info(f"Calculating Kidera factors for {num_residues} residues with {num_factors} factors")
 
     # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
@@ -162,7 +158,6 @@ def calculate_kidera_factor_scores(context: Context) -> pd.DataFrame:
                 kidera_scores[f'kidera_{kidera_feature}_mut'] - kidera_scores[f'kidera_{kidera_feature}_wt']
             )
 
-    logger.info(f"Kidera factors calculation completed for {num_residues} residues")
     return kidera_scores
 
 
@@ -181,11 +176,10 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'blosum90' along with residue metadata.
     """
+    logger.info("Calculating BLOSUM scores")
+    
     residue_table, blosum_threshold = context.residue_table, 90
     blosum_scores = residue_table.loc[residue_table.mut_info, KEEP_COLS].copy()
-    num_mutations = len(blosum_scores)
-    logger.info(f"Calculating BLOSUM scores for {num_mutations} mutations")
-    
     b_matrix = bl.BLOSUM(blosum_threshold)
 
     def get_blosum_score(row):
@@ -195,5 +189,4 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
 
     blosum_scores[f'blosum{blosum_threshold}'] = blosum_scores.apply(get_blosum_score, axis=1)
 
-    logger.info(f"BLOSUM scores calculation completed for {num_mutations} mutations")
     return blosum_scores

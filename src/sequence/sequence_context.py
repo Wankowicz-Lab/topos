@@ -54,7 +54,7 @@ def load_mutation_scores(
     UserWarning
         If mutation types contain unexpected values.
     """
-    logger.info(f"Loading mutation scores from: {path}")
+    logger.info("Loading mutation scores")
     df = pd.read_csv(path)
 
     required_cols = [residue_col_name, residue_idx_name, mutation_col_name, mutation_type_col_name, score_col_name]
@@ -101,8 +101,6 @@ def load_mutation_scores(
         warnings.warn(f"Mutation types contain unexpected values. Expected types include {valid_types}. "
                       f"Found invalid types: {invalid_types}.")
 
-    num_records = len(df)
-    logger.info(f"Mutation scores loaded successfully: {num_records} records from {path}")
     return df
 
 
@@ -296,7 +294,7 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     res_seq = "".join(res_seq_short.tolist())
 
     # Perform alignment
-    logger.info(f"Performing sequence alignment for chain {chain}")
+    logger.info("Performing sequence alignment")
     alignment = aligner.align(mut_seq, res_seq)[0]
 
     # Create mapping to link dataframes based on alignment
@@ -304,13 +302,6 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
 
     # Merge mutation scores and residue table based on alignment mapping
     merged_df = merge_sequence_dfs(df1=mutation_scores_subset, df2=residue_table_chain, mapping=index_map)
-
-    # Calculate sequence identity percentage
-    total_aligned = len(merged_df)
-    matches = ((merged_df['resn_df1'].notna()) & (merged_df['resn_df2'].notna()) & 
-               (merged_df['resn_df1'] == merged_df['resn_df2'])).sum()
-    identity_pct = (matches / total_aligned * 100) if total_aligned > 0 else 0
-    logger.info(f"Sequence alignment completed: {identity_pct:.1f}% identity ({matches}/{total_aligned} positions)")
 
     # Evaluate alignment quality
     evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=alignment_cutoff)
@@ -330,10 +321,6 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     # Determine which rows have sequence and structure info
     residue_table['mut_info'] = ~residue_table['resn_mut'].isna()
     residue_table['struct_info'] = ~residue_table['resn_struct'].isna()
-
-    # Count matched positions
-    num_matched = (residue_table['mut_info'] & residue_table['struct_info']).sum()
-    logger.info(f"Mutation scores merged with structure data: {num_matched} matched positions")
 
     # drop extra columns if present
     keep_cols = ['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info']
