@@ -37,7 +37,7 @@ class Runner:
     config_path: Optional[Path|str] = None
 
     def __post_init__(self):
-        logger.info(f"Initializing pipeline for PDB ID: {self.pdb_id or 'N/A'}, Name: {self.name or 'N/A'}")
+        logger.info("Initializing pipeline")
 
         # Ensure that either pdb_id or config_path is provided
         if self.pdb_id is None and self.config_path is None:
@@ -68,13 +68,12 @@ class Runner:
 
             # load config from file
             try:
-                logger.info(f"Loading configuration from: {self.config_path}")
+                logger.info("Loading configuration")
                 with self.config_path.open("rb") as f:
                     config_dict = tomli.load(f)
                     # convert empty strings to None
                     config_dict = {k: (None if v == "" else v) for k, v in config_dict.items()}
                     config = Config(**config_dict)
-                logger.info(f"Configuration loaded successfully from: {self.config_path}")
             except FileNotFoundError:
                 raise FileNotFoundError(f"Configuration file not found at {self.config_path}")
             except tomli.TOMLDecodeError as e:
@@ -85,46 +84,38 @@ class Runner:
 
         # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
         if config.pdb_path is None:
-            logger.info(f"Fetching PDB structure from RCSB for PDB ID: {config.pdb_id}")
+            logger.info("Fetching PDB structure from RCSB")
             obj = rcsb.fetch(config.pdb_id, format="cif")
             tmp_file = NamedTemporaryFile(delete=False, suffix=".cif")
             tmp_file.write(obj.getvalue().encode("utf-8"))
             tmp_file.close()
             config.pdb_ext = "cif"
             config.pdb_path = Path(tmp_file.name)
-            logger.info(f"PDB structure fetched from RCSB and saved to temporary file: {config.pdb_path}")
 
         # Otherwise just add parameters directly from config
         else:
+            logger.info("Using local PDB file")
             config.pdb_path = Path(config.pdb_path)
             config.pdb_ext = config.pdb_path.suffix.lstrip(".")
-            logger.info(f"Using local PDB file: {config.pdb_path}")
 
         # Load structure using appropriate parser
         # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
-        logger.info(f"Loading structure from {config.pdb_path} (format: {config.pdb_ext})")
+        logger.info("Loading structure")
         if config.pdb_ext in ("cif", "mmcif"):
             mm = CIFFile.read(config.pdb_path)
             arr = get_structure(mm, model=1, extra_fields=["b_factor", "occupancy"])
         else:
             pdb = PDBFile.read(config.pdb_path)
             arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
-        
-        num_atoms = arr.array_length()
-        res_starts = struc.get_residue_starts(arr)
-        num_residues = len(res_starts)
-        logger.info(f"Structure loaded: model 1, {num_atoms} atoms, {num_residues} residues")
 
         # create context object
         logger.info("Creating context object")
         self.context = structure_context.Context(arr, config=config)
-        logger.info("Context object created successfully")
 
         if self.context.config.membrane_protein:
             try:
-                logger.info(f"Fetching PDBTM annotation for membrane protein: {self.context.config.pdb_id}")
+                logger.info("Fetching PDBTM annotation")
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
-                logger.info(f"PDBTM data fetched successfully: {len(pdbtm_df)} regions, transformation matrix obtained")
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
             except RuntimeError as e:
@@ -137,7 +128,7 @@ class Runner:
 
         # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
-            logger.info(f"Loading mutation data from: {self.context.config.mutation_data_path}")
+            logger.info("Loading mutation data")
 
             self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(
                 path=self.context.config.mutation_data_path,
@@ -147,9 +138,6 @@ class Runner:
                 mutation_type_col_name=self.context.config.mutation_type_col_name,
                 score_col_name=self.context.config.mutation_score_col_name
             )
-            
-            num_mutations = len(self.context.extras['mutation_data'])
-            logger.info(f"Mutation data loaded: {num_mutations} records")
   
             if self.context.config.mutation_data_chain not in self.context.residue_table['chain'].unique():
                 raise ValueError(f"Specified mutation_data_chain '{self.context.config.mutation_data_chain}' not "
@@ -230,7 +218,6 @@ class Runner:
             
             logger.info(f"Calculating metric: {m}")
             df = func(self.context)
-            logger.info(f"Metric '{m}' calculation completed")
 
             # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)
             result_frames.append(df)
@@ -243,8 +230,6 @@ class Runner:
         mutations = self.context.config.mutation_data_path is not None
         self.features = self._merge_features(result_frames, mutations=mutations)
         self.features['name'] = self.context.config.name
-        num_rows, num_cols = self.features.shape
-        logger.info(f"Features merged successfully: {num_rows} rows, {num_cols} columns")
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
@@ -320,9 +305,9 @@ class Runner:
             prefix = self.context.config.pdb_id
 
         # Save features
+        logger.info("Saving results")
         merged_path = output_dir / f"{prefix}_features.csv"
         self.features.to_csv(merged_path, index=False)
-        logger.info(f"Features saved to: {merged_path}")
 
         # Save metadata from residue table
         metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info'] +
@@ -332,4 +317,3 @@ class Runner:
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{prefix}_metadata.csv"
         output_df.to_csv(metadata_path, index=False)
-        logger.info(f"Metadata saved to: {metadata_path}")
