@@ -113,7 +113,7 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
 
 
 @register_metric(name='kidera_factors', provides={'kidera_{factornum}_wt', 'kidera_{factornum}_mut',
-                                                  'kidera_{factornum}_diff'},tags={'sequence'})
+                                                  'kidera_{factornum}_diff'}, tags={'sequence'})
 def calculate_kidera_factor_scores(context: Context) -> pd.DataFrame:
     """
     Calculate kidera factor scores for each mutation in the scores DataFrame.
