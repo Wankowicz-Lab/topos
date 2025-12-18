@@ -11,6 +11,7 @@ import logging
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile, get_structure
+import biotite.structure as struc
 
 from src.structure import structure_context
 from src.sequence import sequence_context
