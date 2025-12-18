@@ -206,6 +206,9 @@ class Config(BaseModel):
         if not Path(self.aaindex_path).is_file():
             raise ValueError(f"AA index data file not found at {self.aaindex_path}")
 
+        if not Path(self.kidera_path).is_file():
+            raise ValueError(f"Kidera factors data file not found at {self.kidera_path}")
+
 
 @dataclass
 class Context:
