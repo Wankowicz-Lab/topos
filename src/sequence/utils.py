@@ -13,7 +13,8 @@ AA_3_TO_1 = {
     "CYS": "C", "GLN": "Q", "GLU": "E", "GLY": "G",
     "HIS": "H", "ILE": "I", "LEU": "L", "LYS": "K",
     "MET": "M", "PHE": "F", "PRO": "P", "SER": "S",
-    "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V"
+    "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V", 
+    "DEL": "DEL", "*": "*", "del": "del"
 }
 
 # Automatically create the reverse mapping

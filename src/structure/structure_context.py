@@ -239,6 +239,10 @@ class Context:
     def __post_init__(self):
         self.neighbor_cache = {}
         self.extras = {} if self.extras is None else self.extras
+        
+        if self.config is None:
+            self.config = Config()
+
         if isinstance(self.array, struc.AtomArray):
             aa = self.array[struc.filter_amino_acids(self.array)]
         else:
@@ -246,10 +250,7 @@ class Context:
             aa = aa0[struc.filter_amino_acids(aa0)]
         self.aa = aa
         self.residue_table = residue_table(aa)
-
-        if self.config is None:
-            self.config = Config()
-
+        
         if self.config.aaindex_path is not None:
             aa_index = pd.read_csv(self.config.aaindex_path)
             self.extras['aaindex'] = aa_index
@@ -273,7 +274,6 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     resi   = array.res_id[res_starts]
     resn   = array.res_name[res_starts]
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
-
 
 def load_structure(
     path: Union[str, Path],
