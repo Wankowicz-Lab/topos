@@ -76,52 +76,6 @@ b2ar_runner = runner.Runner(pdb_id=pdb_id, config_path=config_path)
 b2ar_runner.run()
 ```
 
-### Available Logging Levels
-
-- **DEBUG**: Detailed diagnostic information for troubleshooting
-- **INFO**: General progress and status information (recommended for normal use)
-- **WARNING**: Potentially problematic situations that don't stop execution
-- **ERROR**: Serious problems that prevent specific operations
-- **CRITICAL**: Critical failures requiring immediate attention
-
-### Example: Viewing Only Errors and Warnings
-
-```python
-import logging
-logging.basicConfig(level=logging.WARNING)
-```
-
-### Example: Saving Logs to a File
-
-```python
-import logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('biogenesis_pipeline.log'),
-        logging.StreamHandler()  # Also print to console
-    ]
-)
-```
-
-### Controlling Logging for Specific Modules
-
-You can set different logging levels for different parts of the pipeline:
-
-```python
-import logging
-
-# Set general level
-logging.basicConfig(level=logging.WARNING)
-
-# Enable INFO logging only for the runner
-logging.getLogger('src.pipeline.runner').setLevel(logging.INFO)
-
-# Enable DEBUG logging for metrics
-logging.getLogger('src.structure.metrics').setLevel(logging.DEBUG)
-```
-
 ### Config file
 The easiest way to control the behavior of the runner is by modifying the config file that is provided to the `runner.Runner(config_path=config_path)` initialization. 
 
