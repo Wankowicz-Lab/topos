@@ -6,6 +6,7 @@ This module provides the Context class for managing protein structure data
 and a registry for metric functions.
 """
 from __future__ import annotations
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Set, Any, Protocol, Literal, Union
@@ -14,6 +15,8 @@ import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------- Registry ----------------

@@ -6,6 +6,7 @@ including SASA, hydropathy, membrane distance, secondary structure,
 hydrogen bonds, and packing metrics.
 """
 from __future__ import annotations
+import logging
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
@@ -13,6 +14,8 @@ from .structure_context import Context, register_metric
 from . import pdbtm
 from .utils import residue_key, is_heavy, get_metadata_cols
 from .utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as _detect_hbonds
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
@@ -50,6 +53,9 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     """
     # Calculate atom-wise SASA
     array = context.aa
+    num_residues = len(struc.get_residue_starts(array))
+    logger.info(f"Calculating SASA for {num_residues} residues")
+    
     atom_sasa = struc.sasa(array=array, vdw_radii="ProtOr")
 
     # Sum up SASA for each residue
@@ -59,6 +65,7 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     metadata_df = get_metadata_cols(array)
     metadata_df['sasa'] = res_sasa
     
+    logger.info(f"SASA calculation completed for {num_residues} residues")
     return metadata_df
 
 
@@ -85,6 +92,8 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
     array = context.aa
+    num_residues = len(struc.get_residue_starts(array))
+    logger.info(f"Calculating Kyte-Doolittle hydropathy for {num_residues} residues")
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
@@ -96,6 +105,7 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
     metadata_df = get_metadata_cols(array)
     metadata_df['kyte_doolittle'] = kd_per_res
     
+    logger.info(f"Kyte-Doolittle calculation completed for {num_residues} residues")
     return metadata_df
 
 @register_metric(name='membrane_distance', provides=['distance_from_membrane_edge'], tags={'structure', 'membrane'})
@@ -118,6 +128,8 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
     array, membrane_thickness = context.array, context.config.membrane_thickness
+    num_residues = len(struc.get_residue_starts(array))
+    logger.info(f"Calculating membrane distance for {num_residues} residues")
 
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
@@ -128,6 +140,7 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     metadata_df = get_metadata_cols(array)
     metadata_df['distance_from_membrane_edge'] = distance_from_edge
 
+    logger.info(f"Membrane distance calculation completed for {num_residues} residues")
     return metadata_df
 
 @register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
@@ -150,6 +163,9 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
     """
 
     res_starts = struc.get_residue_starts(context.aa)
+    num_residues = len(res_starts)
+    logger.info(f"Calculating secondary structure for {num_residues} residues")
+    
     sse_vals = calculate_secondary_structure(context.aa)
 
     # Get metadata columns (chain, resi_struct, resn_struct)
@@ -163,6 +179,7 @@ def define_secondary_structure(context: Context) -> pd.DataFrame:
         ss_output = ss_df.copy()
         ss_output['ss_group'] = pdbtm.make_contiguous_group_labels(ss_output['sse'].tolist())
 
+    logger.info(f"Secondary structure calculation completed for {num_residues} residues")
     return ss_output
 
 @register_metric(name='calculate_hbond_metrics', provides=['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count'], tags={'structure', 'interaction'})
@@ -183,10 +200,13 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
         DataFrame with 'bb_hbond_count', 'sc_hbond_count', 'total_hbond_count' along with residue metadata.
     """
     array = context.array
+    res_starts = struc.get_residue_starts(array)
+    num_residues = len(res_starts)
+    logger.info(f"Calculating hydrogen bond metrics for {num_residues} residues")
+    
     donors, acceptors = _build_sites_biotite(array)
     hbonds = _detect_hbonds(donors, acceptors)
     
-    res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
@@ -238,6 +258,7 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     metadata_df['bb_hbond_count'] = bb_counts
     metadata_df['sc_hbond_count'] = sc_counts
     metadata_df['total_hbond_count'] = total_counts
+    logger.info(f"Hydrogen bond metrics calculation completed for {num_residues} residues")
     return metadata_df
 
 
@@ -267,6 +288,7 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     n_res = len(res_starts)
+    logger.info(f"Calculating packing metrics for {n_res} residues")
 
     # Initialize output arrays
     n_atoms = np.zeros(n_res, dtype=int)
@@ -333,4 +355,5 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     metadata_df['packing_n_atoms'] = n_atoms
     metadata_df['packing_n_neighbor_residues'] = n_neighbors
     metadata_df['packing_contact_density'] = contact_density
+    logger.info(f"Packing metrics calculation completed for {n_res} residues")
     return metadata_df

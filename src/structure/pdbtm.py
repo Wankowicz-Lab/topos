@@ -1,10 +1,12 @@
 import numpy as np
 import requests
 import pandas as pd
+import logging
 from lxml import etree
 from typing import Tuple, Dict, List
 from itertools import groupby
 
+logger = logging.getLogger(__name__)
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
@@ -135,6 +137,7 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     xml_url = f"{API_BASE}/{pdb}.xml"
     headers = {"Accept": "application/xml, */*"}
 
+    logger.info(f"Initiating PDBTM API request for PDB ID: {pdb_id}")
     try:
         r = requests.get(xml_url, timeout=timeout, headers=headers)
         r.raise_for_status()
@@ -150,6 +153,7 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
     regions_df.type = regions_df.type.apply(describe_pdbtm_region)
 
+    logger.info(f"PDBTM data parsed successfully: {len(regions_df)} regions, transformation matrix obtained")
     return regions_df, mat
 
 

@@ -1,10 +1,13 @@
 from pathlib import Path
 import pandas as pd
 import itertools
+import logging
 
 from typing import List, Dict, Any
 
 from src.pipeline.runner import Runner
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -34,13 +37,19 @@ def batch_process(batch_file_path: str) -> pd.DataFrame:
     if not Path(batch_file_path).is_file():
         raise FileNotFoundError(f"Batch file not found at {batch_file_path}")
 
+    logger.info(f"Loading batch file from: {batch_file_path}")
     batch_df = pd.read_csv(batch_file_path)
+    logger.info(f"Batch file loaded: {len(batch_df)} protein entries")
 
     # Expand DFs if multiple entries per protein
     expanded_args = expand_batch_arguments(batch_df)
+    num_proteins = len(expanded_args)
+    logger.info(f"Starting batch processing for {num_proteins} proteins")
 
     all_results = []
-    for args in expanded_args:
+    for idx, args in enumerate(expanded_args, start=1):
+        protein_name = args.get('name', 'Unknown')
+        logger.info(f"Processing protein {idx} of {num_proteins}: {protein_name}")
         runner = Runner(
             pdb_id=args.get('pdb_id'),
             name=args.get('name'),
@@ -52,6 +61,7 @@ def batch_process(batch_file_path: str) -> pd.DataFrame:
         result_df = runner.run()
         all_results.append(result_df)
 
+    logger.info(f"Batch processing completed for {num_proteins} proteins")
     merged_results = pd.concat(all_results, ignore_index=True)
     return merged_results
 
