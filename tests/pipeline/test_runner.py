@@ -567,9 +567,15 @@ def test_runner__merge_features_with_muts():
 
     result_frames = [df1, df2, df3, df4]
 
+    class MockConfig:
+        def __init__(self):
+            self.mutation_data_chain = 'A'
+
     class MockContext:
         def __init__(self, residue_table):
             self.residue_table = residue_table
+            self.config = MockConfig()
+
     myrunner.context = MockContext(residue_table=residue_table)
 
     merged_df = myrunner._merge_features(result_frames, mutations=True)
