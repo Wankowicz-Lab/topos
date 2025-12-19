@@ -172,12 +172,6 @@ class Runner:
         unknown = set(overrides.keys()) - set(filtered.keys())
         if unknown:
             warnings.warn(f"Unknown arguments ignored: {unknown}")
-        if not filtered:
-            if base.name is None:
-                raise ValueError("'name' must be provided either in config file or directly to Runner.")
-            if base.pdb_id is None:
-                raise ValueError("'pdb_id' must be provided either in config file or directly to Runner.")
-            return base
 
         # construct new Config with overrides
         base_dict = base.model_dump()
