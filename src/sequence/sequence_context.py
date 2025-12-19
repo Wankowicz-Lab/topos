@@ -288,9 +288,9 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     mutation_scores_subset = mutation_scores[['resi', 'resn']].drop_duplicates()
 
     # Prepare sequences for alignment, a single string of single-letter amino acids
-    mut_seq_short = mutation_scores_subset['resn'].apply(convert_amino_acid)
+    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
     mut_seq = "".join(mut_seq_short.tolist())
-    res_seq_short = residue_table_chain['resn'].apply(convert_amino_acid)
+    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
     res_seq = "".join(res_seq_short.tolist())
 
     # Perform alignment
