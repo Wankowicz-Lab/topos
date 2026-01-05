@@ -49,8 +49,8 @@ def batch_process(batch_file_path: str) -> pd.DataFrame:
             mutation_data_path=args.get('mutation_data_path'),
             config_path=args.get('config_path')
         )
-        result_df = runner.run()
-        all_results.append(result_df)
+        runner.run()
+        all_results.append(runner.features)
 
     merged_results = pd.concat(all_results, ignore_index=True)
     return merged_results

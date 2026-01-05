@@ -24,7 +24,7 @@ def test_batch_process(monkeypatch, tmp_path):
             calls.append(kwargs)
 
         def run(self):
-            return pd.DataFrame({'result_summary': ['custom']})
+            self.features = pd.DataFrame({'result_summary': ['custom']})
 
 
     monkeypatch.setattr('src.pipeline.batch_processing.Runner', FakeRunner)
