@@ -142,7 +142,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
     return residue_table
 
 
-def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", element=None):
+def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", element=None, altloc=''):
     """
     Create a small AtomArray with manually specified atom names & coordinates.
 
@@ -160,6 +160,9 @@ def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", elem
         Chain ID to assign to all atoms.
     element : list of str, optional
         List of element symbols corresponding to each atom. If None, inferred from atom names.
+    altloc : str or list of str, optional
+        Alternate location identifier(s). If a string, applied to all atoms.
+        If a list, must match the length of atom_names. Default is empty string.
 
     Returns:
     --------
@@ -180,6 +183,12 @@ def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", elem
         arr.element = np.array([name[0] for name in atom_names])
     else:
         arr.element = np.array(element)
+
+    # Set altloc annotation
+    if isinstance(altloc, str):
+        arr.set_annotation("altloc", np.array([altloc] * n))
+    else:
+        arr.set_annotation("altloc", np.array(altloc))
 
     return arr
 
@@ -211,7 +220,7 @@ AA_SIDECHAIN = {
 }
 
 
-def _make_residue(res_name, res_id=1, chain_id="A", coords=None):
+def _make_residue(res_name, res_id=1, chain_id="A", coords=None, altloc=''):
     """
     Make a synthetic residue with correct atoms but made-up geometry.
 
@@ -225,6 +234,9 @@ def _make_residue(res_name, res_id=1, chain_id="A", coords=None):
         Chain ID to assign.
     coords : list of list of float, optional
         List of coordinates for each atom. If None, generates simple linear geometry.
+    altloc : str or list of str, optional
+        Alternate location identifier(s). If a string, applied to all atoms.
+        If a list, must match the number of atoms in the residue. Default is empty string.
 
     Returns:
     --------
@@ -246,10 +258,10 @@ def _make_residue(res_name, res_id=1, chain_id="A", coords=None):
             x_coord, y_coord, z_coord = coords
             coords = [[x_coord * i, y_coord, z_coord] for i in range(len(atom_names))]
 
-    return _make_atoms(atom_names, coords, res_name, res_id, chain_id)
+    return _make_atoms(atom_names, coords, res_name, res_id, chain_id, altloc=altloc)
 
 
-def _make_chain(aa_list, chain_id="A", coords=None):
+def _make_chain(aa_list, chain_id="A", coords=None, altloc=''):
     """
     Create a biotite AtomArray representing a protein chain from a list of amino acids.
 
@@ -261,6 +273,9 @@ def _make_chain(aa_list, chain_id="A", coords=None):
         Chain identifier to assign to all residues.
     coords : list of list of float, optional
         List of coordinates for each atom in the chain. If None, generates simple linear geometry.
+    altloc : str or list of str, optional
+        Alternate location identifier(s). If a string, applied to all residues.
+        If a list, must match the length of aa_list. Default is empty string.
 
     Returns:
     --------
@@ -271,7 +286,9 @@ def _make_chain(aa_list, chain_id="A", coords=None):
 
     residues = []
     for i, aa in enumerate(aa_list, start=1):
-        res = _make_residue(aa, res_id=i, chain_id=chain_id, altloc='', coords=coords[i-1] if coords else None)
+        # Get altloc for this residue
+        res_altloc = altloc[i-1] if isinstance(altloc, list) else altloc
+        res = _make_residue(aa, res_id=i, chain_id=chain_id, altloc=res_altloc, coords=coords[i-1] if coords else None)
         residues.append(res)
 
     return struc.concatenate(residues)
