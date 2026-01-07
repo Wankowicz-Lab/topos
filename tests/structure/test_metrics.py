@@ -222,16 +222,55 @@ def test_calculate_hbond_metrics():
     hbond_metrics = metrics.calculate_hbond_metrics(context)
         
     # Check that all expected keys are present
-    expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']
+    expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count', 'hbond_details']
     assert all(key in hbond_metrics for key in expected_keys)
         
     # Check that arrays have correct length
     res_starts = struc.get_residue_starts(arr)
     n_res = len(res_starts)
-    for key in expected_keys:
+    for key in ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']:
         assert len(hbond_metrics[key]) == n_res
     
     # Check that counts are non-negative
     assert all(hbond_metrics['bb_hbond_count'] >= 0)
     assert all(hbond_metrics['sc_hbond_count'] >= 0)
     assert all(hbond_metrics['total_hbond_count'] >= 0)
+    
+    # Check hbond_details column has correct length
+    assert len(hbond_metrics['hbond_details']) == n_res
+    
+    # Check hbond_details is a list of lists
+    assert all(isinstance(details, list) for details in hbond_metrics['hbond_details'])
+
+
+def test_calculate_hbond_metrics_with_altloc():
+    """Test that hbond metrics properly handle altloc information."""
+    # Create a chain with altloc identifiers
+    aa_list = ['SER', 'GLY', 'ASP']
+    altlocs = ['A', '', 'B']  # Mix of altlocs and no altloc
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc=altlocs)
+    context = Context(array=arr)
+    
+    hbond_metrics = metrics.calculate_hbond_metrics(context)
+    
+    # Check that altloc column is present in metadata
+    assert 'altloc' in hbond_metrics.columns
+    
+    # Check altloc values are preserved
+    assert hbond_metrics['altloc'].iloc[0] == 'A'
+    assert hbond_metrics['altloc'].iloc[1] == ''
+    assert hbond_metrics['altloc'].iloc[2] == 'B'
+    
+    # Check hbond_details structure
+    for details_list in hbond_metrics['hbond_details']:
+        for detail in details_list:
+            # Each detail should have altloc and coordinate info
+            assert 'donor_altloc' in detail
+            assert 'acceptor_altloc' in detail
+            assert 'donor_coord' in detail
+            assert 'acceptor_coord' in detail
+            # Coordinates should be 3D lists when present
+            if detail['donor_coord'] is not None:
+                assert len(detail['donor_coord']) == 3
+            if detail['acceptor_coord'] is not None:
+                assert len(detail['acceptor_coord']) == 3
