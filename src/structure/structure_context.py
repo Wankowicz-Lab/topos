@@ -281,17 +281,59 @@ def load_structure(
     Returns
     -------
     struc.AtomArray
-        Loaded protein structure.
+        Loaded protein structure. The 'altloc' annotation contains the alternate
+        location identifier for each atom (empty string if no alternate location).
     """
     pdb = PDBFile.read(str(path))
     models = pdb.get_model_count()
     arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
-    if isinstance(arr, struc.AtomArray) and altloc_policy != "all":
-        if "altloc_id" in arr.get_annotation_categories():
-            if altloc_policy == "highest" and "highest" in arr.get_annotation_categories():
-                keep = _keep_highest_occ_per_atom(arr) #if this is not selected, all altloc will exist in the array
-            arr = arr[keep]
+    
+    # Ensure altloc annotation exists
+    if isinstance(arr, struc.AtomArray):
+        arr = _ensure_altloc_annotation(arr)
+        
+        if altloc_policy != "all":
+            if "altloc_id" in arr.get_annotation_categories():
+                if altloc_policy == "highest":
+                    keep = _keep_highest_occ_per_atom(arr)
+                    arr = arr[keep]
+    elif isinstance(arr, struc.AtomArrayStack):
+        # For multi-model structures, ensure altloc on each model
+        for i in range(arr.stack_depth()):
+            arr[i] = _ensure_altloc_annotation(arr[i])
+    
     return arr
+
+
+def _ensure_altloc_annotation(array: struc.AtomArray) -> struc.AtomArray:
+    """
+    Ensure the array has an 'altloc' annotation.
+    
+    If 'altloc_id' exists (from PDB file), copy it to 'altloc'.
+    Otherwise, create an empty 'altloc' annotation.
+    
+    Parameters
+    ----------
+    array : struc.AtomArray
+        Input atom array.
+    
+    Returns
+    -------
+    struc.AtomArray
+        Array with 'altloc' annotation guaranteed to exist.
+    """
+    if "altloc" not in array.get_annotation_categories():
+        if "altloc_id" in array.get_annotation_categories():
+            # Copy altloc_id to altloc, normalizing empty values
+            altloc_vals = np.array([
+                str(a).strip() if a is not None else '' 
+                for a in array.altloc_id
+            ])
+            array.set_annotation("altloc", altloc_vals)
+        else:
+            # No altloc information available, set empty strings
+            array.set_annotation("altloc", np.array([''] * array.array_length()))
+    return array
 
 
 def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
