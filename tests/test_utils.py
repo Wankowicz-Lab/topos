@@ -104,8 +104,10 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
 
         if make_mut:
             chain_list = [chain_id] * num_residue * 20
-            resi_list = np.repeat(range(start_resi, start_resi + num_residue), 20)
-            resn_list = np.repeat([_random_AA_seq(num_residue)], 20)
+            resi_mut_list = np.repeat(range(start_resi, start_resi + num_residue), 20)
+            resi_struct_list = resi_mut_list.copy()
+            resn_mut_list = np.repeat([_random_AA_seq(num_residue)], 20)
+            resn_struct_list = resn_mut_list.copy()
             resm_list = AA_LIST * num_residue
             eff_list = np.random.normal(loc=0.0, scale=1.0, size=num_residue * 20)
             type_list = ['missense'] * num_residue * 20
@@ -113,14 +115,16 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
-                'resi': resi_list,
-                'resn': resn_list,
+                'resi_mut': resi_mut_list,
+                'resn_mut': resn_mut_list,
+                'resi_struct': resi_struct_list,
+                'resn_struct': resn_struct_list,
                 'resm': resm_list,
                 'effect': eff_list,
                 'type': type_list,
                 'altloc': altloc_list,
                 'struct_info': True,
-                'seq_info': True
+                'mut_info': True
             })
         else:
             chain_list = [chain_id] * num_residue
@@ -134,7 +138,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
                 'resn': resn_list,
                 'altloc': altloc_list,
                 'struct_info': True,
-                'seq_info': False
+                'mut_info': True
             })
         data.append(chain_df)
 
@@ -405,12 +409,13 @@ def _make_aaindex_data(accessions):
 
     return aaindex_data
 
-def _make_config_file(file_path: Path, pdb_id='8smv', membrane_protein=False,
+def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membrane_protein=False,
                       mutation_data_path=None,
                       mutation_data_chain=None, aaindex_path=None) -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
 
     defaults = {"pdb_id": pdb_id,
+                'name': name,
                 "membrane_protein": membrane_protein,
                 "mutation_data_path": str(mutation_data_path) if mutation_data_path is not None else None,
                 "mutation_data_chain": mutation_data_chain,

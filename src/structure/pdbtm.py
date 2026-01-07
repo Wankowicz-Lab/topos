@@ -1,10 +1,12 @@
 import numpy as np
 import requests
 import pandas as pd
+import logging
 from lxml import etree
 from typing import Tuple, Dict, List
 from itertools import groupby
 
+logger = logging.getLogger(__name__)
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
@@ -135,6 +137,7 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     xml_url = f"{API_BASE}/{pdb}.xml"
     headers = {"Accept": "application/xml, */*"}
 
+    logger.info("Initiating PDBTM API request")
     try:
         r = requests.get(xml_url, timeout=timeout, headers=headers)
         r.raise_for_status()
@@ -324,7 +327,7 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
     ss_df['ss_group'] = make_contiguous_group_labels(ss_df['sse'].tolist())
 
     residue_table['ss_domains'] = pd.NA
-    residue_table = residue_table.merge(ss_df[['chain', 'resi', 'ss_group']], on=['chain', 'resi'], how='left')
+    residue_table = residue_table.merge(ss_df[['chain', 'resi_struct', 'ss_group']], on=['chain', 'resi_struct'], how='left')
 
     membrane_spanning = residue_table.loc[residue_table['pdbtm_region'] == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
 
@@ -371,4 +374,4 @@ def define_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame)
             if np.sum(ss_mask) > 0:
                 residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
 
-    return residue_table[['chain', 'resi', 'resn', 'ss_group', 'ss_domains']].drop_duplicates()
+    return residue_table[['chain', 'resi_struct', 'resn_struct', 'ss_group', 'ss_domains']].drop_duplicates()

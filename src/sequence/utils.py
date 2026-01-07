@@ -13,14 +13,15 @@ AA_3_TO_1 = {
     "CYS": "C", "GLN": "Q", "GLU": "E", "GLY": "G",
     "HIS": "H", "ILE": "I", "LEU": "L", "LYS": "K",
     "MET": "M", "PHE": "F", "PRO": "P", "SER": "S",
-    "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V"
+    "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V", 
+    "DEL": "DEL", "*": "*", "del": "del"
 }
 
 # Automatically create the reverse mapping
 AA_1_TO_3 = {v: k for k, v in AA_3_TO_1.items()}
 
 
-def convert_amino_acid(code: str) -> str:
+def convert_amino_acid(code: str, force_convert: bool = False) -> str:
     """
     Convert between 1-letter and 3-letter amino acid codes.
 
@@ -28,6 +29,9 @@ def convert_amino_acid(code: str) -> str:
     ----------
     code : str
         Either a 1-letter or 3-letter amino acid code.
+    force_convert : bool, optional
+        If True, forces conversion even if the code is unrecognized: 1-letter codes
+        will be repeated 3 times, and 3-letter codes will be converted to 'X'.
 
     Returns
     -------
@@ -40,12 +44,10 @@ def convert_amino_acid(code: str) -> str:
     UserWarning
         If the provided code is not recognized or has an unexpected length.
 
-    Examples
-    --------
-    >>> convert_amino_acid('A')
-    'ALA'
-    >>> convert_amino_acid('ALA')
-    'A'
+    Raises
+    ------
+    ValueError
+        If force_convert is True and the code is not of length 1 or 3.
     """
     code = code.upper().strip()
     if len(code) == 1:
@@ -53,15 +55,24 @@ def convert_amino_acid(code: str) -> str:
             return AA_1_TO_3[code]
         else:
             warnings.warn(f"Unknown 1 letter code: {code}")
-            return code
+            if force_convert:
+                return code * 3
+            else:
+                return code
 
     elif len(code) == 3:
         if code in AA_3_TO_1:
             return AA_3_TO_1[code]
         else:
             warnings.warn(f"Unknown 3 letter code: {code}")
-            return code
+            if force_convert:
+                return 'X'
+            else:
+                return code
 
-    warnings.warn(f"Unexpected amino acid code length: {code}")
-    return code
+    if force_convert:
+        raise ValueError(f"Cannot convert amino acid code: {code}")
+    else:
+        warnings.warn(f"Unexpected amino acid code length: {code}")
+        return code
 

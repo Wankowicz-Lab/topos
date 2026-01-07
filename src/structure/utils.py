@@ -27,9 +27,7 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'chain', 'resi_struct', 'resn_struct', 'altloc' for each residue
-        in the structure. The 'altloc' column indicates whether any atoms in the
-        residue have alternate locations.
+
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]

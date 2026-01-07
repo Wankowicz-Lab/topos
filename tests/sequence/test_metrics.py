@@ -1,12 +1,13 @@
 """Tests for sequence metrics module."""
 import numpy as np
 import pandas as pd
+import pytest
 import random
 
 from src.sequence import metrics
 from src.sequence.utils import convert_amino_acid
 
-from tests.test_utils import _make_residue_table, _make_aaindex_data
+from tests.test_utils import _make_residue_table, _make_aaindex_data, AA_LIST
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)
@@ -19,15 +20,15 @@ def test_calculate_position_effect_quartiles_with_pos_effect():
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
 
     # remove mutation data for last residue to test handling of missing data
-    residue_table = residue_table[residue_table['resi'] != 10]
-    new_row = pd.DataFrame({'chain': ['A'], 'resi': [10], 'resn': ['ALA'], 'resm': [np.nan],
-                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'seq_info': [False]})
+    residue_table = residue_table[residue_table['resi_mut'] != 10]
+    new_row = pd.DataFrame({'chain': ['A'], 'resi_mut': [10], 'resn_mut': ['ALA'], 'resi_struct': [10], 'resn_struct': ['ALA'], 'resm': [np.nan],
+                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'mut_info': [False]})
     residue_table = pd.concat([residue_table, new_row], ignore_index=True)
 
     # compute position effects
-    pos_effects = residue_table.groupby('resi')['effect'].mean().reset_index()
+    pos_effects = residue_table.groupby('resi_mut')['effect'].mean().reset_index()
     pos_effects.rename(columns={'effect': 'pos_effect'}, inplace=True)
-    residue_table = pd.merge(residue_table, pos_effects, on='resi', how='left')
+    residue_table = pd.merge(residue_table, pos_effects, on='resi_mut', how='left')
 
     # create mock context
     class MockContext:
@@ -41,7 +42,7 @@ def test_calculate_position_effect_quartiles_with_pos_effect():
     # check that quartile labels are correct
     assert 'effect_quartile' in quartile_df.columns
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
-    assert 10 not in quartile_df.resi.values
+    assert 10 not in quartile_df.resi_mut.values
 
 
 def test_calculate_position_effect_quartiles_without_pos_effect():
@@ -49,9 +50,9 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
 
     # remove mutation data for last residue to test handling of missing data
-    residue_table = residue_table[residue_table['resi'] != 10]
-    new_row = pd.DataFrame({'chain': ['A'], 'resi': [10], 'resn': ['ALA'], 'resm': [np.nan],
-                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'seq_info': [False]})
+    residue_table = residue_table[residue_table['resi_mut'] != 10]
+    new_row = pd.DataFrame({'chain': ['A'], 'resi_mut': [10], 'resn_mut': ['ALA'], 'resi_struct': [10], 'resn_struct': ['ALA'], 'resm': [np.nan],
+                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'mut_info': [False]})
     residue_table = pd.concat([residue_table, new_row], ignore_index=True)
 
     # create mock context
@@ -67,7 +68,7 @@ def test_calculate_position_effect_quartiles_without_pos_effect():
     # check that quartile labels are correct
     assert 'effect_quartile' in quartile_df.columns
     assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
-    assert 10 not in quartile_df.resi.values
+    assert 10 not in quartile_df.resi_mut.values
 
 
 def test_calculate_position_effect_quartiles_custom_percentiles():
@@ -124,7 +125,7 @@ def test_calculate_aaindex_scores_no_muts():
     for acc in accessions:
         feature_values = aaindex_data.set_index('accession').loc[acc].iloc[1:]
         for idx, row in aaindex_df.iterrows():
-            expected_value = feature_values.get(row['resn'], np.nan)
+            expected_value = feature_values.get(row['resn_mut'], np.nan)
             assert aaindex_df.at[idx, f'AAIndex_{acc}_wt'] == expected_value
 
 
@@ -156,7 +157,7 @@ def test_calculate_aaindex_scores_with_muts():
     for acc in accessions:
         feature_values = aaindex_data.set_index('accession').loc[acc].iloc[1:]
         for idx, row in aaindex_df.iterrows():
-            expected_wt = feature_values.get(row['resn'], np.nan)
+            expected_wt = feature_values.get(row['resn_mut'], np.nan)
             expected_mut = feature_values.get(row['resm'], np.nan)
             expected_diff = expected_mut - expected_wt if not (np.isnan(expected_wt) or np.isnan(expected_mut)) else np.nan
 
@@ -166,6 +167,84 @@ def test_calculate_aaindex_scores_with_muts():
                 assert np.isnan(aaindex_df.at[idx, f'AAIndex_{acc}_diff'])
             else:
                 assert aaindex_df.at[idx, f'AAIndex_{acc}_diff'] == expected_diff
+
+
+def test_calculate_kidera_factor_scores_no_muts():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
+
+    # create mock kidera data
+    kidera_data = pd.DataFrame({
+        'factor': ['f' + str(i) for i in range(1, 11)],
+        'description': ['desc' + str(i) for i in range(1, 11)],
+        **{f'{aa}': np.random.rand(10) for aa in AA_LIST}
+    })
+
+    class MockContext:
+        def __init__(self, residue_table, kidera_data):
+            self.residue_table = residue_table
+            self.extras = {'kidera': kidera_data}
+
+    context = MockContext(residue_table, kidera_data)
+
+    # calculate kidera factor scores
+    kidera_df = metrics.calculate_kidera_factor_scores(context)
+
+    # check that kidera scores are added
+    output_cols = [f'kidera_f{i}_wt' for i in range(1, 11)]
+    for col in output_cols:
+        assert col in kidera_df.columns
+
+    # verify that values are correct for wildtype
+    for i in range(1, 11):
+        factor_values = kidera_data.set_index('factor').loc[f'f{i}']
+        for idx, row in kidera_df.iterrows():
+            expected_value = factor_values.get(row['resn_mut'], np.nan)
+            assert kidera_df.at[idx, f'kidera_f{i}_wt'] == expected_value
+
+
+def test_calculate_kidera_factor_scores_with_muts():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+
+    # create mock kidera data
+    kidera_data = pd.DataFrame({
+        'factor': ['f' + str(i) for i in range(1, 11)],
+        'description': ['desc' + str(i) for i in range(1, 11)],
+        **{f'{aa}': np.random.rand(10) for aa in AA_LIST}
+    })
+
+    class MockContext:
+        def __init__(self, residue_table, kidera_data):
+            self.residue_table = residue_table
+            self.extras = {'kidera': kidera_data}
+    context = MockContext(residue_table, kidera_data)
+
+    # calculate kidera factor scores
+    kidera_df = metrics.calculate_kidera_factor_scores(context)
+
+    # check that kidera scores are added
+    output_cols = []
+    for i in range(1, 11):
+        output_cols.extend([f'kidera_f{i}_wt', f'kidera_f{i}_mut', f'kidera_f{i}_diff'])
+
+    for col in output_cols:
+        assert col in kidera_df.columns
+
+    # verify that values are correct for wildtype, mutant, and diff
+    for i in range(1, 11):
+        factor_values = kidera_data.set_index('factor').loc[f'f{i}']
+        for idx, row in kidera_df.iterrows():
+            expected_wt = factor_values.get(row['resn_mut'], np.nan)
+            expected_mut = factor_values.get(row['resm'], np.nan)
+            expected_diff = expected_mut - expected_wt if not (np.isnan(expected_wt) or np.isnan(expected_mut)) else np.nan
+
+            assert kidera_df.at[idx, f'kidera_f{i}_wt'] == expected_wt
+            assert kidera_df.at[idx, f'kidera_f{i}_mut'] == expected_mut
+            if np.isnan(expected_diff):
+                assert np.isnan(kidera_df.at[idx, f'kidera_f{i}_diff'])
+            else:
+                assert kidera_df.at[idx, f'kidera_f{i}_diff'] == expected_diff
 
 
 def test_calculate_blosum_score():
@@ -187,5 +266,21 @@ def test_calculate_blosum_score():
     # verify that values are correct
     b_matrix = metrics.bl.BLOSUM(90)
     for idx, row in blosum_df.iterrows():
-        expected_score = b_matrix[convert_amino_acid(row['resn'])][convert_amino_acid(row['resm'])]
+        expected_score = b_matrix[convert_amino_acid(row['resn_mut'])][convert_amino_acid(row['resm'])]
         assert blosum_df.at[idx, 'blosum90'] == expected_score
+
+
+def test_calculate_position_effect_quartiles_multichain_error():
+    """Test that ValueError is raised when residue table contains data from more than one chain."""
+    # Create test residue table with multiple chains
+    residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=True)
+    
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+    
+    # Verify that ValueError is raised with appropriate message
+    with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
+        metrics.calculate_position_effect_quartiles(context)
