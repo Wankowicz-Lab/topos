@@ -28,13 +28,20 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     -------
     pd.DataFrame
         DataFrame with columns 'chain', 'resi', 'resn', 'altloc' for each residue
-        in the structure.
+        in the structure. The 'altloc' column indicates whether any atoms in the
+        residue have alternate locations.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi = array.res_id[res_starts]
     resn = array.res_name[res_starts]
-    altloc = array.res_name[res_starts]
+    
+    # Add in altloc (T/F)
+    if hasattr(array, 'altloc'):
+        altloc = array.altloc[res_starts]
+    else:
+        altloc = np.array([''] * len(res_starts))
+    
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 
