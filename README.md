@@ -26,53 +26,95 @@ The `examples` directory contains example data for each of these use cases.
 
 ```python
 from src.pipeline import runner
+import src.structure.metrics  
+import src.sequence.metrics 
+
 
 # Set up pipeline using B2AR example data
 pdb_id = '4LDE'
 config_path = 'examples/B2AR_DMS_example/B2AR_config.toml'
-b2ar_runner = runner.Runner(pbd_id=pdb_id, config_path=config_path)
+b2ar_runner = runner.Runner(pdb_id=pdb_id, config_path=config_path)
 
 # Provide a list of specific metrics to calculate
 metrics = ['define_secondary_structure', 'sasa', 'kyte_doolittle', 'calculate_blosum_score'] 
-computed_metrics = b2ar_runner.run(metrics=metrics)
+b2ar_runner.run(metrics=metrics)
 
 # Or calculate using all available metrics
-all_computed_metrics = b2ar_runner.run()
+b2ar_runner.run()
+
+# Access the metrics directly
+metrics_selected = b2ar_runner.features
+
+# Save metrics and associated metadata to specified directory
+output_dir = 'examples/B2AR_DMS_example/'
+b2ar_runner.save_results(output_dir)
+```
+
+## Logging
+
+The biogenesis pipeline uses Python's standard logging module to provide visibility into pipeline execution. By default, only WARNING level and above messages are shown.
+
+### Setting the Logging Level
+
+You can configure the logging level in your scripts to see more detailed information:
+
+```python
+import logging
+
+# Configure logging before importing biogenesis modules
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+from src.pipeline import runner
+
+# Your pipeline code here
+pdb_id = '4LDE'
+config_path = 'examples/B2AR_DMS_example/B2AR_config.toml'
+b2ar_runner = runner.Runner(pdb_id=pdb_id, config_path=config_path)
+b2ar_runner.run()
 ```
 
 ### Config file
 The easiest way to control the behavior of the runner is by modifying the config file that is provided to the `runner.Runner(config_path=config_path)` initialization. 
-This file has the following arguments:
 
-pdb_id  
-The PDB ID of the structure
+#### Structure Parameters
 
-pdb_path  
-The path to the PDB file. Only one of pdb_id or pdb_path needs to be provided
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `pdb_id` | The PDB ID of the structure | - |
+| `pdb_path` | The path to the PDB file. Only one of `pdb_id` or `pdb_path` needs to be provided | - |
+| `membrane_protein` | Whether or not the protein is a membrane protein. If it is, calculates additional features | `false` |
+| `membrane_thickness` | The thickness of the membrane in Angstroms, used for calculating distances from the center of the membrane | `15` |
+
+#### Mutagenesis Data Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `mutation_data_path` | Path to CSV file containing mutation data | - |
+| `mutation_data_chain` | The chain of the PDB file that corresponds to the sequence being mutated in the mutation data | - |
+| `alignment_cutoff` | Minimum sequence identity needed between structural and mutation data to avoid raising an error | 0.95 |
+| `mutation_residue_col_name` | Column name for wildtype residues in mutation data CSV | `"wildtype"` |
+| `mutation_residue_idx_name` | Column name for residue positions in mutation data CSV | `"position"` |
+| `mutation_col_name` | Column name for mutant residues in mutation data CSV | `"mutation"` |
+| `mutation_type_col_name` | Column name for mutation types in mutation data CSV | `"type"` |
+| `mutation_score_col_name` | Column name for mutation effect scores in mutation data CSV | `"effect"` |
+
+#### Sequence Feature Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `aaindex_path` | Path to the data file containing amino acid indices | `"data/aaindex_parsed_small.csv"` | 
+| `kidera_path` | Path to the data file containing kidera factors | `"data/kidera_factors.csv"` | 
 
 
-## Structural features
-membrane_protein  
-Whether or not the protein is a membrane protein. If it is, calculates additional features
+#### Pipeline Parameters
 
-vdw_radii  
-Setting that controls how automatic radii are set (defaults to ProtOr) 
-
-membrane_thickness  
-The thickness of the membrane, used for calculating distances from the center of the membrane (defaults to 15 Angstrom)
-
-altloc_policy
-If you would like to consider [alternative conformers](https://pdb101.rcsb.org/learn/guide-to-understanding-pdb-data/dealing-with-coordinates) in structural metrics sleect all for altloc_policy (defaults to highest occupancy altloc)
-
-## Sequence features
-mutation_data_path  
-The path to .csv file containing mutation data
-
-mutation_data_chain  
-The chain of the PDB file that corresponds to the sequence being mutated in the mutation data
-
-aaindex_path  
-Path to the data file containing amino acid indices. 
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `output_dir` | Path to the directory where output files will be saved | `"examples/B2AR_DMS_example/output"` | 
+| `output_prefix` | Prefix to append to generated output files | - | 
 
 
 ### Development and Testing
