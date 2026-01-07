@@ -17,7 +17,7 @@ import biotite.structure as struc
 
 def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     """
-    Extract metadata columns (chain, resi, resn, altloc) from an AtomArray.
+    Extract metadata columns (chain, resi_struct, resn_struct, altloc) from an AtomArray.
 
     Parameters
     ----------
@@ -27,7 +27,7 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'chain', 'resi', 'resn', 'altloc' for each residue
+        DataFrame with columns 'chain', 'resi_struct', 'resn_struct', 'altloc' for each residue
         in the structure. The 'altloc' column indicates whether any atoms in the
         residue have alternate locations.
     """
@@ -41,8 +41,8 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
         altloc = array.altloc[res_starts]
     else:
         altloc = np.array([''] * len(res_starts))
-    
-    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
+        
+    return pd.DataFrame({"chain": chains, "resi_struct": resi, "resn_struct": resn "altloc": altloc})
 
 
 #________________HYDROGEN BONDS__________________________
