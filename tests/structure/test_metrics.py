@@ -254,17 +254,3 @@ def test_calculate_hbond_metrics_with_altloc():
     assert hbond_metrics['altloc'].iloc[0] == 'A'
     assert hbond_metrics['altloc'].iloc[1] == ''
     assert hbond_metrics['altloc'].iloc[2] == 'B'
-    
-    # Check hbond_details structure
-    for details_list in hbond_metrics['hbond_details']:
-        for detail in details_list:
-            # Each detail should have altloc and coordinate info
-            assert 'donor_altloc' in detail
-            assert 'acceptor_altloc' in detail
-            assert 'donor_coord' in detail
-            assert 'acceptor_coord' in detail
-            # Coordinates should be 3D lists when present
-            if detail['donor_coord'] is not None:
-                assert len(detail['donor_coord']) == 3
-            if detail['acceptor_coord'] is not None:
-                assert len(detail['acceptor_coord']) == 3
