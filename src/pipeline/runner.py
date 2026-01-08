@@ -99,7 +99,6 @@ class Runner:
             config.pdb_ext = config.pdb_path.suffix.lstrip(".")
 
         # Load structure using appropriate parser
-        # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
         logger.info("Loading structure")
         if config.pdb_ext in ("cif", "mmcif"):
             mm = CIFFile.read(config.pdb_path)
@@ -249,7 +248,7 @@ class Runner:
             Merged DataFrame.
         """
         # Get all unique rows to merge on
-        keep_cols = ['chain', 'resi_struct', 'resn_struct', ''altloc', 'resi_mut', 'resn_mut']
+        keep_cols = ['chain', 'resi_struct', 'resn_struct', 'altloc', 'resi_mut', 'resn_mut']
         
         # Add mutation columns if mutations are present
         keep_cols += ['resm'] if mutations else []
