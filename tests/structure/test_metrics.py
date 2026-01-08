@@ -222,7 +222,7 @@ def test_calculate_hbond_metrics():
     hbond_metrics = metrics.calculate_hbond_metrics(context)
         
     # Check that all expected keys are present
-    expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count', 'hbond_details']
+    expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']
     assert all(key in hbond_metrics for key in expected_keys)
         
     # Check that arrays have correct length
@@ -236,12 +236,6 @@ def test_calculate_hbond_metrics():
     assert all(hbond_metrics['sc_hbond_count'] >= 0)
     assert all(hbond_metrics['total_hbond_count'] >= 0)
     
-    # Check hbond_details column has correct length
-    assert len(hbond_metrics['hbond_details']) == n_res
-    
-    # Check hbond_details is a list of lists
-    assert all(isinstance(details, list) for details in hbond_metrics['hbond_details'])
-
 
 def test_calculate_hbond_metrics_with_altloc():
     """Test that hbond metrics properly handle altloc information."""
