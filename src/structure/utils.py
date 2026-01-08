@@ -40,7 +40,7 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     else:
         altloc = np.array([''] * len(res_starts))
         
-    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn "altloc": altloc})
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 
 #________________HYDROGEN BONDS__________________________
