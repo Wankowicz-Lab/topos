@@ -280,13 +280,25 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'chain', 'resi', 'resn' for each residue.
+        DataFrame with columns 'chain', 'resi', 'resn', 'altloc' for each residue.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
     resn   = array.res_name[res_starts]
-    altloc = array.altloc[res_starts]
+    
+    # Get altloc - check for both 'altloc' and 'altloc_id' annotation names
+    try:
+        annot_categories = array.get_annotation_categories()
+        if 'altloc' in annot_categories:
+            altloc = array.altloc[res_starts]
+        elif 'altloc_id' in annot_categories:
+            altloc = array.altloc_id[res_starts]
+        else:
+            altloc = np.array([''] * len(res_starts))
+    except (AttributeError, TypeError):
+        altloc = np.array([''] * len(res_starts))
+    
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 def load_structure(
