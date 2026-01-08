@@ -252,8 +252,7 @@ class Runner:
         keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
         
         # Add mutation columns if mutations are present
-        if mutations and 'resm' in self.context.residue_table.columns:
-            keep_cols.append('resm')
+        keep_cols += ['resm'] if mutations else []
         
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
