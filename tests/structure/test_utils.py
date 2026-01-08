@@ -8,7 +8,7 @@ import biotite.structure as struc
 def test_is_heavy():
     # Test heavy atoms
     assert utils.is_heavy("C") == True
-    assert utils.is_heavy("CA") == Truef
+    assert utils.is_heavy("CA") == True
     assert utils.is_heavy("N") == True
     assert utils.is_heavy("O") == True
     
