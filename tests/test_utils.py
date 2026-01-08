@@ -134,8 +134,8 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
-                'resi': resi_list,
-                'resn': resn_list,
+                'resi_struct': resi_list,
+                'resn_struct': resn_list,
                 'altloc': altloc_list,
                 'struct_info': True,
                 'mut_info': True
