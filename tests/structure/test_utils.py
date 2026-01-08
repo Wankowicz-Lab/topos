@@ -242,7 +242,7 @@ def test_get_metadata_cols_with_altloc():
     assert metadata_df['altloc'].iloc[2] == 'B'
     
     # Check other metadata is correct
-    assert list(metadata_df['resn']) == ['SER', 'THR', 'TYR']
+    assert list(metadata_df['resn_struct']) == ['SER', 'THR', 'TYR']
     assert all(metadata_df['chain'] == 'X')
 
 
