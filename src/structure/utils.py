@@ -34,7 +34,6 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     resi = array.res_id[res_starts]
     resn = array.res_name[res_starts]
     
-    # Add in altloc - check for both 'altloc' and 'altloc_id' annotation names
     try:
         annot_categories = array.get_annotation_categories()
         if 'altloc' in annot_categories:
@@ -46,7 +45,7 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     except (AttributeError, TypeError):
         altloc = np.array([''] * len(res_starts))
         
-    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
+    return pd.DataFrame({"chain": chains, "resi_struct": resi, "resn_struct": resn, "altloc": altloc})
 
 
 #________________HYDROGEN BONDS__________________________
