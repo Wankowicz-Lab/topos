@@ -8,7 +8,7 @@ import biotite.structure as struc
 def test_is_heavy():
     # Test heavy atoms
     assert utils.is_heavy("C") == True
-    assert utils.is_heavy("CA") == True
+    assert utils.is_heavy("CA") == Truef
     assert utils.is_heavy("N") == True
     assert utils.is_heavy("O") == True
     
@@ -217,14 +217,14 @@ def test_get_metadata_cols():
     
     # Check that all expected columns are present
     assert 'chain' in metadata_df.columns
-    assert 'resi' in metadata_df.columns
-    assert 'resn' in metadata_df.columns
+    assert 'resi_struct' in metadata_df.columns
+    assert 'resn_struct' in metadata_df.columns
     assert 'altloc' in metadata_df.columns
     
     # Check values
     assert len(metadata_df) == 3
-    assert list(metadata_df['resn']) == ['ALA', 'CYS', 'ASP']
-    assert list(metadata_df['resi']) == [1, 2, 3]
+    assert list(metadata_df['resn_struct']) == ['ALA', 'CYS', 'ASP']
+    assert list(metadata_df['resi_struct']) == [1, 2, 3]
     assert all(metadata_df['chain'] == 'A')
 
 
