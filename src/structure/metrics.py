@@ -223,25 +223,6 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     # Accumulate counts per residue
     for h in hbonds:
         cat = h["category"]
-        
-        # Create detail record with coordinates
-        detail = {
-            'donor_chain': h['donor_chain'],
-            'donor_resi': h['donor_resi'],
-            'donor_resname': h['donor_resname'],
-            'donor_atom': h['donor_atom'],
-            'donor_altloc': h.get('donor_altloc', ''),
-            'acceptor_chain': h['acceptor_chain'],
-            'acceptor_resi': h['acceptor_resi'],
-            'acceptor_resname': h['acceptor_resname'],
-            'acceptor_atom': h['acceptor_atom'],
-            'acceptor_altloc': h.get('acceptor_altloc', ''),
-            'DA_dist': h['DA_dist'],
-            'angle': h['angle'],
-            'category': cat,
-            'donor_coord': None,  # Will be populated if available
-            'acceptor_coord': None,
-        }
 
         # Donor
         d_key = f"{h['donor_chain']}:{h['donor_resi']}:{h['donor_resname']}"
