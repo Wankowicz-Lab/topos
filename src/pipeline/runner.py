@@ -248,14 +248,12 @@ class Runner:
             Merged DataFrame.
         """
         # Get all unique rows to merge on
-        keep_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
-
-        # Add altloc column if present
-        if 'altloc' in self.context.residue_table.columns:
-            keep_cols.append('altloc')
+        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'altloc']
+        keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
         
         # Add mutation columns if mutations are present
-        keep_cols += ['resm'] if mutations else []
+        if mutations and 'resm' in self.context.residue_table.columns:
+            keep_cols.append('resm')
         
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
