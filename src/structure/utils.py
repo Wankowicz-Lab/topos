@@ -34,10 +34,16 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     resi = array.res_id[res_starts]
     resn = array.res_name[res_starts]
     
-    # Add in altloc (T/F)
-    if hasattr(array, 'altloc'):
-        altloc = array.altloc[res_starts]
-    else:
+    # Add in altloc - check for both 'altloc' and 'altloc_id' annotation names
+    try:
+        annot_categories = array.get_annotation_categories()
+        if 'altloc' in annot_categories:
+            altloc = array.altloc[res_starts]
+        elif 'altloc_id' in annot_categories:
+            altloc = array.altloc_id[res_starts]
+        else:
+            altloc = np.array([''] * len(res_starts))
+    except (AttributeError, TypeError):
         altloc = np.array([''] * len(res_starts))
         
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
@@ -292,16 +298,22 @@ def _donor_acceptor_templates(resname: str, names_set: set[str]):
 
 def _index_by_name_alt(arr: struc.AtomArray, idxs: np.ndarray):
     d: Dict[str, Dict[str, int]] = defaultdict(dict)
-    # Check if altloc_id annotation exists
+    # Check for altloc annotation - could be named 'altloc' or 'altloc_id'
+    altloc_attr = None
     try:
-        has_altloc = "altloc_id" in arr.get_annotation_categories()
+        annot_categories = arr.get_annotation_categories()
+        if "altloc" in annot_categories:
+            altloc_attr = "altloc"
+        elif "altloc_id" in annot_categories:
+            altloc_attr = "altloc_id"
     except (AttributeError, TypeError):
-        has_altloc = False
+        pass
+    
     for i in idxs:
         name = arr.atom_name[i].strip()
-        if has_altloc:
+        if altloc_attr:
             try:
-                alt = norm_alt(arr.altloc_id[i])
+                alt = norm_alt(getattr(arr, altloc_attr)[i])
             except (AttributeError, KeyError, IndexError):
                 alt = ""
         else:
