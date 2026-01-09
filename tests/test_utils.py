@@ -128,7 +128,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
             })
         else:
             chain_list = [chain_id] * num_residue
-            resi_list = range(start_resi, start_resi + num_residue)
+            resi_list = list(range(start_resi, start_resi + num_residue))
             resn_list = _random_AA_seq(num_residue)
             altloc_list = [''] * num_residue
 
@@ -136,6 +136,8 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
                 'chain': chain_list,
                 'resi_struct': resi_list,
                 'resn_struct': resn_list,
+                'resi_mut': resi_list,
+                'resn_mut': resn_list,
                 'altloc': altloc_list,
                 'struct_info': True,
                 'mut_info': True
