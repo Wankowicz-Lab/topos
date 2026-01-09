@@ -284,3 +284,139 @@ def test_calculate_position_effect_quartiles_multichain_error():
     # Verify that ValueError is raised with appropriate message
     with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
         metrics.calculate_position_effect_quartiles(context)
+
+
+def test_calculate_aa_groupings_with_muts():
+    """Test amino acid groupings with mutations."""
+    # Define expected groups for verification
+    aa_groups = {
+        "Nonpolar_Aliphatic": ["ALA", "VAL", "LEU", "ILE", "MET"],
+        "Aromatic": ["PHE", "TRP", "TYR"],
+        "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
+        "Positively_Charged": ["LYS", "ARG", "HIS"],
+        "Negatively_Charged": ["ASP", "GLU"],
+    }
+    
+    # Create reverse mapping for verification
+    aa_to_group = {}
+    for group_name, aa_list in aa_groups.items():
+        for aa in aa_list:
+            aa_to_group[aa] = group_name
+    
+    # create test residue table with mutations
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+    
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+    
+    # calculate aa groupings
+    aa_groupings_df = metrics.calculate_aa_groupings(context)
+    
+    # check that all three output columns exist
+    assert 'wildtype_aa_group' in aa_groupings_df.columns
+    assert 'mut_aa_group' in aa_groupings_df.columns
+    assert 'wildtype_mut_aa_group' in aa_groupings_df.columns
+    
+    # verify that values are correctly assigned
+    for idx, row in aa_groupings_df.iterrows():
+        expected_wt_group = aa_to_group.get(row['resn_mut'], np.nan)
+        expected_mut_group = aa_to_group.get(row['resm'], np.nan)
+        
+        if pd.isna(expected_wt_group):
+            assert pd.isna(aa_groupings_df.at[idx, 'wildtype_aa_group'])
+        else:
+            assert aa_groupings_df.at[idx, 'wildtype_aa_group'] == expected_wt_group
+        
+        if pd.isna(expected_mut_group):
+            assert pd.isna(aa_groupings_df.at[idx, 'mut_aa_group'])
+        else:
+            assert aa_groupings_df.at[idx, 'mut_aa_group'] == expected_mut_group
+        
+        # verify concatenated column
+        if pd.isna(expected_wt_group) or pd.isna(expected_mut_group):
+            assert pd.isna(aa_groupings_df.at[idx, 'wildtype_mut_aa_group'])
+        else:
+            expected_concatenated = f"{expected_wt_group}_{expected_mut_group}"
+            assert aa_groupings_df.at[idx, 'wildtype_mut_aa_group'] == expected_concatenated
+
+
+def test_calculate_aa_groupings_no_muts():
+    """Test amino acid groupings without mutations."""
+    # create test residue table without mutations
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
+    
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+    
+    # calculate aa groupings
+    aa_groupings_df = metrics.calculate_aa_groupings(context)
+    
+    # check that wildtype_aa_group column exists
+    assert 'wildtype_aa_group' in aa_groupings_df.columns
+    
+    # check that mut columns do not exist when resm is missing
+    # Note: The function should still create mut columns if resm is in KEEP_COLS but empty
+    # But if resm column doesn't exist at all, the columns shouldn't be created
+    if 'resm' not in residue_table.columns:
+        assert 'mut_aa_group' not in aa_groupings_df.columns
+        assert 'wildtype_mut_aa_group' not in aa_groupings_df.columns
+
+
+def test_calculate_aa_groupings_unknown_amino_acids():
+    """Test that amino acids not in any group return NaN."""
+    # Define expected groups
+    aa_groups = {
+        "Nonpolar_Aliphatic": ["ALA", "VAL", "LEU", "ILE", "MET"],
+        "Aromatic": ["PHE", "TRP", "TYR"],
+        "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
+        "Positively_Charged": ["LYS", "ARG", "HIS"],
+        "Negatively_Charged": ["ASP", "GLU"],
+    }
+    
+    # Create test residue table with PRO (not in any group) and known amino acids
+    residue_table = pd.DataFrame({
+        'chain': ['A', 'A', 'A'],
+        'resi_mut': [1, 2, 3],
+        'resn_mut': ['PRO', 'ALA', 'LYS'],  # PRO is not in any group
+        'resm': ['ALA', 'PRO', 'ARG'],  # PRO is not in any group
+    })
+    
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+    
+    # calculate aa groupings
+    aa_groupings_df = metrics.calculate_aa_groupings(context)
+    
+    # PRO should return NaN for wildtype_aa_group
+    pro_wt_idx = aa_groupings_df[aa_groupings_df['resn_mut'] == 'PRO'].index[0]
+    assert pd.isna(aa_groupings_df.at[pro_wt_idx, 'wildtype_aa_group'])
+    
+    # PRO should return NaN for mut_aa_group
+    pro_mut_idx = aa_groupings_df[aa_groupings_df['resm'] == 'PRO'].index[0]
+    assert pd.isna(aa_groupings_df.at[pro_mut_idx, 'mut_aa_group'])
+    
+    # When either wildtype or mutant is PRO, concatenated should be NaN
+    assert pd.isna(aa_groupings_df.at[pro_wt_idx, 'wildtype_mut_aa_group'])
+    assert pd.isna(aa_groupings_df.at[pro_mut_idx, 'wildtype_mut_aa_group'])
+    
+    # Known amino acids should have valid groups
+    # Row 0: PRO -> ALA (PRO is NaN, ALA is Nonpolar_Aliphatic)
+    # Row 1: ALA -> PRO (ALA is Nonpolar_Aliphatic, PRO is NaN)
+    # Row 2: LYS -> ARG (both are Positively_Charged)
+    
+    ala_wt_idx = aa_groupings_df[aa_groupings_df['resn_mut'] == 'ALA'].index[0]
+    assert aa_groupings_df.at[ala_wt_idx, 'wildtype_aa_group'] == 'Nonpolar_Aliphatic'
+    
+    lys_idx = aa_groupings_df[aa_groupings_df['resn_mut'] == 'LYS'].index[0]
+    assert aa_groupings_df.at[lys_idx, 'wildtype_aa_group'] == 'Positively_Charged'
+    assert aa_groupings_df.at[lys_idx, 'mut_aa_group'] == 'Positively_Charged'
+    assert aa_groupings_df.at[lys_idx, 'wildtype_mut_aa_group'] == 'Positively_Charged_Positively_Charged'
