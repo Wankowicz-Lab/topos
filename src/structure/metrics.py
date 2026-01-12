@@ -76,17 +76,17 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     # Nonpolar atoms (C, H)
     nonpolar_mask = np.array([elem in ('C', 'H') if elem else False for elem in elements], dtype=bool)
     
-    # Calculate mean SASA for each category per residue
-    # For each category, set non-matching atoms to NaN, then compute nanmean
-    def _mean_for_mask(mask):
-        """Helper to compute mean SASA for atoms matching a mask."""
-        masked_sasa = np.where(mask, atom_sasa, np.nan)
-        return struc.apply_residue_wise(array, masked_sasa, np.nanmean)
+    # Calculate sum SASA for each category per residue
+    # For each category, set non-matching atoms to 0, then compute sum
+    def _sum_for_mask(mask):
+        """Helper to compute sum SASA for atoms matching a mask."""
+        masked_sasa = np.where(mask, atom_sasa, 0)
+        return struc.apply_residue_wise(array, masked_sasa, np.sum)
     
-    res_sasa_backbone = _mean_for_mask(backbone_mask)
-    res_sasa_sidechain = _mean_for_mask(sidechain_mask)
-    res_sasa_polar = _mean_for_mask(polar_mask)
-    res_sasa_nonpolar = _mean_for_mask(nonpolar_mask)
+    res_sasa_backbone = _sum_for_mask(backbone_mask)
+    res_sasa_sidechain = _sum_for_mask(sidechain_mask)
+    res_sasa_polar = _sum_for_mask(polar_mask)
+    res_sasa_nonpolar = _sum_for_mask(nonpolar_mask)
     
     # Attach to metadata DataFrame
     metadata_df = get_metadata_cols(array)
