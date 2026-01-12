@@ -91,7 +91,7 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with 'effect_SEM' along with residue metadata.
+        DataFrame with 'effect_variance' and 'effect_variance_rank' along with residue metadata.
     """
     logger.info("Calculating effect SEM")
     
@@ -101,6 +101,7 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
     
     # Rank positions based on variance
     effect_variance['effect_variance_rank'] = effect_variance['effect_variance'].rank(method='min')
+    effect_variance['effect_variance_rank'] = effect_variance['effect_variance_rank'] / np.max(effect_variance['effect_variance_rank'])
     
     # Add relevant metadata from original table
     keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
@@ -108,6 +109,33 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
     
     return effect_variance
 
+
+@register_metric(name='effect_ranking', provides=['effect_ranking'], tags={'sequence'})
+def calculate_effect_ranking(context: Context) -> pd.DataFrame:
+    """
+    Calculate the ranking of the effects.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'effect_ranking' along with residue metadata.
+    """
+    logger.info("Calculating effect ranking")
+    
+    # Calculate ranking for each position
+    effect_ranking = context.residue_table.copy()
+    keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
+    effect_ranking = effect_ranking[keep_cols + ['effect']]
+
+    effect_ranking['effect_ranking'] = effect_ranking['effect'].rank(method='min')
+    effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / np.max(effect_ranking['effect_ranking'])
+    
+    return effect_ranking
 
 
 @register_metric(name='aaindex_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},

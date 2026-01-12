@@ -101,7 +101,7 @@ def test_calculate_position_effect_quartiles_custom_percentiles():
 
 def test_calculate_effect_variance():
     # create test residue table
-    residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+    residue_table = _make_residue_table(num_residues=100, num_chains=1, make_muts=True)
     
     class MockContext:
         def __init__(self, residue_table):
@@ -119,7 +119,46 @@ def test_calculate_effect_variance():
     assert effect_variance_df['effect_variance'].sum() > 0
     assert 'effect_variance_rank' in effect_variance_df.columns
 
+    # verify that effect variance rank is between 0 and 1
+    assert effect_variance_df['effect_variance_rank'].min() >= 0
+    assert effect_variance_df['effect_variance_rank'].max() <= 1
+
+    # verify that effect variance rank is correct
+    min_idx = effect_variance_df['effect_variance'].idxmin()
+    max_idx = effect_variance_df['effect_variance'].idxmax()
+    assert effect_variance_df.at[min_idx, 'effect_variance_rank'] <= 0.05
+    assert effect_variance_df.at[max_idx, 'effect_variance_rank'] == 1
+
+
+def test_calculate_effect_ranking():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=100, num_chains=1, make_muts=True)
     
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+
+    # calculate effect ranking
+    effect_ranking_df = metrics.calculate_effect_ranking(context)
+
+    # check that effect ranking column is added
+    assert 'effect_ranking' in effect_ranking_df.columns
+
+    # verify that values are correct
+    assert effect_ranking_df['effect_ranking'].sum() > 0
+
+    # verify that effect ranking rank is between 0 and 1
+    assert effect_ranking_df['effect_ranking'].min() >= 0
+    assert effect_ranking_df['effect_ranking'].max() <= 1
+
+    # verify that effect ranking rank is correct
+    min_idx = effect_ranking_df['effect_ranking'].idxmin()
+    max_idx = effect_ranking_df['effect_ranking'].idxmax()
+    assert effect_ranking_df.at[min_idx, 'effect_ranking'] <= 0.05
+    assert effect_ranking_df.at[max_idx, 'effect_ranking'] == 1
+
 
 def test_calculate_aaindex_scores_no_muts():
     # create test residue table
