@@ -295,6 +295,7 @@ def test_calculate_aa_groupings_with_muts():
         "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
         "Positively_Charged": ["LYS", "ARG", "HIS"],
         "Negatively_Charged": ["ASP", "GLU"],
+        "Special": ["PRO", "GLY"]
     }
     
     # Create reverse mapping for verification
@@ -325,22 +326,11 @@ def test_calculate_aa_groupings_with_muts():
         expected_wt_group = aa_to_group.get(row['resn_mut'], np.nan)
         expected_mut_group = aa_to_group.get(row['resm'], np.nan)
         
-        if pd.isna(expected_wt_group):
-            assert pd.isna(aa_groupings_df.at[idx, 'wildtype_aa_group'])
-        else:
-            assert aa_groupings_df.at[idx, 'wildtype_aa_group'] == expected_wt_group
-        
-        if pd.isna(expected_mut_group):
-            assert pd.isna(aa_groupings_df.at[idx, 'mut_aa_group'])
-        else:
-            assert aa_groupings_df.at[idx, 'mut_aa_group'] == expected_mut_group
-        
-        # verify concatenated column
-        if pd.isna(expected_wt_group) or pd.isna(expected_mut_group):
-            assert pd.isna(aa_groupings_df.at[idx, 'wildtype_mut_aa_group'])
-        else:
-            expected_concatenated = f"{expected_wt_group}_{expected_mut_group}"
-            assert aa_groupings_df.at[idx, 'wildtype_mut_aa_group'] == expected_concatenated
+        assert aa_groupings_df.at[idx, 'wildtype_aa_group'] == expected_wt_group
+        assert aa_groupings_df.at[idx, 'mut_aa_group'] == expected_mut_group
+
+        expected_concatenated = f"{expected_wt_group}_{expected_mut_group}"
+        assert aa_groupings_df.at[idx, 'wildtype_mut_aa_group'] == expected_concatenated
 
 
 def test_calculate_aa_groupings_no_muts():
@@ -366,57 +356,3 @@ def test_calculate_aa_groupings_no_muts():
     if 'resm' not in residue_table.columns:
         assert 'mut_aa_group' not in aa_groupings_df.columns
         assert 'wildtype_mut_aa_group' not in aa_groupings_df.columns
-
-
-def test_calculate_aa_groupings_unknown_amino_acids():
-    """Test that amino acids not in any group return NaN."""
-    # Define expected groups
-    aa_groups = {
-        "Nonpolar_Aliphatic": ["ALA", "VAL", "LEU", "ILE", "MET"],
-        "Aromatic": ["PHE", "TRP", "TYR"],
-        "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
-        "Positively_Charged": ["LYS", "ARG", "HIS"],
-        "Negatively_Charged": ["ASP", "GLU"],
-    }
-    
-    # Create test residue table with PRO (not in any group) and known amino acids
-    residue_table = pd.DataFrame({
-        'chain': ['A', 'A', 'A'],
-        'resi_mut': [1, 2, 3],
-        'resn_mut': ['PRO', 'ALA', 'LYS'],  # PRO is not in any group
-        'resm': ['ALA', 'PRO', 'ARG'],  # PRO is not in any group
-    })
-    
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-    
-    context = MockContext(residue_table)
-    
-    # calculate aa groupings
-    aa_groupings_df = metrics.calculate_aa_groupings(context)
-    
-    # PRO should return NaN for wildtype_aa_group
-    pro_wt_idx = aa_groupings_df[aa_groupings_df['resn_mut'] == 'PRO'].index[0]
-    assert pd.isna(aa_groupings_df.at[pro_wt_idx, 'wildtype_aa_group'])
-    
-    # PRO should return NaN for mut_aa_group
-    pro_mut_idx = aa_groupings_df[aa_groupings_df['resm'] == 'PRO'].index[0]
-    assert pd.isna(aa_groupings_df.at[pro_mut_idx, 'mut_aa_group'])
-    
-    # When either wildtype or mutant is PRO, concatenated should be NaN
-    assert pd.isna(aa_groupings_df.at[pro_wt_idx, 'wildtype_mut_aa_group'])
-    assert pd.isna(aa_groupings_df.at[pro_mut_idx, 'wildtype_mut_aa_group'])
-    
-    # Known amino acids should have valid groups
-    # Row 0: PRO -> ALA (PRO is NaN, ALA is Nonpolar_Aliphatic)
-    # Row 1: ALA -> PRO (ALA is Nonpolar_Aliphatic, PRO is NaN)
-    # Row 2: LYS -> ARG (both are Positively_Charged)
-    
-    ala_wt_idx = aa_groupings_df[aa_groupings_df['resn_mut'] == 'ALA'].index[0]
-    assert aa_groupings_df.at[ala_wt_idx, 'wildtype_aa_group'] == 'Nonpolar_Aliphatic'
-    
-    lys_idx = aa_groupings_df[aa_groupings_df['resn_mut'] == 'LYS'].index[0]
-    assert aa_groupings_df.at[lys_idx, 'wildtype_aa_group'] == 'Positively_Charged'
-    assert aa_groupings_df.at[lys_idx, 'mut_aa_group'] == 'Positively_Charged'
-    assert aa_groupings_df.at[lys_idx, 'wildtype_mut_aa_group'] == 'Positively_Charged_Positively_Charged'

@@ -217,6 +217,7 @@ def calculate_aa_groupings(context: Context) -> pd.DataFrame:
         "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
         "Positively_Charged": ["LYS", "ARG", "HIS"],
         "Negatively_Charged": ["ASP", "GLU"],
+        "Special": ["PRO", "GLY"]
     }
     
     # Create reverse mapping from amino acid to group
