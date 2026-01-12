@@ -77,6 +77,39 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
 
     return pos_scores
 
+
+@register_metric(name='effect_variance', provides=['effect_variance'], tags={'sequence'})
+def calculate_effect_variance(context: Context) -> pd.DataFrame:
+    """
+    Calculate the standard error of the mean for the effect scores at each position.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'effect_SEM' along with residue metadata.
+    """
+    logger.info("Calculating effect SEM")
+    
+    # Calculate SEM for each position
+    effect_variance = context.residue_table[['resi_mut', 'effect']].groupby('resi_mut')['effect'].sem().reset_index()
+    effect_variance.rename(columns={'effect': 'effect_variance'}, inplace=True)
+    
+    # Rank positions based on variance
+    effect_variance['effect_variance_rank'] = effect_variance['effect_variance'].rank(method='min')
+    
+    # Add relevant metadata from original table
+    keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
+    effect_variance = pd.merge(context.residue_table[keep_cols], effect_variance, on='resi_mut', how='left')
+    
+    return effect_variance
+
+
+
 @register_metric(name='aaindex_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
                  tags={'sequence'})
 def calculate_aaindex_scores(context: Context) -> pd.DataFrame:

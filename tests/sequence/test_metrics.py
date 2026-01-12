@@ -99,6 +99,28 @@ def test_calculate_position_effect_quartiles_custom_percentiles():
     assert custom_q1_count > default_q1_count
 
 
+def test_calculate_effect_variance():
+    # create test residue table
+    residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+    
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+    
+    context = MockContext(residue_table)
+
+    # calculate effect variance
+    effect_variance_df = metrics.calculate_effect_variance(context)
+
+    # check that effect variance column is added
+    assert 'effect_variance' in effect_variance_df.columns
+
+    # verify that values are correct
+    assert effect_variance_df['effect_variance'].sum() > 0
+    assert 'effect_variance_rank' in effect_variance_df.columns
+
+    
+
 def test_calculate_aaindex_scores_no_muts():
     # create test residue table
     residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)

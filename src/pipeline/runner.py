@@ -252,7 +252,7 @@ class Runner:
         keep_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
         
         # Add mutation columns if mutations are present
-        keep_cols += ['resm'] if mutations else []
+        keep_cols += ['resm', 'effect'] if mutations else []
         
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
 
