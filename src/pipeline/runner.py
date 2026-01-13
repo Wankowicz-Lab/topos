@@ -268,7 +268,7 @@ class Runner:
             elif 'resi_struct' in df.columns:
                 merge_cols.extend(['resi_struct', 'resn_struct'])
             
-            merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
+            merged_df = pd.merge(merged_df, df, on=merge_cols, how='left')
 
         return merged_df
 

@@ -124,10 +124,15 @@ def test_calculate_effect_variance():
     assert effect_variance_df['effect_variance_rank'].max() <= 1
 
     # verify that effect variance rank is correct
-    min_idx = effect_variance_df['effect_variance'].idxmin()
-    max_idx = effect_variance_df['effect_variance'].idxmax()
-    assert effect_variance_df.at[min_idx, 'effect_variance_rank'] <= 0.05
-    assert effect_variance_df.at[max_idx, 'effect_variance_rank'] == 1
+    min_rank_idx = effect_variance_df['effect_variance_rank'].idxmin()
+    max_rank_idx = effect_variance_df['effect_variance_rank'].idxmax()
+    min_effect_idx = effect_variance_df['effect'].idxmin()
+    max_effect_idx = effect_variance_df['effect'].idxmax()
+    assert min_rank_idx == min_effect_idx
+    assert max_rank_idx == max_effect_idx
+    
+    # maximum ranking should correspond to a normalized rank of 1.0
+    assert effect_variance_df.at[max_rank_idx, 'effect_variance_rank'] == 1
 
 
 def test_calculate_effect_ranking():
@@ -153,11 +158,16 @@ def test_calculate_effect_ranking():
     assert effect_ranking_df['effect_ranking'].min() >= 0
     assert effect_ranking_df['effect_ranking'].max() <= 1
 
-    # verify that effect ranking rank is correct
-    min_idx = effect_ranking_df['effect_ranking'].idxmin()
-    max_idx = effect_ranking_df['effect_ranking'].idxmax()
-    assert effect_ranking_df.at[min_idx, 'effect_ranking'] <= 0.05
-    assert effect_ranking_df.at[max_idx, 'effect_ranking'] == 1
+   # verify that ranking reflects the ordering of effect values
+    min_rank_idx = effect_ranking_df['effect_ranking'].idxmin()
+    max_rank_idx = effect_ranking_df['effect_ranking'].idxmax()
+    min_effect_idx = effect_ranking_df['effect'].idxmin()
+    max_effect_idx = effect_ranking_df['effect'].idxmax()
+    assert min_rank_idx == min_effect_idx
+    assert max_rank_idx == max_effect_idx
+    
+    # maximum ranking should correspond to a normalized rank of 1.0
+    assert effect_ranking_df.at[max_rank_idx, 'effect_ranking'] == 1
 
 
 def test_calculate_aaindex_scores_no_muts():

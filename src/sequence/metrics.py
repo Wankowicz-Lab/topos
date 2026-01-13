@@ -37,7 +37,6 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     ValueError
         If the residue table contains data from more than one chain.
     """
-    logger.info("Calculating position effect quartiles")
     
     if percentiles is None:
         percentiles = [25, 50, 75]
@@ -78,7 +77,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     return pos_scores
 
 
-@register_metric(name='effect_variance', provides=['effect_variance'], tags={'sequence'})
+@register_metric(name='effect_variance', provides=['effect_variance', 'effect_variance_rank'], tags={'sequence'})
 def calculate_effect_variance(context: Context) -> pd.DataFrame:
     """
     Calculate the standard error of the mean for the effect scores at each position.
@@ -93,10 +92,10 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'effect_variance' and 'effect_variance_rank' along with residue metadata.
     """
-    logger.info("Calculating effect SEM")
     
     # Calculate SEM for each position
-    effect_variance = context.residue_table[['resi_mut', 'effect']].groupby('resi_mut')['effect'].sem().reset_index()
+    seq_data = context.residue_table.loc[context.residue_table.mut_info, :]
+    effect_variance = seq_data.groupby('resi_mut')['effect'].sem().reset_index()
     effect_variance.rename(columns={'effect': 'effect_variance'}, inplace=True)
     
     # Rank positions based on variance
@@ -125,15 +124,15 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'effect_ranking' along with residue metadata.
     """
-    logger.info("Calculating effect ranking")
     
     # Calculate ranking for each position
-    effect_ranking = context.residue_table.copy()
+    effect_ranking = context.residue_table.loc[context.residue_table.mut_info, :]
     keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
     effect_ranking = effect_ranking[keep_cols + ['effect']]
 
     effect_ranking['effect_ranking'] = effect_ranking['effect'].rank(method='min')
     effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / np.max(effect_ranking['effect_ranking'])
+    effect_ranking.drop(columns=['effect'], inplace=True)
     
     return effect_ranking
 
@@ -154,7 +153,6 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff' along with residue metadata.
     """
-    logger.info("Calculating AAIndex scores")
     
     # extract params
     residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
@@ -196,8 +194,7 @@ def calculate_kidera_factor_scores(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'kidera_{factornum}_wt', 'kidera_{factornum}_mut', 'kidera_{factornum}_diff', along with residue metadata.
     """
-    logger.info("Calculating Kidera factors")
-    
+
     # extract params
     residue_table, kidera_data = context.residue_table, context.extras['kidera']
 
@@ -237,7 +234,6 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with 'blosum90' along with residue metadata.
     """
-    logger.info("Calculating BLOSUM scores")
     
     residue_table, blosum_threshold = context.residue_table, 90
     blosum_scores = residue_table.loc[residue_table.mut_info, KEEP_COLS].copy()
