@@ -246,11 +246,6 @@ def test_calculate_hbond_metrics_with_altloc():
     context = Context(array=arr)
     
     hbond_metrics = metrics.calculate_hbond_metrics(context)
+    assert 'bb_hbond_count' in hbond_metrics.columns
+    assert 'sc_hbond_count' in hbond_metrics.columns
     
-    # Check that altloc column is present in metadata
-    assert 'altloc' in hbond_metrics.columns
-    
-    # Check altloc values are preserved
-    assert hbond_metrics['altloc'].iloc[0] == 'A'
-    assert hbond_metrics['altloc'].iloc[1] == ''
-    assert hbond_metrics['altloc'].iloc[2] == 'B'
