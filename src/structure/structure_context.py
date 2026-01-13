@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import biotite.structure as struc
 from biotite.structure.io.pdb import PDBFile
+from biotite.structure.io.pdbx import CIFFile, get_structure
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -298,12 +299,12 @@ def load_structure(
     pdb_ext: str = "pdb"
 ) -> struc.AtomArray:
     """
-    Load a protein structure from a PDB file.
+    Load a protein structure from a PDB or mmCIF file.
 
     Parameters
     ----------
     path : str or Path
-        Path to the PDB file.
+        Path to the structure file (PDB or mmCIF format).
     model : int, optional
         Model number to load. Default is 1. Use None to load all models.
     altloc_policy : {'highest', 'all'}, optional
@@ -311,7 +312,7 @@ def load_structure(
         highest occupancy conformer, 'all' keeps all conformers.
         Default is 'highest'.
     pdb_ext : str, optional
-        File extension hint. Default is 'pdb'.
+        File extension hint ('pdb', 'cif', or 'mmcif'). Default is 'pdb'.
 
     Returns
     -------
@@ -319,19 +320,26 @@ def load_structure(
         Loaded protein structure. The 'altloc' annotation contains the alternate
         location identifier for each atom (empty string if no alternate location).
     """
-    pdb = PDBFile.read(str(path))
-    models = pdb.get_model_count()
-    arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
+    extra_fields = ["b_factor", "occupancy"]
+    
+    if pdb_ext in ("cif", "mmcif"):
+        cif = CIFFile.read(str(path))
+        arr = get_structure(cif, model=model or 1, extra_fields=extra_fields)
+    else:
+        pdb = PDBFile.read(str(path))
+        models = pdb.get_model_count()
+        if model is None and models > 1:
+            arr = pdb.get_structure(model=None, extra_fields=extra_fields)
+        else:
+            arr = pdb.get_structure(model=model or 1, extra_fields=extra_fields)
     
     # Ensure altloc annotation exists
     if isinstance(arr, struc.AtomArray):
         arr = _ensure_altloc_annotation(arr)
         
-        if altloc_policy != "all":
-            if "altloc_id" in arr.get_annotation_categories():
-                if altloc_policy == "highest":
-                    keep = _keep_highest_occ_per_atom(arr)
-                    arr = arr[keep]
+        if altloc_policy == "highest":
+            keep = _keep_highest_occ_per_atom(arr)
+            arr = arr[keep]
     elif isinstance(arr, struc.AtomArrayStack):
         # For multi-model structures, ensure altloc on each model
         for i in range(arr.stack_depth()):
