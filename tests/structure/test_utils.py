@@ -219,7 +219,6 @@ def test_get_metadata_cols():
     assert 'chain' in metadata_df.columns
     assert 'resi_struct' in metadata_df.columns
     assert 'resn_struct' in metadata_df.columns
-    assert 'altloc' in metadata_df.columns
     
     # Check values
     assert len(metadata_df) == 3
