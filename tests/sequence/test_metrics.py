@@ -120,14 +120,14 @@ def test_calculate_effect_variance():
     assert 'effect_variance_rank' in effect_variance_df.columns
 
     # verify that effect variance rank is between 0 and 1
-    assert effect_variance_df['effect_variance_rank'].min() >= 0
-    assert effect_variance_df['effect_variance_rank'].max() <= 1
+    assert effect_variance_df['effect_variance_rank'].min() <= (1 / 100)
+    assert effect_variance_df['effect_variance_rank'].max() == 1
 
     # verify that effect variance rank is correct
     min_rank_idx = effect_variance_df['effect_variance_rank'].idxmin()
     max_rank_idx = effect_variance_df['effect_variance_rank'].idxmax()
-    min_effect_idx = effect_variance_df['effect'].idxmin()
-    max_effect_idx = effect_variance_df['effect'].idxmax()
+    min_effect_idx = effect_variance_df['effect_variance'].idxmin()
+    max_effect_idx = effect_variance_df['effect_variance'].idxmax()
     assert min_rank_idx == min_effect_idx
     assert max_rank_idx == max_effect_idx
     
@@ -155,8 +155,8 @@ def test_calculate_effect_ranking():
     assert effect_ranking_df['effect_ranking'].sum() > 0
 
     # verify that effect ranking rank is between 0 and 1
-    assert effect_ranking_df['effect_ranking'].min() >= 0
-    assert effect_ranking_df['effect_ranking'].max() <= 1
+    assert effect_ranking_df['effect_ranking'].min() <= (1 / 100)
+    assert effect_ranking_df['effect_ranking'].max() == 1
 
    # verify that ranking reflects the ordering of effect values
     min_rank_idx = effect_ranking_df['effect_ranking'].idxmin()
@@ -165,9 +165,6 @@ def test_calculate_effect_ranking():
     max_effect_idx = effect_ranking_df['effect'].idxmax()
     assert min_rank_idx == min_effect_idx
     assert max_rank_idx == max_effect_idx
-    
-    # maximum ranking should correspond to a normalized rank of 1.0
-    assert effect_ranking_df.at[max_rank_idx, 'effect_ranking'] == 1
 
 
 def test_calculate_aaindex_scores_no_muts():

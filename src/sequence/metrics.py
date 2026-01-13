@@ -77,7 +77,7 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     return pos_scores
 
 
-#@register_metric(name='effect_variance', provides=['effect_variance', 'effect_variance_rank'], tags={'sequence'})
+@register_metric(name='effect_variance', provides=['effect_variance', 'effect_variance_rank'], tags={'sequence'})
 def calculate_effect_variance(context: Context) -> pd.DataFrame:
     """
     Calculate the standard error of the mean for the effect scores at each position.
@@ -109,7 +109,7 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
     return effect_variance
 
 
-#@register_metric(name='effect_ranking', provides=['effect_ranking'], tags={'sequence'})
+@register_metric(name='effect_ranking', provides=['effect', 'effect_ranking'], tags={'sequence'})
 def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     """
     Calculate the ranking of the effects.
@@ -132,7 +132,6 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
 
     effect_ranking['effect_ranking'] = effect_ranking['effect'].rank(method='min')
     effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / np.max(effect_ranking['effect_ranking'])
-    effect_ranking.drop(columns=['effect'], inplace=True)
     
     return effect_ranking
 
