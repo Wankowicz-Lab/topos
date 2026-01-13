@@ -248,7 +248,7 @@ class Runner:
             Merged DataFrame.
         """
         # Get all unique rows to merge on
-        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'altloc']
+        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
         keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
         
         # Add mutation columns if mutations are present
@@ -267,10 +267,6 @@ class Runner:
                     merge_cols.append('resm')
             elif 'resi_struct' in df.columns:
                 merge_cols.extend(['resi_struct', 'resn_struct'])
-                
-            # Add altloc to merge columns if present in both dataframes
-            if 'altloc' in df.columns and 'altloc' in merged_df.columns:
-                merge_cols.append('altloc')
             
             merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
 
