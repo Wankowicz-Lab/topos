@@ -253,6 +253,7 @@ class Context:
             self.config = Config()
 
         if isinstance(self.array, struc.AtomArray):
+            self.array = _ensure_altloc_annotation(self.array)
             aa = self.array[struc.filter_amino_acids(self.array)]
         else:
             aa0 = self.array[0]
@@ -286,18 +287,7 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
     resn   = array.res_name[res_starts]
-    
-    # Get altloc - check for both 'altloc' and 'altloc_id' annotation names
-    try:
-        annot_categories = array.get_annotation_categories()
-        if 'altloc' in annot_categories:
-            altloc = array.altloc[res_starts]
-        elif 'altloc_id' in annot_categories:
-            altloc = array.altloc_id[res_starts]
-        else:
-            altloc = np.array([''] * len(res_starts))
-    except (AttributeError, TypeError):
-        altloc = np.array([''] * len(res_starts))
+    altloc = array.altloc[res_starts]
     
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
