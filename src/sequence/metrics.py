@@ -159,7 +159,7 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
 
     # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
-    aaindex_scores = residue_table[keep_cols].copy()
+    aaindex_scores = residue_table.loc[residue_table.mut_info, keep_cols].copy()
 
     # Create a dictionary mapping AAIndex feature to its values, truncating first two metadata columns
     feature_dict = {f: aaindex_data.loc[aaindex_data.accession == f].iloc[0][2:]
@@ -200,7 +200,7 @@ def calculate_kidera_factor_scores(context: Context) -> pd.DataFrame:
 
     # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
-    kidera_scores = residue_table[keep_cols].copy()
+    kidera_scores = residue_table.loc[residue_table.mut_info, keep_cols].copy()
 
     # Create a dictionary mapping kidera feature to its values, truncating first two metadata columns
     feature_dict = {f: kidera_data.loc[kidera_data['factor'] == f].iloc[0][2:]

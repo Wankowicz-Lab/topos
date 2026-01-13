@@ -12,14 +12,14 @@ Examples
 --------
 python analyze_compare_packing.py \
   --csv-glob '/path/to/PDBs/*_packing.csv' \
-  --clusters-csv '/path/to/HBDScan_PDB_clusters.csv' \
+  --clusters-csv '/path/to/clusters.csv' \
   --output-dir results
 
 # If your PDB name is not simply the start of the filename, you can control extraction
 # and also declare a different default suffix than '.pdb' (e.g., '.ent'):
 python analyze_compare_packing.py \
   --csv-glob 'PDBs/*_packing.csv' \
-  --clusters-csv '/path/to/HBDScan_PDB_clusters.csv' \
+  --clusters-csv '/path/to/lusters.csv' \
   --pdb-suffix '.ent'
 """
 from __future__ import annotations

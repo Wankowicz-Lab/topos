@@ -319,6 +319,7 @@ def test_runner__merge_config(tmp_path):
 
     base_config = Config(
         pdb_id='1abc',
+        name='test_protein',
         pdb_path=pdb_file_path,
         membrane_protein=False,
         mutation_data_path=None,
@@ -337,6 +338,24 @@ def test_runner__merge_config(tmp_path):
     assert merged_config.membrane_protein is True
     assert merged_config.mutation_data_path is None
     assert merged_config.aaindex_path == aaindex_file_path
+
+    # Test missing pdb_id
+    empty_config = Config(name='test')
+    with pytest.raises(ValueError, match="'pdb_id' must be provided"):
+        myrunner._merge_config(base=empty_config, overrides={})
+    with pytest.raises(ValueError, match="'pdb_id' must be provided"):
+        myrunner._merge_config(base=empty_config,
+                               overrides={'membrane_protein': True})
+
+    # Test missing name
+    empty_config = Config(pdb_id='1abc')
+    with pytest.raises(ValueError, match="'name' must be provided"):
+        myrunner._merge_config(base=empty_config, overrides={})
+    with pytest.raises(ValueError, match="'name' must be provided"):
+        myrunner._merge_config(base=empty_config,
+                               overrides={'membrane_protein': True})
+
+
 
 
 def test_runner_run_metric(tmp_path):
