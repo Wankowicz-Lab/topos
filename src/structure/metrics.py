@@ -73,8 +73,8 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     # Polar atoms (N, O, S)
     elements = array.element
     polar_mask = np.array([elem in ('N', 'O', 'S') if elem else False for elem in elements], dtype=bool)
-    # Nonpolar atoms (C, H)
-    nonpolar_mask = np.array([elem in ('C', 'H') if elem else False for elem in elements], dtype=bool)
+    # Nonpolar atoms (C)
+    nonpolar_mask = np.array(elements == 'C', dtype=bool)
     
     # Calculate sum SASA for each category per residue
     # For each category, set non-matching atoms to 0, then compute sum
