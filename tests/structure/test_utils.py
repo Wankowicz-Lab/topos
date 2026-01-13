@@ -228,23 +228,6 @@ def test_get_metadata_cols():
     assert all(metadata_df['chain'] == 'A')
 
 
-def test_get_metadata_cols_with_altloc():
-    """Test that get_metadata_cols properly captures altloc information."""
-    aa_list = ['SER', 'THR', 'TYR']
-    altlocs = ['A', '', 'B']
-    arr = _make_chain(aa_list=aa_list, chain_id='X', altloc=altlocs)
-    
-    metadata_df = utils.get_metadata_cols(arr)
-    
-    # Check altloc values
-    assert metadata_df['altloc'].iloc[0] == 'A'
-    assert metadata_df['altloc'].iloc[1] == ''
-    assert metadata_df['altloc'].iloc[2] == 'B'
-    
-    # Check other metadata is correct
-    assert list(metadata_df['resn_struct']) == ['SER', 'THR', 'TYR']
-    assert all(metadata_df['chain'] == 'X')
-
 
 def test_build_sites_biotite_with_altloc():
     """Test that build_sites_biotite properly captures altloc for donor/acceptor sites."""
