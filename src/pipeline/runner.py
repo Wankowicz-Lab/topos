@@ -23,6 +23,8 @@ from typing import List, Optional, Dict, Any
 import src.sequence.metrics
 import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
+from src.structure.utils import get_metadata_cols
+from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 
 logger = logging.getLogger(__name__)
 
@@ -112,19 +114,20 @@ class Runner:
         logger.info("Creating context object")
         self.context = structure_context.Context(arr, config=config)
 
+        # Set up df with secondary structure info
+        ss_df = get_secondary_structure_annotations(self.context)
+
         if self.context.config.membrane_protein:
             try:
                 logger.info("Fetching PDBTM annotation")
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
+                self.context.residue_table = define_membrane_secondary_structure(self.context.residue_table, ss_df)
             except RuntimeError as e:
-                warnings.warn(
-                    f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. "
-                    "Membrane features will not be calculated. Setting membrane_protein to False.",
-                    UserWarning
-                )
-                self.context.config.membrane_protein = False
+                raise RuntimeError(f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. Rerun with membrane_protein=False to calculate soluble secondary structure.")
+        else:
+            self.context.residue_table = define_soluble_secondary_structure(self.context.residue_table, ss_df)
 
         # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
