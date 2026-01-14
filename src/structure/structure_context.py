@@ -9,10 +9,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Callable, Dict, Iterable, List, Optional, Set, Any, Protocol, Literal, Union
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
+from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile, get_structure
 from pydantic import BaseModel
@@ -293,26 +295,26 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 def load_structure(
-    path: Union[str, Path],
+    path: Optional[Union[str, Path]] = None,
+    pdb_id: Optional[str] = None,
     model: Optional[int] = 1,
     altloc_policy: Literal["highest", "all"] = "highest",
-    pdb_ext: str = "pdb"
 ) -> struc.AtomArray:
     """
-    Load a protein structure from a PDB or mmCIF file.
+    Load a protein structure from a PDB or mmCIF file, or fetch from RCSB by PDB ID.
 
     Parameters
     ----------
-    path : str or Path
-        Path to the structure file (PDB or mmCIF format).
+    path : str or Path, optional
+        Path to the structure file (PDB or mmCIF format). If not provided, pdb_id must be provided.
+    pdb_id : str, optional
+        PDB identifier for fetching structure from RCSB. If not provided, path must be provided.
     model : int, optional
         Model number to load. Default is 1. Use None to load all models.
     altloc_policy : {'highest', 'all'}, optional
         Policy for handling alternate locations. 'highest' keeps the
         highest occupancy conformer, 'all' keeps all conformers.
         Default is 'highest'.
-    pdb_ext : str, optional
-        File extension hint ('pdb', 'cif', or 'mmcif'). Default is 'pdb'.
 
     Returns
     -------
@@ -322,6 +324,22 @@ def load_structure(
     """
     extra_fields = ["b_factor", "occupancy"]
     
+    # Handle PDB ID fetching if path is not provided
+    if path is None and pdb_id is not None:
+        logger.info("Fetching PDB structure from RCSB")
+        obj = rcsb.fetch(pdb_id, format="cif")
+        tmp_file = NamedTemporaryFile(delete=False, suffix=".cif")
+        tmp_file.write(obj.getvalue().encode("utf-8"))
+        tmp_file.close()
+        path = Path(tmp_file.name)
+        pdb_ext = "cif"
+    elif path is not None:
+        path = Path(path)
+        pdb_ext = path.suffix.lstrip(".")
+    else:
+        raise ValueError("Either pdb_id or path must be provided")
+    
+    # Load structure using appropriate parser
     if pdb_ext in ("cif", "mmcif"):
         cif = CIFFile.read(str(path))
         arr = get_structure(cif, model=model or 1, extra_fields=extra_fields)

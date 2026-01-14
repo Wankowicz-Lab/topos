@@ -1,8 +1,9 @@
 import pytest
 import tomli
 import numpy as np
-from src.structure.structure_context import Config, Context, residue_table
-from tests.test_utils import _make_config_file, _make_chain, _make_aaindex_data
+from pathlib import Path
+from src.structure.structure_context import Config, Context, residue_table, load_structure
+from tests.test_utils import _make_config_file, _make_chain, _make_aaindex_data, _write_mmcif_file
 
 def test_config(tmp_path):
     config_args = {'pdb_id': "1abc", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
@@ -100,3 +101,55 @@ def test_context_with_altloc():
     assert context.residue_table['altloc'].iloc[0] == 'A'
     assert context.residue_table['altloc'].iloc[1] == 'A'
     assert context.residue_table['altloc'].iloc[2] == ''
+
+
+def test_load_structure_from_pdb_id():
+    """Test loading structure from PDB ID by fetching from RCSB."""
+    pdb_id = '8smv'
+    
+    arr = load_structure(pdb_id=pdb_id)
+    
+    assert arr is not None
+    assert arr.array_length() > 0
+
+
+def test_load_structure_pdb_format(tmp_path):
+    """Test loading structure with PDB format (not just CIF)."""
+    # Create a simple PDB file
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    pdb_path = tmp_path / "test_structure.pdb"
+    
+    # Write a minimal valid PDB file
+    pdb_content = []
+    atom_id = 1
+    for res_idx, res_name in enumerate(residues, start=1):
+        # Add backbone atoms for each residue
+        for atom_name in ['N', 'CA', 'C', 'O']:
+            x, y, z = float(atom_id), 0.0, 0.0
+            pdb_content.append(
+                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
+            )
+            atom_id += 1
+    pdb_content.append("END\n")
+    
+    with pdb_path.open("w") as f:
+        f.writelines(pdb_content)
+    
+    # Test loading PDB format
+    arr = load_structure(path=pdb_path, pdb_ext="pdb")
+    
+    assert arr is not None
+    assert arr.array_length() > 0
+
+
+def test_load_structure_cif_format(tmp_path):
+    """Test loading structure with CIF format to verify extension handling."""
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    cif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
+    
+    arr = load_structure(path=cif_path, pdb_ext="cif")
+    
+    assert arr is not None
+    assert arr.array_length() > 0
