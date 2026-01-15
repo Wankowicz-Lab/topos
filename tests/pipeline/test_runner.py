@@ -42,6 +42,17 @@ def test_runner_initialization_from_config(tmp_path):
         _ = runner.Runner(pdb_id='test')
 
 
+def test_runner_initialization_altloc_policy(tmp_path):
+    """Test that altloc policy is set correctly."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, altloc_policy='all', pdb_id='5C1M')
+
+    altloc_runner = runner.Runner(config_path=config_path)
+    assert altloc_runner.context.config.altloc_policy == 'all'
+    assert set(np.unique(altloc_runner.context.array.altloc_id)) == {'.', 'A', 'B'}
+    assert set(np.unique(altloc_runner.context.residue_table.altloc)) == {'.', 'A'}
+
+
 def test_runner_initialization_overrides_membrane(tmp_path):
 
     config_path = tmp_path / 'config.toml'

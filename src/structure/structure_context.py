@@ -147,6 +147,9 @@ class Config(BaseModel):
         Whether the protein is a membrane protein (affects analysis methods).
     membrane_thickness : Optional[float]
         Half-thickness of membrane in Angstroms (default: 15).
+    altloc_policy : Literal["highest", "all"] = "highest"
+        Policy for handling alternate locations. 'highest' keeps the
+        highest occupancy conformer, 'all' keeps all conformers.
     mutation_data_path : Optional[Path]
         Path to CSV file containing mutagenesis data.
     mutation_data_chain : Optional[str]
@@ -179,6 +182,7 @@ class Config(BaseModel):
 
     # structure parameters
     membrane_thickness: Optional[float] = 15
+    altloc_policy: Literal["highest", "all"] = "highest"
 
     # mutagenesis data
     mutation_data_path: Optional[Path] = None

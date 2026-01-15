@@ -84,7 +84,8 @@ class Runner:
         logger.info("Loading structure")
         arr = structure_context.load_structure(
             path=config.pdb_path,
-            pdb_id=config.pdb_id
+            pdb_id=config.pdb_id,
+            altloc_policy=config.altloc_policy
         )
 
         # create context object
