@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import Tuple, Dict, List
+from typing import List
 from itertools import groupby
 
 from src.structure.structure_context import Context
@@ -10,7 +10,17 @@ import biotite.structure as struc
 
 def get_secondary_structure_annotations(context: Context) -> pd.DataFrame:
     """
-    Get secondary structure annotations for a context.
+    Get secondary structure annotations for an atom array.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing atom array.
+
+    Returns
+    -------
+    ss_df : pd.DataFrame
+        DataFrame containing secondary structure annotations.
     """
     sse_vals = struc.annotate_sse(context.aa)
     ss_df = get_metadata_cols(context.aa)
@@ -66,13 +76,10 @@ def define_membrane_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.D
     Returns
     -------
     annotated_df : pd.DataFrame
-        Input residue_table augmented with 'secondary_structure' column
+        Input residue_table augmented with 'ss_group' and 'ss_domains' columns
     """
 
     residue_table = residue_table.copy()
-
-    ss_df['ss_group'] = make_contiguous_group_labels(ss_df['sse'].tolist())
-
     residue_table['ss_domains'] = pd.NA
     residue_table = residue_table.merge(ss_df[['chain', 'resi', 'ss_group']], on=['chain', 'resi'], how='left')
 
@@ -141,7 +148,7 @@ def define_soluble_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.Da
     Returns
     -------
     annotated_df : pd.DataFrame
-        Input residue_table augmented with 'secondary_structure' column
+        Input residue_table augmented with 'ss_group' and 'ss_domains' columns
     """
     
     # Get secondary structure groups less than min_ss_length
@@ -153,18 +160,18 @@ def define_soluble_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.Da
         ss_mask = ss_df['ss_group'] == ss_group
         ss_indices = np.where(ss_mask)[0]
 
-        # Merge into previous domain if not first in chain
-        if ss_indices[0] > 0:
+        # Merge into previous domain if not first in chain or last in chain
+        if ss_indices[0] > 0 and ss_indices[0] < len(ss_df) - 1:
             # Get adjacent ss groups
-            previous_ss_group = ss_df.loc[ss_indices[0] - 1, 'ss_group']
-            subsequent_ss_groups = ss_df.loc[ss_indices[0] + 1, 'ss_group']
-            if previous_ss_group.split('_')[0] == subsequent_ss_groups.split('_')[0]:
+            previous_ss_group = ss_df.iloc[ss_indices[0] - 1]['ss_group']
+            subsequent_ss_group = ss_df.iloc[ss_indices[0] + 1]['ss_group']
+            if previous_ss_group.split('_')[0] == subsequent_ss_group.split('_')[0]:
                 ss_df.loc[ss_mask, 'ss_group'] = previous_ss_group
-                ss_df.loc[ss_df['ss_group'] == subsequent_ss_groups, 'ss_group'] = previous_ss_group
+                ss_df.loc[ss_df['ss_group'] == subsequent_ss_group, 'ss_group'] = previous_ss_group
     
     # ss_domains column has the full name of each group
     ss_df['ss_domains'] = ss_df['ss_group']
-    ss_df['ss_domains'] = ss_df['ss_domains'].str.replace('a_', 'alpah-helix_')
+    ss_df['ss_domains'] = ss_df['ss_domains'].str.replace('a_', 'alpha-helix_')
     ss_df['ss_domains'] = ss_df['ss_domains'].str.replace('b_', 'beta-sheet_')
     ss_df['ss_domains'] = ss_df['ss_domains'].str.replace('c_', 'coil_')
 

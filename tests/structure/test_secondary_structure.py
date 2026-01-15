@@ -44,7 +44,8 @@ def test_define_membrane_secondary_structure():
     ss_df = pd.DataFrame({
         'chain': ['A'] * len(ss_annotation),
         'resi': list(range(1, len(ss_annotation) + 1)),
-        'sse': ss_annotation
+        'sse': ss_annotation,
+        'ss_group': make_contiguous_group_labels(ss_annotation)
     })
 
     residue_table = pd.DataFrame({
@@ -69,9 +70,20 @@ def test_define_soluble_secondary_structure():
     residue_table.rename(columns={'resi_struct': 'resi'}, inplace=True)
     ss_df = residue_table[['chain', 'resi']].copy()
     ss_df['ss_group'] = ss_annotation
-    ss_df.rename(columns={'resi_struct': 'resi'}, inplace=True)
     output_df = define_soluble_secondary_structure(residue_table, ss_df)
 
     # 'b2' should be merged into 'c1', 'c2' merged into 'c1'
     assert output_df['ss_group'].tolist() == ['a_1', 'a_1', 'b_1', 'b_1', 'a_2', 'a_2', 'a_2', 'c_1', 'c_1', 'c_1', 'c_1', 'c_1', 'c_1']
-    assert output_df['ss_domains'].tolist() == ['alpah-helix_1', 'alpah-helix_1', 'beta-sheet_1', 'beta-sheet_1', 'alpah-helix_2', 'alpah-helix_2', 'alpah-helix_2', 'coil_1', 'coil_1', 'coil_1', 'coil_1', 'coil_1', 'coil_1']
+    assert output_df['ss_domains'].tolist() == ['alpha-helix_1', 'alpha-helix_1', 'beta-sheet_1', 'beta-sheet_1', 'alpha-helix_2', 'alpha-helix_2', 'alpha-helix_2', 'coil_1', 'coil_1', 'coil_1', 'coil_1', 'coil_1', 'coil_1']
+
+def test_define_soluble_secondary_structure_edge_cases():
+    # a1 is first in the chain, shouldn't be merged. b_3 is last in the chain, shouldn't be merged. A_3 isn't sandwhiched between two secondary structure elements of the same type, so shouldn't be merged.
+    ss_annotation = ['a_1', 'b_1', 'b_1', 'a_2', 'a_2', 'a_2', 'c_1', 'c_1', 'b_2', 'c_2', 'c_2', 'a_3', 'b_3']
+    residue_table = _make_residue_table(num_residues=len(ss_annotation), num_chains=1, make_muts=False)
+    residue_table.rename(columns={'resi_struct': 'resi'}, inplace=True)
+    ss_df = residue_table[['chain', 'resi']].copy()
+    ss_df['ss_group'] = ss_annotation
+    output_df = define_soluble_secondary_structure(residue_table, ss_df)
+
+    assert output_df['ss_group'].tolist() == ['a_1', 'b_1', 'b_1', 'a_2', 'a_2', 'a_2', 'c_1', 'c_1', 'c_1', 'c_1', 'c_1', 'a_3', 'b_3']
+    assert output_df['ss_domains'].tolist() == ['alpha-helix_1', 'beta-sheet_1', 'beta-sheet_1', 'alpha-helix_2', 'alpha-helix_2', 'alpha-helix_2', 'coil_1', 'coil_1', 'coil_1', 'coil_1', 'coil_1', 'alpha-helix_3', 'beta-sheet_3']

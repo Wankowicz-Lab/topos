@@ -23,7 +23,6 @@ from typing import List, Optional, Dict, Any
 import src.sequence.metrics
 import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
-from src.structure.utils import get_metadata_cols
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 
 logger = logging.getLogger(__name__)
