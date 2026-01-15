@@ -13,7 +13,8 @@ def get_secondary_structure_annotations(context: Context) -> pd.DataFrame:
     Get secondary structure annotations for a context.
     """
     sse_vals = struc.annotate_sse(context.aa)
-    ss_df = get_metadata_cols(context.array)
+    ss_df = get_metadata_cols(context.aa)
+    ss_df.rename(columns={'resi_struct': 'resi'}, inplace=True)
     ss_df["sse"] = sse_vals
     ss_df['ss_group'] = make_contiguous_group_labels(ss_df['sse'].tolist())
     return ss_df
@@ -73,7 +74,7 @@ def define_membrane_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.D
     ss_df['ss_group'] = make_contiguous_group_labels(ss_df['sse'].tolist())
 
     residue_table['ss_domains'] = pd.NA
-    residue_table = residue_table.merge(ss_df[['chain', 'resi_struct', 'ss_group']], on=['chain', 'resi_struct'], how='left')
+    residue_table = residue_table.merge(ss_df[['chain', 'resi', 'ss_group']], on=['chain', 'resi'], how='left')
 
     membrane_spanning = residue_table.loc[residue_table['pdbtm_region'] == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
 
@@ -167,5 +168,5 @@ def define_soluble_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.Da
     ss_df['ss_domains'] = ss_df['ss_domains'].str.replace('b_', 'beta-sheet_')
     ss_df['ss_domains'] = ss_df['ss_domains'].str.replace('c_', 'coil_')
 
-    residue_table = pd.merge(residue_table, ss_df[['chain', 'resi_struct', 'ss_group', 'ss_domains']], on=['chain', 'resi_struct'], how='left')
+    residue_table = pd.merge(residue_table, ss_df[['chain', 'resi', 'ss_group', 'ss_domains']], on=['chain', 'resi'], how='left')
     return residue_table    

@@ -43,14 +43,14 @@ def test_define_membrane_secondary_structure():
 
     ss_df = pd.DataFrame({
         'chain': ['A'] * len(ss_annotation),
-        'resi_struct': list(range(1, len(ss_annotation) + 1)),
+        'resi': list(range(1, len(ss_annotation) + 1)),
         'sse': ss_annotation
     })
 
     residue_table = pd.DataFrame({
         'chain': ['A'] * len(pdbtm_region),
-        'resi_struct': list(range(1, len(pdbtm_region) + 1)),
-        'resn_struct': ['ALA'] * len(ss_annotation),
+        'resi': list(range(1, len(pdbtm_region) + 1)),
+        'resn': ['ALA'] * len(ss_annotation),
         'pdbtm_region': pdbtm_region,
         'pdbtm_region_detailed': pdbtm_region_detailed
     })
@@ -66,8 +66,10 @@ def test_define_membrane_secondary_structure():
 def test_define_soluble_secondary_structure():
     ss_annotation = ['a_1', 'a_1', 'b_1', 'b_1', 'a_2', 'a_2', 'a_2', 'c_1', 'c_1', 'b_2', 'c_2', 'c_2', 'c_2']
     residue_table = _make_residue_table(num_residues=len(ss_annotation), num_chains=1, make_muts=False)
-    ss_df = residue_table[['chain', 'resi_struct']].copy()
+    residue_table.rename(columns={'resi_struct': 'resi'}, inplace=True)
+    ss_df = residue_table[['chain', 'resi']].copy()
     ss_df['ss_group'] = ss_annotation
+    ss_df.rename(columns={'resi_struct': 'resi'}, inplace=True)
     output_df = define_soluble_secondary_structure(residue_table, ss_df)
 
     # 'b2' should be merged into 'c1', 'c2' merged into 'c1'
