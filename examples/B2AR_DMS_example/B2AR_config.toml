@@ -5,6 +5,7 @@ membrane_protein = true
 
 # Structure parameters 
 membrane_thickness = 15
+remove_hydrogens = true
 
 # Mutagenesis data
 mutation_data_path = "examples/B2AR_DMS_example/B2AR_processed_scores.csv"

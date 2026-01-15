@@ -4,6 +4,7 @@ from tempfile import NamedTemporaryFile
 
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import tomli
 import warnings
 import logging
@@ -107,6 +108,16 @@ class Runner:
         else:
             pdb = PDBFile.read(config.pdb_path)
             arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
+
+        # Remove hydrogens if configured
+        if config.remove_hydrogens:
+            logger.info("Removing hydrogen atoms")
+            # Filter out atoms whose names start with 'H' or 'D' (hydrogen/deuterium)
+            non_hydrogen_mask = np.array([
+                not (name.strip().startswith("H") or name.strip().startswith("D"))
+                for name in arr.atom_name
+            ], dtype=bool)
+            arr = arr[non_hydrogen_mask]
 
         # create context object
         logger.info("Creating context object")

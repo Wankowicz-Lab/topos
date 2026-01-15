@@ -145,6 +145,8 @@ class Config(BaseModel):
         Whether the protein is a membrane protein (affects analysis methods).
     membrane_thickness : Optional[float]
         Half-thickness of membrane in Angstroms (default: 15).
+    remove_hydrogens : bool
+        Whether to remove hydrogen atoms from the structure (default: True).
     mutation_data_path : Optional[Path]
         Path to CSV file containing mutagenesis data.
     mutation_data_chain : Optional[str]
@@ -178,6 +180,7 @@ class Config(BaseModel):
 
     # structure parameters
     membrane_thickness: Optional[float] = 15
+    remove_hydrogens: bool = True
 
     # mutagenesis data
     mutation_data_path: Optional[Path] = None
