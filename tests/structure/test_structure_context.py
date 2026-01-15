@@ -137,7 +137,7 @@ def test_load_structure_pdb_format(tmp_path):
         f.writelines(pdb_content)
     
     # Test loading PDB format
-    arr = load_structure(path=pdb_path, pdb_ext="pdb")
+    arr = load_structure(path=pdb_path)
     
     assert arr is not None
     assert arr.array_length() > 0
@@ -149,7 +149,7 @@ def test_load_structure_cif_format(tmp_path):
     cif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
     
-    arr = load_structure(path=cif_path, pdb_ext="cif")
+    arr = load_structure(path=cif_path)
     
     assert arr is not None
     assert arr.array_length() > 0

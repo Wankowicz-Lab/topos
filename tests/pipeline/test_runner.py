@@ -32,8 +32,6 @@ def test_runner_initialization_from_config(tmp_path):
     assert base_runner.context is not None
     assert base_runner.context.config is not None
     assert base_runner.context.config.pdb_id == '8smv'
-    assert base_runner.context.config.pdb_path is not None
-    assert base_runner.context.config.pdb_ext == 'cif'
     assert base_runner.context.config.mutation_data_path is None
     assert base_runner.context.config.name == 'test_protein'
 

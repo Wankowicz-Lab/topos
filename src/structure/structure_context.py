@@ -16,6 +16,7 @@ import pandas as pd
 import biotite.structure as struc
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
+from biotite.structure import filter_highest_occupancy_altloc
 from biotite.structure.io.pdbx import CIFFile, get_structure
 from pydantic import BaseModel
 
@@ -142,8 +143,6 @@ class Config(BaseModel):
         PDB identifier for fetching structure from RCSB.
     pdb_path : Optional[Path]
         Local path to structure file (PDB or mmCIF format).
-    pdb_ext : Optional[str]
-        File extension of the structure file.
     membrane_protein : Optional[bool]
         Whether the protein is a membrane protein (affects analysis methods).
     membrane_thickness : Optional[float]
@@ -176,7 +175,6 @@ class Config(BaseModel):
     name: Optional[str] = None
     pdb_id: Optional[str] = None
     pdb_path: Optional[Path] = None
-    pdb_ext: Optional[str] = None
     membrane_protein: Optional[bool] = False
 
     # structure parameters
@@ -338,30 +336,21 @@ def load_structure(
         pdb_ext = path.suffix.lstrip(".")
     else:
         raise ValueError("Either pdb_id or path must be provided")
+
+    # Rename 'highest' to 'occupancy' to match biotite convention
+    altloc_policy = "occupancy" if altloc_policy == 'highest' else altloc_policy
     
     # Load structure using appropriate parser
     if pdb_ext in ("cif", "mmcif"):
         cif = CIFFile.read(str(path))
-        arr = get_structure(cif, model=model or 1, extra_fields=extra_fields)
+        arr = get_structure(cif, model=model or 1, extra_fields=extra_fields, altloc=altloc_policy)
     else:
         pdb = PDBFile.read(str(path))
         models = pdb.get_model_count()
         if model is None and models > 1:
-            arr = pdb.get_structure(model=None, extra_fields=extra_fields)
+            arr = pdb.get_structure(model=None, extra_fields=extra_fields, altloc=altloc_policy)
         else:
-            arr = pdb.get_structure(model=model or 1, extra_fields=extra_fields)
-    
-    # Ensure altloc annotation exists
-    if isinstance(arr, struc.AtomArray):
-        arr = _ensure_altloc_annotation(arr)
-        
-        if altloc_policy == "highest":
-            keep = _keep_highest_occ_per_atom(arr)
-            arr = arr[keep]
-    elif isinstance(arr, struc.AtomArrayStack):
-        # For multi-model structures, ensure altloc on each model
-        for i in range(arr.stack_depth()):
-            arr[i] = _ensure_altloc_annotation(arr[i])
+            arr = pdb.get_structure(model=model or 1, extra_fields=extra_fields, altloc=altloc_policy)
     
     return arr
 
@@ -395,13 +384,3 @@ def _ensure_altloc_annotation(array: struc.AtomArray) -> struc.AtomArray:
             # No altloc information available, set empty strings
             array.set_annotation("altloc", np.array([''] * array.array_length()))
     return array
-
-
-def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
-    """Keep atoms with the highest occupancy for each unique atom position."""
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id","res_id","atom_name"]):
-        occ = array.occupancy[idx]
-        keep[idx[int(np.argmax(occ))]] = True
-    return keep
-
