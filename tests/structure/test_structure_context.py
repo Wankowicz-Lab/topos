@@ -153,3 +153,13 @@ def test_load_structure_cif_format(tmp_path):
     
     assert arr is not None
     assert arr.array_length() > 0
+
+
+def test_load_structure_altloc_policy():
+    """Test loading structure with altloc policy."""
+
+    arr_altloc_all = load_structure(pdb_id='5C1M', altloc_policy='all')
+    assert set(np.unique(arr_altloc_all.altloc_id)) == {'.', 'A', 'B'}
+
+    arr_altloc_highest = load_structure(pdb_id='5C1M', altloc_policy='highest')
+    assert len(arr_altloc_highest) < len(arr_altloc_all)
