@@ -50,6 +50,8 @@ def test_runner_initialization_altloc_policy(tmp_path):
     altloc_runner = runner.Runner(config_path=config_path)
     assert altloc_runner.context.config.altloc_policy == 'all'
     assert set(np.unique(altloc_runner.context.array.altloc_id)) == {'.', 'A', 'B'}
+
+    # Altlocs in body of residue don't show up in residue table, only those at the start of the residue (res starts). Need to decide how to handle this
     assert set(np.unique(altloc_runner.context.residue_table.altloc)) == {'.', 'A'}
 
 
