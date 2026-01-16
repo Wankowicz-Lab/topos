@@ -98,17 +98,6 @@ ATOM   2537 HD22 LEU A 169     -22.200 -37.598  -0.114  1.00 27.94           H
 ATOM   2538 HD23 LEU A 169     -22.842 -39.045   0.017  1.00 27.94           H"""
 
 
-def test_calculate_secondary_structure():
-    # Create a test chain with random coordinates
-    aa_list = random.choices(AA_LIST, k=10)
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
-
-    sse = metrics.calculate_secondary_structure(arr)
-
-    assert len(sse) == len(aa_list)
-    assert all(ss in {'a', 'b', 'c'} for ss in sse)
-
-
 def test_calculate_membrane_distance():
     # Create a test chain with varying z-coordinates
     z_values = list(range(-25, 25, 5))
@@ -130,26 +119,6 @@ def test_calculate_membrane_distance():
 
     assert np.allclose(distances['distance_from_membrane_edge'], expected_distances)
 
-def test_define_secondary_structure():
-    # Create input data
-    residue_table = _make_residue_table(num_chains=1, make_muts=False)
-    residue_table['pdbtm_region'] = 'membrane_spanning'
-    residue_table['pdbtm_region_detailed'] = 'TM1'
-    aa_list = residue_table.resn_struct.tolist()
-    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
-
-    context = Context(array=arr, config=Config())
-    context.residue_table = residue_table
-
-    output = metrics.define_secondary_structure(context)
-    assert 'ss_domains' not in output.columns.tolist()
-    assert 'ss_group' in output.columns.tolist()
-
-    context = Context(array=arr, config=Config(membrane_protein=True))
-    context.residue_table = residue_table
-    output = metrics.define_secondary_structure(context)
-    assert 'ss_domains' in output.columns.tolist()
-    assert 'ss_group' in output.columns.tolist()
 
 ##TO DO MAKE MORE ROBUST WITH REAL PDB FILE
 def test_calculate_sasa():  

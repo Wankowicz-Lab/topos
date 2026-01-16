@@ -18,24 +18,6 @@ from .utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as
 logger = logging.getLogger(__name__)
 
 
-def calculate_secondary_structure(array: struc.AtomArray) -> np.ndarray:
-    """
-    Calculate secondary structure assignment per residue.
-
-    Parameters
-    ----------
-    array : struc.AtomArray
-        Structure array (amino acids only recommended).
-
-    Returns
-    -------
-    np.ndarray
-        Per-residue secondary structure assignment.
-        'a' = alpha-helix, 'b' = beta-sheet, 'c' = coil.
-    """
-    return struc.annotate_sse(array)
-
-
 @register_metric(name='sasa', provides=['sasa', 'sasa_backbone', 'sasa_sidechain', 'sasa_polar', 'sasa_nonpolar'], tags={'structure'})
 def calculate_sasa(context: Context) -> pd.DataFrame:
     """
@@ -169,41 +151,6 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
 
     return metadata_df
 
-@register_metric(name='define_secondary_structure', provides=['ss_group', 'ss_domains'], tags={'structure'})
-def define_secondary_structure(context: Context) -> pd.DataFrame:
-    """
-    Calculate secondary structure and merge adjacent regions.
-
-    For membrane proteins, uses PDBTM regions to define transmembrane domains and loop regions.
-    For non-membrane proteins, creates contiguous groups based on secondary structure assignments.
-
-    Parameters
-    ----------
-    context : Context
-        Context object containing residue metadata, structural information, and mutation information.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with 'ss_group', 'ss_domains' along with residue metadata.
-    """
-    logger.info("Calculating secondary structure")
-    
-    res_starts = struc.get_residue_starts(context.aa)
-    sse_vals = calculate_secondary_structure(context.aa)
-
-    # Get metadata columns (chain, resi_struct, resn_struct)
-    ss_df = get_metadata_cols(context.aa)
-    ss_df["sse"] = sse_vals
-
-    if context.config.membrane_protein:
-        ss_output = pdbtm.define_secondary_structure(context.residue_table, ss_df)
-    else:
-        # TODO: decide if we want to do any merging of secondary structure regions for non-membrane proteins
-        ss_output = ss_df.copy()
-        ss_output['ss_group'] = pdbtm.make_contiguous_group_labels(ss_output['sse'].tolist())
-
-    return ss_output
 
 @register_metric(name='calculate_hbond_metrics', provides=['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count'], tags={'structure', 'interaction'})
 def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
