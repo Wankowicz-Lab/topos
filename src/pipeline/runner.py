@@ -25,6 +25,45 @@ from src.structure.structure_context import _REGISTRY, Config
 logger = logging.getLogger(__name__)
 
 
+def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[str] = None) -> pd.DataFrame:
+    """Sort residue table by chain and alignment position.
+    
+    If mutation_chain is provided, that chain comes first, followed by other chains alphabetically.
+    Within each chain, residues are sorted by align_pos (alignment position).
+    
+    Parameters
+    ----------
+    residue_table : pd.DataFrame
+        The residue table to sort.
+    mutation_chain : Optional[str]
+        Chain identifier for mutation data. If provided, this chain will be sorted first.
+        
+    Returns
+    -------
+    pd.DataFrame
+        Sorted residue table with index reset.
+    """
+    residue_table = residue_table.copy()
+    
+    if mutation_chain is not None:
+        # Create custom sort key: mutation_data_chain first, then alphabetical
+        residue_table['_chain_sort'] = residue_table['chain'].apply(
+            lambda c: (0, c) if c == mutation_chain else (1, c)
+        )
+        residue_table = residue_table.sort_values(
+            ['_chain_sort', 'align_pos'], 
+            kind='mergesort'
+        ).drop(columns=['_chain_sort']).reset_index(drop=True)
+    else:
+        # No mutation data: sort alphabetically by chain, then by align_pos
+        residue_table = residue_table.sort_values(
+            ['chain', 'align_pos'], 
+            kind='mergesort'
+        ).reset_index(drop=True)
+    
+    return residue_table
+
+
 @dataclass
 class Runner:
     pdb_id: Optional[str] = None
@@ -129,6 +168,12 @@ class Runner:
                 chain=self.context.config.mutation_data_chain,
                 alignment_cutoff=self.context.config.alignment_cutoff
             )
+            
+            # Sort residue table with mutation_data_chain first
+            self.context.residue_table = _sort_residue_table(
+                self.context.residue_table,
+                mutation_chain=self.context.config.mutation_data_chain
+            )
         # Otherwise create mutation columns from structure data
         else:
             self.context.residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
@@ -136,6 +181,16 @@ class Runner:
             self.context.residue_table['resi_mut'] = self.context.residue_table['resi_struct']
             self.context.residue_table['mut_info'] = True
             self.context.residue_table['struct_info'] = True
+            
+            # Add align_pos for consistency (sequential across all chains since no alignment is performed)
+            # This ensures all code paths have align_pos, even though it doesn't represent an alignment position
+            self.context.residue_table['align_pos'] = range(len(self.context.residue_table))
+            
+            # Sort residue table alphabetically by chain
+            self.context.residue_table = _sort_residue_table(
+                self.context.residue_table,
+                mutation_chain=None
+            )
 
 
 
@@ -232,7 +287,8 @@ class Runner:
             Merged DataFrame.
         """
         # Get all unique rows to merge on
-        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
+
+        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'align_pos']
         keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
         
         # Add mutation columns if mutations are present
@@ -254,6 +310,13 @@ class Runner:
             
             merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
 
+        # Sort using the same logic as residue_table
+        mutation_chain = self.context.config.mutation_data_chain if mutations else None
+        merged_df = _sort_residue_table(merged_df, mutation_chain=mutation_chain)
+        
+        # Drop align_pos before returning (it's just for internal sorting)
+        merged_df = merged_df.drop(columns=['align_pos'])
+        
         return merged_df
 
 

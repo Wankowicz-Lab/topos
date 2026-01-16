@@ -158,6 +158,24 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     # Verify the config has the custom column names
     assert mut_runner.context.config.mutation_residue_col_name == 'wt_residue'
     assert mut_runner.context.config.mutation_score_col_name == 'fitness_score'
+    
+    # Check that residue_table has align_pos column and is sorted appropriately
+    assert 'align_pos' in mut_runner.context.residue_table.columns, "residue_table should have align_pos column"
+    
+    # Check that mutation chain A comes first
+    chains = mut_runner.context.residue_table['chain'].tolist()
+    unique_chains = []
+    for c in chains:
+        if not unique_chains or unique_chains[-1] != c:
+            unique_chains.append(c)
+    
+    assert unique_chains[0] == 'A', "Mutation chain A should come first"
+    
+    # Check that within each chain, align_pos is sorted
+    for chain in mut_runner.context.residue_table['chain'].unique():
+        chain_df = mut_runner.context.residue_table[mut_runner.context.residue_table['chain'] == chain]
+        align_pos_values = chain_df['align_pos'].tolist()
+        assert align_pos_values == sorted(align_pos_values), f"Within chain {chain}, align_pos should be sorted"
 
     # Now test with invalid chain specified in config
     bad_config = config_dict.copy()
@@ -511,9 +529,15 @@ def test_runner__merge_features_with_muts():
 
     result_frames = [df1, df2, df3, df4]
 
+    class MockConfig:
+        def __init__(self):
+            self.mutation_data_chain = 'A'
+
     class MockContext:
         def __init__(self, residue_table):
             self.residue_table = residue_table
+            self.config = MockConfig()
+
     myrunner.context = MockContext(residue_table=residue_table)
 
     merged_df = myrunner._merge_features(result_frames, mutations=True)
@@ -540,6 +564,18 @@ def test_runner__merge_features_with_muts():
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
+    
+    # Reset index for sorting checks
+    merged_df = merged_df.reset_index()
+    
+    # Check that output is sorted appropriately (chains in order)
+    chains = merged_df['chain'].tolist()
+    unique_chains = []
+    for c in chains:
+        if not unique_chains or unique_chains[-1] != c:
+            unique_chains.append(c)
+    # Should be alphabetically sorted since no mutation_chain
+    assert unique_chains == sorted(unique_chains), "Chains should be alphabetically sorted"
 
 
 def test_runner_save_results(tmp_path):
@@ -619,3 +655,39 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+
+def test_sort_residue_table():
+    """Test that _sort_residue_table works correctly."""
+    # Test 1: Sorting with mutation_chain specified
+    df_with_mutation = pd.DataFrame({
+        'chain': ['C', 'B', 'A', 'B', 'A', 'C'],
+        'align_pos': [2, 0, 1, 3, 4, 5],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU']
+    })
+    
+    sorted_df = runner._sort_residue_table(df_with_mutation, mutation_chain='B')
+    
+    # Check that chain B comes first
+    chains = sorted_df['chain'].tolist()
+    assert chains[0] == 'B' and chains[1] == 'B', "Mutation chain B should come first"
+    
+    # Check that within each chain, residues are sorted by align_pos
+    chain_b_align_pos = sorted_df[sorted_df['chain'] == 'B']['align_pos'].tolist()
+    assert chain_b_align_pos == sorted(chain_b_align_pos), "Within chain B, should be sorted by align_pos"
+    
+    # Check that other chains are alphabetically ordered
+    assert chains == ['B', 'B', 'A', 'A', 'C', 'C'], "Should be B first, then A, then C"
+    
+    # Test 2: Sorting without mutation_chain (alphabetical)
+    sorted_df_alpha = runner._sort_residue_table(df_with_mutation, mutation_chain=None)
+    chains_alpha = sorted_df_alpha['chain'].tolist()
+    assert chains_alpha == ['A', 'A', 'B', 'B', 'C', 'C'], "Should be alphabetically sorted when no mutation_chain"
+    
+    # Check sorting within each chain
+    for chain in ['A', 'B', 'C']:
+        chain_align_pos = sorted_df_alpha[sorted_df_alpha['chain'] == chain]['align_pos'].tolist()
+        assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
+
+
