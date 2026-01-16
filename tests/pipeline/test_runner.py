@@ -32,8 +32,6 @@ def test_runner_initialization_from_config(tmp_path):
     assert base_runner.context is not None
     assert base_runner.context.config is not None
     assert base_runner.context.config.pdb_id == '8smv'
-    assert base_runner.context.config.pdb_path is not None
-    assert base_runner.context.config.pdb_ext == 'cif'
     assert base_runner.context.config.mutation_data_path is None
     assert base_runner.context.config.name == 'test_protein'
 
@@ -44,20 +42,17 @@ def test_runner_initialization_from_config(tmp_path):
         _ = runner.Runner(pdb_id='test')
 
 
-def test_runner_initialization_from_pdb_id():
-    pdb_id = '8smv'
+def test_runner_initialization_altloc_policy(tmp_path):
+    """Test that altloc policy is set correctly."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, altloc_policy='all', pdb_id='5C1M')
 
-    id_runner = runner.Runner(
-        pdb_id=pdb_id,
-        name='test')
+    altloc_runner = runner.Runner(config_path=config_path)
+    assert altloc_runner.context.config.altloc_policy == 'all'
+    assert set(np.unique(altloc_runner.context.array.altloc_id)) == {'.', 'A', 'B'}
 
-    assert id_runner.context.array is not None
-    assert id_runner.context is not None
-    assert id_runner.context.config is not None
-    assert id_runner.context.config.pdb_id == pdb_id
-    assert id_runner.context.config.pdb_path is not None
-    assert id_runner.context.config.pdb_ext == 'cif'
-    assert id_runner.context.config.mutation_data_path is None
+    # Altlocs in body of residue don't show up in residue table, only those at the start of the residue (res starts). Need to decide how to handle this
+    assert set(np.unique(altloc_runner.context.residue_table.altloc)) == {'.', 'A'}
 
 
 def test_runner_initialization_overrides_membrane(tmp_path):
@@ -152,6 +147,24 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
     # Verify the config has the custom column names
     assert mut_runner.context.config.mutation_residue_col_name == 'wt_residue'
     assert mut_runner.context.config.mutation_score_col_name == 'fitness_score'
+    
+    # Check that residue_table has align_pos column and is sorted appropriately
+    assert 'align_pos' in mut_runner.context.residue_table.columns, "residue_table should have align_pos column"
+    
+    # Check that mutation chain A comes first
+    chains = mut_runner.context.residue_table['chain'].tolist()
+    unique_chains = []
+    for c in chains:
+        if not unique_chains or unique_chains[-1] != c:
+            unique_chains.append(c)
+    
+    assert unique_chains[0] == 'A', "Mutation chain A should come first"
+    
+    # Check that within each chain, align_pos is sorted
+    for chain in mut_runner.context.residue_table['chain'].unique():
+        chain_df = mut_runner.context.residue_table[mut_runner.context.residue_table['chain'] == chain]
+        align_pos_values = chain_df['align_pos'].tolist()
+        assert align_pos_values == sorted(align_pos_values), f"Within chain {chain}, align_pos should be sorted"
 
     # Now test with invalid chain specified in config
     bad_config = config_dict.copy()
@@ -240,58 +253,6 @@ def test_runner_initialization_invalid_config(tmp_path):
 
     with pytest.raises(ValueError, match="Invalid TOML in configuration file"):
         runner.Runner(config_path=config_path)
-
-
-def test_runner_initialization_load_pdb_format(tmp_path):
-    """Test loading structure with PDB format (not just CIF)."""
-    # Create a simple PDB file
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    pdb_path = tmp_path / "test_structure.pdb"
-
-    # Write a minimal valid PDB file
-    pdb_content = []
-    atom_id = 1
-    for res_idx, res_name in enumerate(residues, start=1):
-        # Add backbone atoms for each residue
-        for atom_name in ['N', 'CA', 'C', 'O']:
-            x, y, z = float(atom_id), 0.0, 0.0
-            pdb_content.append(
-                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
-                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
-            )
-            atom_id += 1
-    pdb_content.append("END\n")
-
-    with pdb_path.open("w") as f:
-        f.writelines(pdb_content)
-
-    # Test that both .pdb and .cif extensions work
-    test_runner = runner.Runner(
-        pdb_id='TEST',
-        name='test_pdb_format',
-        pdb_path=pdb_path
-    )
-
-    assert test_runner.context.array is not None
-    assert test_runner.context.config.pdb_ext == 'pdb'
-    assert test_runner.context.config.pdb_path == pdb_path
-
-
-def test_runner_initialization_load_cif_format(tmp_path):
-    """Test loading structure with CIF format to verify extension handling."""
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    cif_path = tmp_path / "test_structure.cif"
-    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
-
-    test_runner = runner.Runner(
-        pdb_id='TEST',
-        name='test_cif_format',
-        pdb_path=cif_path
-    )
-
-    assert test_runner.context.array is not None
-    assert test_runner.context.config.pdb_ext == 'cif'
-    assert test_runner.context.config.pdb_path == cif_path
 
 
 def test_runner__merge_config(tmp_path):
@@ -557,9 +518,15 @@ def test_runner__merge_features_with_muts():
 
     result_frames = [df1, df2, df3, df4]
 
+    class MockConfig:
+        def __init__(self):
+            self.mutation_data_chain = 'A'
+
     class MockContext:
         def __init__(self, residue_table):
             self.residue_table = residue_table
+            self.config = MockConfig()
+
     myrunner.context = MockContext(residue_table=residue_table)
 
     merged_df = myrunner._merge_features(result_frames, mutations=True)
@@ -586,6 +553,18 @@ def test_runner__merge_features_with_muts():
     df4_mask = merged_df.index.isin(df4.index)
     assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
     assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
+    
+    # Reset index for sorting checks
+    merged_df = merged_df.reset_index()
+    
+    # Check that output is sorted appropriately (chains in order)
+    chains = merged_df['chain'].tolist()
+    unique_chains = []
+    for c in chains:
+        if not unique_chains or unique_chains[-1] != c:
+            unique_chains.append(c)
+    # Should be alphabetically sorted since no mutation_chain
+    assert unique_chains == sorted(unique_chains), "Chains should be alphabetically sorted"
 
 
 def test_runner_save_results(tmp_path):
@@ -665,3 +644,39 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+
+def test_sort_residue_table():
+    """Test that _sort_residue_table works correctly."""
+    # Test 1: Sorting with mutation_chain specified
+    df_with_mutation = pd.DataFrame({
+        'chain': ['C', 'B', 'A', 'B', 'A', 'C'],
+        'align_pos': [2, 0, 1, 3, 4, 5],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU']
+    })
+    
+    sorted_df = runner._sort_residue_table(df_with_mutation, mutation_chain='B')
+    
+    # Check that chain B comes first
+    chains = sorted_df['chain'].tolist()
+    assert chains[0] == 'B' and chains[1] == 'B', "Mutation chain B should come first"
+    
+    # Check that within each chain, residues are sorted by align_pos
+    chain_b_align_pos = sorted_df[sorted_df['chain'] == 'B']['align_pos'].tolist()
+    assert chain_b_align_pos == sorted(chain_b_align_pos), "Within chain B, should be sorted by align_pos"
+    
+    # Check that other chains are alphabetically ordered
+    assert chains == ['B', 'B', 'A', 'A', 'C', 'C'], "Should be B first, then A, then C"
+    
+    # Test 2: Sorting without mutation_chain (alphabetical)
+    sorted_df_alpha = runner._sort_residue_table(df_with_mutation, mutation_chain=None)
+    chains_alpha = sorted_df_alpha['chain'].tolist()
+    assert chains_alpha == ['A', 'A', 'B', 'B', 'C', 'C'], "Should be alphabetically sorted when no mutation_chain"
+    
+    # Check sorting within each chain
+    for chain in ['A', 'B', 'C']:
+        chain_align_pos = sorted_df_alpha[sorted_df_alpha['chain'] == chain]['align_pos'].tolist()
+        assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
+
+

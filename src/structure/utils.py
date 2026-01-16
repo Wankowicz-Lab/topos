@@ -27,13 +27,13 @@ def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'chain', 'resi_struct', 'resn_struct' for each residue
-        in the structure.
+
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi = array.res_id[res_starts]
     resn = array.res_name[res_starts]
+        
     return pd.DataFrame({"chain": chains, "resi_struct": resi, "resn_struct": resn})
 
 
@@ -286,20 +286,9 @@ def _donor_acceptor_templates(resname: str, names_set: set[str]):
 
 def _index_by_name_alt(arr: struc.AtomArray, idxs: np.ndarray):
     d: Dict[str, Dict[str, int]] = defaultdict(dict)
-    # Check if altloc_id annotation exists
-    try:
-        has_altloc = "altloc_id" in arr.get_annotation_categories()
-    except (AttributeError, TypeError):
-        has_altloc = False
     for i in idxs:
         name = arr.atom_name[i].strip()
-        if has_altloc:
-            try:
-                alt = norm_alt(arr.altloc_id[i])
-            except (AttributeError, KeyError, IndexError):
-                alt = ""
-        else:
-            alt = ""
+        alt = norm_alt(arr.altloc[i])
         d[name][alt] = i
     return d
 
