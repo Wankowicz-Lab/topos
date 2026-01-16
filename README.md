@@ -26,7 +26,6 @@ The `examples` directory contains example data for each of these use cases.
 
 ```python
 from src.pipeline import runner
-import src.metrics.structure  
 
 
 # Set up pipeline using B2AR example data
