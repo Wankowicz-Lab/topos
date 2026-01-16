@@ -6,8 +6,8 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from src.structure import metrics
-from src.structure.structure_context import Config, Context
+from src.metrics import structure as metrics
+from src.pipeline.context import Config, Context
 from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
 
 import biotite.structure as struc

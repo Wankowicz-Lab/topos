@@ -2,7 +2,8 @@ import pytest
 import tomli
 import numpy as np
 from pathlib import Path
-from src.structure.structure_context import Config, Context, residue_table, load_structure
+from src.pipeline.context import Config, Context
+from src.structure.structure_context import residue_table, load_structure
 from tests.test_utils import _make_config_file, _make_chain, _make_aaindex_data, _write_mmcif_file
 
 def test_config(tmp_path):
