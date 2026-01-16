@@ -158,12 +158,24 @@ def test_calculate_sasa():
     arr = _make_chain(aa_list=aa_list, chain_id='A')
     context = Context(array=arr)
     
-    # Calculate SASA - should return a DataFrame with 'sasa' column
+    # Calculate SASA - should return a DataFrame with 'sasa' and subcategory columns
     sasa_df = metrics.calculate_sasa(context)
+
+    # Check that all expected columns are present
+    expected_columns = ['sasa', 'sasa_backbone', 'sasa_sidechain', 'sasa_polar', 'sasa_nonpolar']
+    for col in expected_columns:
+        assert col in sasa_df.columns, f"Column '{col}' should be present in output"
 
     # Check that SASA values are non-negative
     sasa_values = sasa_df['sasa']
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
+    
+    # Check that subcategory SASA values are non-negative (where not NaN)
+    for col in ['sasa_backbone', 'sasa_sidechain', 'sasa_polar', 'sasa_nonpolar']:
+        values = sasa_df[col]
+        non_nan_values = values.dropna()
+        if len(non_nan_values) > 0:
+            assert np.all(non_nan_values >= 0), f"{col} values should be non-negative"
 
 
 def test_KD_values():  
