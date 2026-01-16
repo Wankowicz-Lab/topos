@@ -84,6 +84,8 @@ def test_altloc_compatible():
     
     # Different altloc should not be compatible
     assert utils.altloc_compatible("A", "B") == False
+    assert utils.altloc_compatible("A", "b") == False
+    assert utils.altloc_compatible("a", "B") == False
 
 
 def test_build_sites_biotite():
@@ -203,3 +205,72 @@ def test_detect_hbonds_parameters():
     
     # Lenient should find at least as many as strict
     assert len(hbonds_lenient) >= len(hbonds_strict)
+
+
+def test_get_metadata_cols():
+    """Test that get_metadata_cols extracts correct metadata including altloc."""
+    # Create a chain with altloc identifiers
+    aa_list = ['ALA', 'CYS', 'ASP']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    
+    metadata_df = utils.get_metadata_cols(arr)
+    
+    # Check that all expected columns are present
+    assert 'chain' in metadata_df.columns
+    assert 'resi_struct' in metadata_df.columns
+    assert 'resn_struct' in metadata_df.columns
+    
+    # Check values
+    assert len(metadata_df) == 3
+    assert list(metadata_df['resn_struct']) == ['ALA', 'CYS', 'ASP']
+    assert list(metadata_df['resi_struct']) == [1, 2, 3]
+    assert all(metadata_df['chain'] == 'A')
+
+
+
+def test_build_sites_biotite_with_altloc():
+    """Test that build_sites_biotite properly captures altloc for donor/acceptor sites."""
+    aa_list = ['SER', 'GLY']
+    altlocs = ['A', '']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc=altlocs)
+    
+    donors, acceptors = utils.build_sites_biotite(arr)
+    
+    # Check that donors and acceptors have altloc information
+    if len(donors) > 0:
+        # Donors from SER (with altloc 'A') should have altloc set
+        ser_donors = [d for d in donors if d.resi == 1]
+        for d in ser_donors:
+            assert hasattr(d, 'altloc')
+            assert d.altloc == 'A'
+        
+        # Donors from GLY (no altloc) should have empty altloc
+        gly_donors = [d for d in donors if d.resi == 2]
+        for d in gly_donors:
+            assert hasattr(d, 'altloc')
+            assert d.altloc == ''
+    
+    if len(acceptors) > 0:
+        # Similar checks for acceptors
+        ser_acceptors = [a for a in acceptors if a.resi == 1]
+        for a in ser_acceptors:
+            assert hasattr(a, 'altloc')
+            assert a.altloc == 'A'
+
+
+def test_detect_hbonds_with_altloc():
+    """Test that detect_hbonds properly includes altloc in results."""
+    aa_list = ['SER', 'GLY']
+    altlocs = ['A', '']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc=altlocs)
+    
+    donors, acceptors = utils.build_sites_biotite(arr)
+    hbonds = utils.detect_hbonds(donors, acceptors)
+    
+    # Check that altloc fields are present in results
+    for hb in hbonds:
+        assert 'donor_altloc' in hb
+        assert 'acceptor_altloc' in hb
+        # Values should be normalized (uppercase or empty string)
+        assert isinstance(hb['donor_altloc'], str)
+        assert isinstance(hb['acceptor_altloc'], str)

@@ -9,8 +9,6 @@ import warnings
 import logging
 
 from biotite.database import rcsb
-from biotite.structure.io.pdb import PDBFile
-from biotite.structure.io.pdbx import CIFFile, get_structure
 import biotite.structure as struc
 
 from src.structure import structure_context
@@ -82,31 +80,13 @@ class Runner:
         # merge overrides
         config = self._merge_config(base=config, overrides=overrides)
 
-        # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
-        if config.pdb_path is None:
-            logger.info("Fetching PDB structure from RCSB")
-            obj = rcsb.fetch(config.pdb_id, format="cif")
-            tmp_file = NamedTemporaryFile(delete=False, suffix=".cif")
-            tmp_file.write(obj.getvalue().encode("utf-8"))
-            tmp_file.close()
-            config.pdb_ext = "cif"
-            config.pdb_path = Path(tmp_file.name)
-
-        # Otherwise just add parameters directly from config
-        else:
-            logger.info("Using local PDB file")
-            config.pdb_path = Path(config.pdb_path)
-            config.pdb_ext = config.pdb_path.suffix.lstrip(".")
-
-        # Load structure using appropriate parser
-        # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
+        # Load structure using load_structure function
         logger.info("Loading structure")
-        if config.pdb_ext in ("cif", "mmcif"):
-            mm = CIFFile.read(config.pdb_path)
-            arr = get_structure(mm, model=1, extra_fields=["b_factor", "occupancy"])
-        else:
-            pdb = PDBFile.read(config.pdb_path)
-            arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
+        arr = structure_context.load_structure(
+            path=config.pdb_path,
+            pdb_id=config.pdb_id,
+            altloc_policy=config.altloc_policy
+        )
 
         # create context object
         logger.info("Creating context object")
@@ -252,7 +232,8 @@ class Runner:
             Merged DataFrame.
         """
         # Get all unique rows to merge on
-        keep_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
+        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']
+        keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
         
         # Add mutation columns if mutations are present
         keep_cols += ['resm'] if mutations else []
