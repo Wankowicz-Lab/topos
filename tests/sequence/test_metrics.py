@@ -289,8 +289,12 @@ def test_calculate_position_effect_quartiles_multichain_error():
 def test_make_phat75_73():
     """Test that make_phat75_73 returns Phat 75/73 substitution matrix."""
     phat75_73 = metrics.make_phat75_73()
-    phat75_73['A']['A'] == 0
+    assert phat75_73['A']['A'] == 5
+    assert phat75_73['V']['V'] == 4
 
+    assert phat75_73.alphabet == "ARNDCQEGHILKMFPSTWYV"
+    assert phat75_73.shape == (20, 20)
+    
 
 def test_calculate_phat_score():
     """Test that calculate_phat_score returns a DataFrame with 'phat_score' column."""
@@ -306,7 +310,7 @@ def test_calculate_phat_score():
     assert phat_df['phat_score'].notna().all()
 
     # Test for amino acids not in alphabet
-    residue_table.iloc[0, 2] = 'XXX' 
+    residue_table.at[0, 'resn_mut'] = 'XXX' 
     context = MockContext(residue_table)
     phat_df = metrics.calculate_phat_score(context)
     assert phat_df['phat_score'].iloc[0] == np.inf

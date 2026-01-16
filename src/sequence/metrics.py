@@ -268,6 +268,6 @@ def calculate_phat_score(context: Context) -> pd.DataFrame:
             return np.inf
         return PHAT75_73[wt][mut]
 
-    phat_scores[f'phat_score'] = phat_scores.apply(get_phat_score, axis=1)
+    phat_scores['phat_score'] = phat_scores.apply(get_phat_score, axis=1)
 
     return phat_scores
