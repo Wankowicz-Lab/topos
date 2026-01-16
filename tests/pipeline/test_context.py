@@ -1,8 +1,8 @@
 """Tests for pipeline context module."""
 import pytest
 import tomli
-import numpy as np
-from pathlib import Path
+
+
 from src.pipeline.context import Config, Context
 from tests.test_utils import _make_config_file, _make_chain, _make_aaindex_data
 
@@ -20,6 +20,10 @@ def test_config(tmp_path):
         loaded_config_data = tomli.load(f)
 
     config_from_file = Config(**loaded_config_data)
+    # Verify that fields loaded from the TOML file are correctly set on the Config object
+    assert isinstance(config_from_file, Config)
+    for key, value in loaded_config_data.items():
+        assert getattr(config_from_file, key) == value
 
     with pytest.raises(ValueError, match="Mutation data file not found at nonexistent.csv"):
         bad_config_args = config_args.copy()
