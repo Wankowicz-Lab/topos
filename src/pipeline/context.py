@@ -39,6 +39,8 @@ class Config(BaseModel):
         Whether the protein is a membrane protein (affects analysis methods).
     membrane_thickness : Optional[float]
         Half-thickness of membrane in Angstroms (default: 15).
+    remove_hydrogens : bool
+        Whether to remove hydrogen atoms from the structure after loading (default: True).
     altloc_policy : Literal["highest", "all"] = "highest"
         Policy for handling alternate locations. 'highest' keeps the
         highest occupancy conformer, 'all' keeps all conformers.
@@ -74,6 +76,7 @@ class Config(BaseModel):
 
     # structure parameters
     membrane_thickness: Optional[float] = 15
+    remove_hydrogens: bool = True
     altloc_policy: Literal["highest", "all"] = "highest"
 
     # mutagenesis data
