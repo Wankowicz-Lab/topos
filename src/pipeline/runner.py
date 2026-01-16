@@ -129,6 +129,11 @@ class Runner:
             altloc_policy=config.altloc_policy
         )
 
+        # Remove hydrogens if configured
+        if config.remove_hydrogens:
+            logger.info("Removing hydrogen atoms")
+            arr = arr[arr.element != "H"]
+
         # create context object
         logger.info("Creating context object")
         self.context = Context(arr, config=config)
