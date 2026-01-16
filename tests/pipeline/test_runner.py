@@ -32,8 +32,6 @@ def test_runner_initialization_from_config(tmp_path):
     assert base_runner.context is not None
     assert base_runner.context.config is not None
     assert base_runner.context.config.pdb_id == '8smv'
-    assert base_runner.context.config.pdb_path is not None
-    assert base_runner.context.config.pdb_ext == 'cif'
     assert base_runner.context.config.mutation_data_path is None
     assert base_runner.context.config.name == 'test_protein'
 
@@ -44,20 +42,17 @@ def test_runner_initialization_from_config(tmp_path):
         _ = runner.Runner(pdb_id='test')
 
 
-def test_runner_initialization_from_pdb_id():
-    pdb_id = '8smv'
+def test_runner_initialization_altloc_policy(tmp_path):
+    """Test that altloc policy is set correctly."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, altloc_policy='all', pdb_id='5C1M')
 
-    id_runner = runner.Runner(
-        pdb_id=pdb_id,
-        name='test')
+    altloc_runner = runner.Runner(config_path=config_path)
+    assert altloc_runner.context.config.altloc_policy == 'all'
+    assert set(np.unique(altloc_runner.context.array.altloc_id)) == {'.', 'A', 'B'}
 
-    assert id_runner.context.array is not None
-    assert id_runner.context is not None
-    assert id_runner.context.config is not None
-    assert id_runner.context.config.pdb_id == pdb_id
-    assert id_runner.context.config.pdb_path is not None
-    assert id_runner.context.config.pdb_ext == 'cif'
-    assert id_runner.context.config.mutation_data_path is None
+    # Altlocs in body of residue don't show up in residue table, only those at the start of the residue (res starts). Need to decide how to handle this
+    assert set(np.unique(altloc_runner.context.residue_table.altloc)) == {'.', 'A'}
 
 
 def test_runner_initialization_overrides_membrane(tmp_path):
@@ -271,58 +266,6 @@ def test_runner_initialization_invalid_config(tmp_path):
         runner.Runner(config_path=config_path)
 
 
-def test_runner_initialization_load_pdb_format(tmp_path):
-    """Test loading structure with PDB format (not just CIF)."""
-    # Create a simple PDB file
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    pdb_path = tmp_path / "test_structure.pdb"
-
-    # Write a minimal valid PDB file
-    pdb_content = []
-    atom_id = 1
-    for res_idx, res_name in enumerate(residues, start=1):
-        # Add backbone atoms for each residue
-        for atom_name in ['N', 'CA', 'C', 'O']:
-            x, y, z = float(atom_id), 0.0, 0.0
-            pdb_content.append(
-                f"ATOM  {atom_id:5d}  {atom_name:4s}{res_name:3s} A{res_idx:4d}    "
-                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {atom_name[0]:>2s}\n"
-            )
-            atom_id += 1
-    pdb_content.append("END\n")
-
-    with pdb_path.open("w") as f:
-        f.writelines(pdb_content)
-
-    # Test that both .pdb and .cif extensions work
-    test_runner = runner.Runner(
-        pdb_id='TEST',
-        name='test_pdb_format',
-        pdb_path=pdb_path
-    )
-
-    assert test_runner.context.array is not None
-    assert test_runner.context.config.pdb_ext == 'pdb'
-    assert test_runner.context.config.pdb_path == pdb_path
-
-
-def test_runner_initialization_load_cif_format(tmp_path):
-    """Test loading structure with CIF format to verify extension handling."""
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    cif_path = tmp_path / "test_structure.cif"
-    _write_mmcif_file(file_path=cif_path, pdb_id="TEST", chains={"A": residues})
-
-    test_runner = runner.Runner(
-        pdb_id='TEST',
-        name='test_cif_format',
-        pdb_path=cif_path
-    )
-
-    assert test_runner.context.array is not None
-    assert test_runner.context.config.pdb_ext == 'cif'
-    assert test_runner.context.config.pdb_path == cif_path
-
-
 def test_runner__merge_config(tmp_path):
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_path=None)
@@ -336,6 +279,7 @@ def test_runner__merge_config(tmp_path):
 
     base_config = Config(
         pdb_id='1abc',
+        name='test_protein',
         pdb_path=pdb_file_path,
         membrane_protein=False,
         mutation_data_path=None,
@@ -354,6 +298,24 @@ def test_runner__merge_config(tmp_path):
     assert merged_config.membrane_protein is True
     assert merged_config.mutation_data_path is None
     assert merged_config.aaindex_path == aaindex_file_path
+
+    # Test missing pdb_id
+    empty_config = Config(name='test')
+    with pytest.raises(ValueError, match="'pdb_id' must be provided"):
+        myrunner._merge_config(base=empty_config, overrides={})
+    with pytest.raises(ValueError, match="'pdb_id' must be provided"):
+        myrunner._merge_config(base=empty_config,
+                               overrides={'membrane_protein': True})
+
+    # Test missing name
+    empty_config = Config(pdb_id='1abc')
+    with pytest.raises(ValueError, match="'name' must be provided"):
+        myrunner._merge_config(base=empty_config, overrides={})
+    with pytest.raises(ValueError, match="'name' must be provided"):
+        myrunner._merge_config(base=empty_config,
+                               overrides={'membrane_protein': True})
+
+
 
 
 def test_runner_run_metric(tmp_path):

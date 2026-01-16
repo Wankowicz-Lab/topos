@@ -6,14 +6,21 @@ This module provides the Context class for managing protein structure data
 and a registry for metric functions.
 """
 from __future__ import annotations
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Callable, Dict, Iterable, List, Optional, Set, Any, Protocol, Literal, Union
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
+from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
+from biotite.structure import filter_highest_occupancy_altloc
+from biotite.structure.io.pdbx import CIFFile, get_structure
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------- Registry ----------------
@@ -136,12 +143,13 @@ class Config(BaseModel):
         PDB identifier for fetching structure from RCSB.
     pdb_path : Optional[Path]
         Local path to structure file (PDB or mmCIF format).
-    pdb_ext : Optional[str]
-        File extension of the structure file.
     membrane_protein : Optional[bool]
         Whether the protein is a membrane protein (affects analysis methods).
     membrane_thickness : Optional[float]
         Half-thickness of membrane in Angstroms (default: 15).
+    altloc_policy : Literal["highest", "all"] = "highest"
+        Policy for handling alternate locations. 'highest' keeps the
+        highest occupancy conformer, 'all' keeps all conformers.
     mutation_data_path : Optional[Path]
         Path to CSV file containing mutagenesis data.
     mutation_data_chain : Optional[str]
@@ -170,11 +178,11 @@ class Config(BaseModel):
     name: Optional[str] = None
     pdb_id: Optional[str] = None
     pdb_path: Optional[Path] = None
-    pdb_ext: Optional[str] = None
     membrane_protein: Optional[bool] = False
 
     # structure parameters
     membrane_thickness: Optional[float] = 15
+    altloc_policy: Literal["highest", "all"] = "highest"
 
     # mutagenesis data
     mutation_data_path: Optional[Path] = None
@@ -224,7 +232,7 @@ class Context:
     aa : struc.AtomArray, optional
         Amino acid atoms only (filtered from array).
     residue_table : pd.DataFrame, optional
-        DataFrame with chain, resi, resn for each residue.
+        DataFrame with chain, resi, resn, altloc for each residue. Residues with no altlocs have blanks
     kdtree : Any, optional
         KD-tree for spatial queries (built on demand).
     neighbor_cache : dict
@@ -250,6 +258,7 @@ class Context:
             self.config = Config()
 
         if isinstance(self.array, struc.AtomArray):
+            self.array = _ensure_altloc_annotation(self.array)
             aa = self.array[struc.filter_amino_acids(self.array)]
         else:
             aa0 = self.array[0]
@@ -277,66 +286,105 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns 'chain', 'resi', 'resn' for each residue.
+        DataFrame with columns 'chain', 'resi', 'resn', 'altloc' for each residue.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     resi   = array.res_id[res_starts]
     resn   = array.res_name[res_starts]
-    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn})
+    altloc = array.altloc[res_starts]
+    
+    return pd.DataFrame({"chain": chains, "resi": resi, "resn": resn, "altloc": altloc})
 
 def load_structure(
-    path: Union[str, Path],
+    path: Optional[Union[str, Path]] = None,
+    pdb_id: Optional[str] = None,
     model: Optional[int] = 1,
-    altloc_policy: Literal["occupancy", "all"] = "occupancy",
-    pdb_ext: str = "pdb"
+    altloc_policy: Literal["highest", "all"] = "highest",
 ) -> struc.AtomArray:
     """
-    Load a protein structure from a PDB file.
+    Load a protein structure from a PDB or mmCIF file, or fetch from RCSB by PDB ID.
 
     Parameters
     ----------
-    path : str or Path
-        Path to the PDB file.
+    path : str or Path, optional
+        Path to the structure file (PDB or mmCIF format). If not provided, pdb_id must be provided.
+    pdb_id : str, optional
+        PDB identifier for fetching structure from RCSB. If not provided, path must be provided.
     model : int, optional
         Model number to load. Default is 1. Use None to load all models.
-    altloc_policy : {'occupancy', 'all'}, optional
-        Policy for handling alternate locations. 'occupancy' keeps the
+    altloc_policy : {'highest', 'all'}, optional
+        Policy for handling alternate locations. 'highest' keeps the
         highest occupancy conformer, 'all' keeps all conformers.
-        Default is 'occupancy'.
-    pdb_ext : str, optional
-        File extension hint. Default is 'pdb'.
+        Default is 'highest'.
 
     Returns
     -------
     struc.AtomArray
-        Loaded protein structure.
+        Loaded protein structure. The 'altloc' annotation contains the alternate
+        location identifier for each atom (empty string if no alternate location).
     """
-    pdb = PDBFile.read(str(path))
-    models = pdb.get_model_count()
-    arr = pdb.get_structure(model=None) if (model is None and models > 1) else pdb.get_structure(model or 1)
-    if isinstance(arr, struc.AtomArray) and altloc_policy != "all":
-        if "altloc_id" in arr.get_annotation_categories():
-            if altloc_policy == "occupancy" and "occupancy" in arr.get_annotation_categories():
-                keep = _keep_highest_occ_per_atom(arr)
-            else:
-                keep = _keep_first_altloc_per_atom(arr)
-            arr = arr[keep]
+    extra_fields = ["b_factor", "occupancy"]
+    
+    # Handle PDB ID fetching if path is not provided
+    if path is None and pdb_id is not None:
+        logger.info("Fetching PDB structure from RCSB")
+        obj = rcsb.fetch(pdb_id, format="cif")
+        tmp_file = NamedTemporaryFile(delete=False, suffix=".cif")
+        tmp_file.write(obj.getvalue().encode("utf-8"))
+        tmp_file.close()
+        path = Path(tmp_file.name)
+        pdb_ext = "cif"
+    elif path is not None:
+        path = Path(path)
+        pdb_ext = path.suffix.lstrip(".")
+    else:
+        raise ValueError("Either pdb_id or path must be provided")
+
+    # Rename 'highest' to 'occupancy' to match biotite convention
+    altloc_policy = "occupancy" if altloc_policy == 'highest' else altloc_policy
+    
+    # Load structure using appropriate parser
+    if pdb_ext in ("cif", "mmcif"):
+        cif = CIFFile.read(str(path))
+        arr = get_structure(cif, model=model or 1, extra_fields=extra_fields, altloc=altloc_policy)
+    else:
+        pdb = PDBFile.read(str(path))
+        models = pdb.get_model_count()
+        if model is None and models > 1:
+            arr = pdb.get_structure(model=None, extra_fields=extra_fields, altloc=altloc_policy)
+        else:
+            arr = pdb.get_structure(model=model or 1, extra_fields=extra_fields, altloc=altloc_policy)
+    
     return arr
 
 
-def _keep_highest_occ_per_atom(array: struc.AtomArray) -> np.ndarray:
-    """Keep atoms with the highest occupancy for each unique atom position."""
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id","res_id","atom_name"]):
-        occ = array.occupancy[idx]
-        keep[idx[int(np.argmax(occ))]] = True
-    return keep
-
-
-def _keep_first_altloc_per_atom(array: struc.AtomArray) -> np.ndarray:
-    """Keep the first alternate location for each unique atom position."""
-    keep = np.zeros(array.array_length(), dtype=bool)
-    for idx in struc.group(array, ["chain_id", "res_id", "atom_name"]):
-        keep[idx[0]] = True
-    return keep
+def _ensure_altloc_annotation(array: struc.AtomArray) -> struc.AtomArray:
+    """
+    Ensure the array has an 'altloc' annotation.
+    
+    If 'altloc_id' exists (from PDB file), copy it to 'altloc'.
+    Otherwise, create an empty 'altloc' annotation.
+    
+    Parameters
+    ----------
+    array : struc.AtomArray
+        Input atom array.
+    
+    Returns
+    -------
+    struc.AtomArray
+        Array with 'altloc' annotation guaranteed to exist.
+    """
+    if "altloc" not in array.get_annotation_categories():
+        if "altloc_id" in array.get_annotation_categories():
+            # Copy altloc_id to altloc, normalizing empty values
+            altloc_vals = np.array([
+                str(a).strip() if a is not None else '' 
+                for a in array.altloc_id
+            ])
+            array.set_annotation("altloc", altloc_vals)
+        else:
+            # No altloc information available, set empty strings
+            array.set_annotation("altloc", np.array([''] * array.array_length()))
+    return array

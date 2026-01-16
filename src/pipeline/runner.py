@@ -6,10 +6,10 @@ from pathlib import Path
 import pandas as pd
 import tomli
 import warnings
+import logging
 
 from biotite.database import rcsb
-from biotite.structure.io.pdb import PDBFile
-from biotite.structure.io.pdbx import CIFFile, get_structure
+import biotite.structure as struc
 
 from src.structure import structure_context
 from src.sequence import sequence_context
@@ -21,6 +21,8 @@ from typing import List, Optional, Dict, Any
 import src.sequence.metrics
 import src.structure.metrics
 from src.structure.structure_context import _REGISTRY, Config
+
+logger = logging.getLogger(__name__)
 
 
 def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[str] = None) -> pd.DataFrame:
@@ -72,6 +74,7 @@ class Runner:
     config_path: Optional[Path|str] = None
 
     def __post_init__(self):
+        logger.info("Initializing pipeline")
 
         # Ensure that either pdb_id or config_path is provided
         if self.pdb_id is None and self.config_path is None:
@@ -102,6 +105,7 @@ class Runner:
 
             # load config from file
             try:
+                logger.info("Loading configuration")
                 with self.config_path.open("rb") as f:
                     config_dict = tomli.load(f)
                     # convert empty strings to None
@@ -115,34 +119,21 @@ class Runner:
         # merge overrides
         config = self._merge_config(base=config, overrides=overrides)
 
-        # If the user did not provide a pdb_path, fetch from RCSB and save to a temp file
-        if config.pdb_path is None:
-            obj = rcsb.fetch(config.pdb_id, format="cif")
-            tmp_file = NamedTemporaryFile(delete=False, suffix=".cif")
-            tmp_file.write(obj.getvalue().encode("utf-8"))
-            tmp_file.close()
-            config.pdb_ext = "cif"
-            config.pdb_path = Path(tmp_file.name)
-
-        # Otherwise just add parameters directly from config
-        else:
-            config.pdb_path = Path(config.pdb_path)
-            config.pdb_ext = config.pdb_path.suffix.lstrip(".")
-
-        # Load structure using appropriate parser
-        # TODO: update this code to use load_structure function in structure_context.py once altloc handling is decided
-        if config.pdb_ext in ("cif", "mmcif"):
-            mm = CIFFile.read(config.pdb_path)
-            arr = get_structure(mm, model=1, extra_fields=["b_factor", "occupancy"])
-        else:
-            pdb = PDBFile.read(config.pdb_path)
-            arr = pdb.get_structure(model=1, extra_fields=["b_factor", "occupancy"])
+        # Load structure using load_structure function
+        logger.info("Loading structure")
+        arr = structure_context.load_structure(
+            path=config.pdb_path,
+            pdb_id=config.pdb_id,
+            altloc_policy=config.altloc_policy
+        )
 
         # create context object
+        logger.info("Creating context object")
         self.context = structure_context.Context(arr, config=config)
 
         if self.context.config.membrane_protein:
             try:
+                logger.info("Fetching PDBTM annotation")
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
@@ -156,6 +147,7 @@ class Runner:
 
         # Load mutation data if provided
         if self.context.config.mutation_data_path is not None:
+            logger.info("Loading mutation data")
 
             self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(
                 path=self.context.config.mutation_data_path,
@@ -227,12 +219,15 @@ class Runner:
         unknown = set(overrides.keys()) - set(filtered.keys())
         if unknown:
             warnings.warn(f"Unknown arguments ignored: {unknown}")
-        if not filtered:
-            return base
 
         # construct new Config with overrides
         base_dict = base.model_dump()
         base_dict.update(filtered)
+
+        if base_dict.get('name') is None:
+            raise ValueError("'name' must be provided either in config file or directly to Runner.")
+        if base_dict.get('pdb_id') is None:
+            raise ValueError("'pdb_id' must be provided either in config file or directly to Runner.")
 
         return Config(**base_dict)
 
@@ -258,7 +253,8 @@ class Runner:
         result_frames = []
         for m in order:
             meta, func = _REGISTRY[m]
-
+            
+            logger.info(f"Calculating metric: {m}")
             df = func(self.context)
 
             # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)
@@ -268,6 +264,7 @@ class Runner:
             self.context.extras[m] = df
 
         # merge all results into one DataFrame
+        logger.info("Merging features")
         mutations = self.context.config.mutation_data_path is not None
         self.features = self._merge_features(result_frames, mutations=mutations)
         self.features['name'] = self.context.config.name
@@ -290,7 +287,9 @@ class Runner:
             Merged DataFrame.
         """
         # Get all unique rows to merge on
-        keep_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'align_pos']
+
+        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'align_pos']
+        keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
         
         # Add mutation columns if mutations are present
         keep_cols += ['resm'] if mutations else []
@@ -353,6 +352,7 @@ class Runner:
             prefix = self.context.config.pdb_id
 
         # Save features
+        logger.info("Saving results")
         merged_path = output_dir / f"{prefix}_features.csv"
         self.features.to_csv(merged_path, index=False)
 

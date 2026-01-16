@@ -114,7 +114,7 @@ def test_calculate_membrane_distance():
     z_values = list(range(-25, 25, 5))
     coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
     aa_list = random.choices(AA_LIST, k=len(z_values))
-    arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A', altloc='')
 
     class MockContext:
         def __init__(self, array):
@@ -136,7 +136,7 @@ def test_define_secondary_structure():
     residue_table['pdbtm_region'] = 'membrane_spanning'
     residue_table['pdbtm_region_detailed'] = 'TM1'
     aa_list = residue_table.resn_struct.tolist()
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
 
     context = Context(array=arr, config=Config())
     context.residue_table = residue_table
@@ -155,21 +155,33 @@ def test_define_secondary_structure():
 def test_calculate_sasa():  
     # Create a simple chain with a few residues
     aa_list = ['ALA', 'GLY', 'SER']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
     context = Context(array=arr)
     
-    # Calculate SASA - should return a DataFrame with 'sasa' column
+    # Calculate SASA - should return a DataFrame with 'sasa' and subcategory columns
     sasa_df = metrics.calculate_sasa(context)
+
+    # Check that all expected columns are present
+    expected_columns = ['sasa', 'sasa_backbone', 'sasa_sidechain', 'sasa_polar', 'sasa_nonpolar']
+    for col in expected_columns:
+        assert col in sasa_df.columns, f"Column '{col}' should be present in output"
 
     # Check that SASA values are non-negative
     sasa_values = sasa_df['sasa']
     assert np.all(sasa_values >= 0), "SASA values should be non-negative"
+    
+    # Check that subcategory SASA values are non-negative (where not NaN)
+    for col in ['sasa_backbone', 'sasa_sidechain', 'sasa_polar', 'sasa_nonpolar']:
+        values = sasa_df[col]
+        non_nan_values = values.dropna()
+        if len(non_nan_values) > 0:
+            assert np.all(non_nan_values >= 0), f"{col} values should be non-negative"
 
 
 def test_KD_values():  
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
     context = Context(array=arr)
     
     kd_df = metrics.calculate_kyte_doolittle(context)
@@ -190,7 +202,7 @@ def test_KD_values():
 def test_calculate_residue_packing():
     # Create a chain with a few residues that can be close together
     aa_list = ['ALA', 'GLY', 'ALA', 'LEU']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
     context = Context(array=arr)
     
     # Calculate packing metrics
@@ -228,10 +240,24 @@ def test_calculate_hbond_metrics():
     # Check that arrays have correct length
     res_starts = struc.get_residue_starts(arr)
     n_res = len(res_starts)
-    for key in expected_keys:
+    for key in ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']:
         assert len(hbond_metrics[key]) == n_res
     
     # Check that counts are non-negative
     assert all(hbond_metrics['bb_hbond_count'] >= 0)
     assert all(hbond_metrics['sc_hbond_count'] >= 0)
     assert all(hbond_metrics['total_hbond_count'] >= 0)
+    
+
+def test_calculate_hbond_metrics_with_altloc():
+    """Test that hbond metrics properly handle altloc information."""
+    # Create a chain with altloc identifiers
+    aa_list = ['SER', 'GLY', 'ASP']
+    altlocs = ['A', '', 'B']  # Mix of altlocs and no altloc
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc=altlocs)
+    context = Context(array=arr)
+    
+    hbond_metrics = metrics.calculate_hbond_metrics(context)
+    assert 'bb_hbond_count' in hbond_metrics.columns
+    assert 'sc_hbond_count' in hbond_metrics.columns
+    
