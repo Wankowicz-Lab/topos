@@ -246,3 +246,61 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     blosum_scores[f'blosum{blosum_threshold}'] = blosum_scores.apply(get_blosum_score, axis=1)
 
     return blosum_scores
+
+
+@register_metric(name='aa_groupings', provides=['wildtype_aa_group', 'mut_aa_group', 'wildtype_mut_aa_group'],
+                 requires={'resm'}, tags={'sequence'})
+def calculate_aa_groupings(context: Context) -> pd.DataFrame:
+    """
+    Calculate amino acid groupings for each mutation.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'wildtype_aa_group', 'mut_aa_group', 'wildtype_mut_aa_group' along with residue metadata.
+    """
+    logger.info("Calculating amino acid groupings")
+    
+    # Define amino acid groups
+    aa_groups_3letter = {
+        "Nonpolar_Aliphatic": ["ALA", "VAL", "LEU", "ILE", "MET"],
+        "Aromatic": ["PHE", "TRP", "TYR"],
+        "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
+        "Positively_Charged": ["LYS", "ARG", "HIS"],
+        "Negatively_Charged": ["ASP", "GLU"],
+        "Special": ["PRO", "GLY"]
+    }
+    
+    # Create reverse mapping from amino acid to group
+    aa_to_group = {}
+    for group_name, aa_list in aa_groups_3letter.items():
+        for aa in aa_list:
+            aa_to_group[aa] = group_name
+    
+    # Extract residue table and subset to KEEP_COLS
+    residue_table = context.residue_table
+    keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
+    aa_groupings = residue_table[keep_cols].copy()
+    
+    # Map wildtype amino acid to group
+    aa_groupings['wildtype_aa_group'] = aa_groupings['resn_mut'].map(aa_to_group)
+    
+    # Map mutant amino acid to group if resm column exists
+    if 'resm' in keep_cols:
+        aa_groupings['mut_aa_group'] = aa_groupings['resm'].map(aa_to_group)
+        
+        # Create concatenated column: wildtype_group_mut_group
+        # Handle NaN values - if either is NaN, result should be NaN
+        mask = aa_groupings['wildtype_aa_group'].notna() & aa_groupings['mut_aa_group'].notna()
+        aa_groupings['wildtype_mut_aa_group'] = pd.Series(dtype='object')
+        aa_groupings.loc[mask, 'wildtype_mut_aa_group'] = (
+            aa_groupings.loc[mask, 'wildtype_aa_group'].astype(str) + '_' + 
+            aa_groupings.loc[mask, 'mut_aa_group'].astype(str)
+        )
+    
+    return aa_groupings

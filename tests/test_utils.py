@@ -111,6 +111,7 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
             resm_list = AA_LIST * num_residue
             eff_list = np.random.normal(loc=0.0, scale=1.0, size=num_residue * 20)
             type_list = ['missense'] * num_residue * 20
+            altloc_list = [''] * num_residue * 20
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
@@ -121,13 +122,15 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
                 'resm': resm_list,
                 'effect': eff_list,
                 'type': type_list,
+                'altloc': altloc_list,
                 'struct_info': True,
                 'mut_info': True
             })
         else:
             chain_list = [chain_id] * num_residue
-            resi_list = range(start_resi, start_resi + num_residue)
+            resi_list = list(range(start_resi, start_resi + num_residue))
             resn_list = _random_AA_seq(num_residue)
+            altloc_list = [''] * num_residue
 
             chain_df = pd.DataFrame({
                 'chain': chain_list,
@@ -135,16 +138,21 @@ def _make_residue_table(num_residues=10, num_chains=2, start_resis=1, make_muts=
                 'resn_struct': resn_list,
                 'resi_mut': resi_list,
                 'resn_mut': resn_list,
+                'altloc': altloc_list,
                 'struct_info': True,
                 'mut_info': True
             })
         data.append(chain_df)
 
     residue_table = pd.concat(data, ignore_index=True)
+    
+    # Add align_pos for consistency with actual residue tables
+    residue_table['align_pos'] = range(len(residue_table))
+    
     return residue_table
 
 
-def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", element=None):
+def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", element=None, altloc=''):
     """
     Create a small AtomArray with manually specified atom names & coordinates.
 
@@ -162,6 +170,9 @@ def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", elem
         Chain ID to assign to all atoms.
     element : list of str, optional
         List of element symbols corresponding to each atom. If None, inferred from atom names.
+    altloc : str or list of str, optional
+        Alternate location identifier(s). If a string, applied to all atoms.
+        If a list, must match the length of atom_names. Default is empty string.
 
     Returns:
     --------
@@ -182,6 +193,12 @@ def _make_atoms(atom_names, coords, res_name="UNK", res_id=1, chain_id="A", elem
         arr.element = np.array([name[0] for name in atom_names])
     else:
         arr.element = np.array(element)
+
+    # Set altloc annotation
+    if isinstance(altloc, str):
+        arr.set_annotation("altloc", np.array([altloc] * n))
+    else:
+        arr.set_annotation("altloc", np.array(altloc))
 
     return arr
 
@@ -213,7 +230,7 @@ AA_SIDECHAIN = {
 }
 
 
-def _make_residue(res_name, res_id=1, chain_id="A", coords=None):
+def _make_residue(res_name, res_id=1, chain_id="A", coords=None, altloc=''):
     """
     Make a synthetic residue with correct atoms but made-up geometry.
 
@@ -227,6 +244,9 @@ def _make_residue(res_name, res_id=1, chain_id="A", coords=None):
         Chain ID to assign.
     coords : list of list of float, optional
         List of coordinates for each atom. If None, generates simple linear geometry.
+    altloc : str or list of str, optional
+        Alternate location identifier(s). If a string, applied to all atoms.
+        If a list, must match the number of atoms in the residue. Default is empty string.
 
     Returns:
     --------
@@ -248,10 +268,10 @@ def _make_residue(res_name, res_id=1, chain_id="A", coords=None):
             x_coord, y_coord, z_coord = coords
             coords = [[x_coord * i, y_coord, z_coord] for i in range(len(atom_names))]
 
-    return _make_atoms(atom_names, coords, res_name, res_id, chain_id)
+    return _make_atoms(atom_names, coords, res_name, res_id, chain_id, altloc=altloc)
 
 
-def _make_chain(aa_list, chain_id="A", coords=None):
+def _make_chain(aa_list, chain_id="A", coords=None, altloc=''):
     """
     Create a biotite AtomArray representing a protein chain from a list of amino acids.
 
@@ -263,6 +283,9 @@ def _make_chain(aa_list, chain_id="A", coords=None):
         Chain identifier to assign to all residues.
     coords : list of list of float, optional
         List of coordinates for each atom in the chain. If None, generates simple linear geometry.
+    altloc : str or list of str, optional
+        Alternate location identifier(s). If a string, applied to all residues.
+        If a list, must match the length of aa_list. Default is empty string.
 
     Returns:
     --------
@@ -273,7 +296,9 @@ def _make_chain(aa_list, chain_id="A", coords=None):
 
     residues = []
     for i, aa in enumerate(aa_list, start=1):
-        res = _make_residue(aa, res_id=i, chain_id=chain_id, coords=coords[i-1] if coords else None)
+        # Get altloc for this residue
+        res_altloc = altloc[i-1] if isinstance(altloc, list) else altloc
+        res = _make_residue(aa, res_id=i, chain_id=chain_id, altloc=res_altloc, coords=coords[i-1] if coords else None)
         residues.append(res)
 
     return struc.concatenate(residues)
@@ -392,7 +417,7 @@ def _make_aaindex_data(accessions):
 
 def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membrane_protein=False,
                       mutation_data_path=None,
-                      mutation_data_chain=None, aaindex_path=None) -> None:
+                      mutation_data_chain=None, aaindex_path=None, altloc_policy='highest') -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
 
     defaults = {"pdb_id": pdb_id,
@@ -400,7 +425,8 @@ def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membr
                 "membrane_protein": membrane_protein,
                 "mutation_data_path": str(mutation_data_path) if mutation_data_path is not None else None,
                 "mutation_data_chain": mutation_data_chain,
-                "aaindex_path": str(aaindex_path) if aaindex_path is not None else None}
+                "aaindex_path": str(aaindex_path) if aaindex_path is not None else None,
+                "altloc_policy": altloc_policy}
 
     # Remove any keys with None values
     remove_keys = [key for key, value in defaults.items() if value is None]
