@@ -284,3 +284,29 @@ def test_calculate_position_effect_quartiles_multichain_error():
     # Verify that ValueError is raised with appropriate message
     with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
         metrics.calculate_position_effect_quartiles(context)
+
+
+def test_make_phat75_73():
+    """Test that make_phat75_73 returns Phat 75/73 substitution matrix."""
+    phat75_73 = metrics.make_phat75_73()
+    phat75_73['A']['A'] == 0
+
+
+def test_calculate_phat_score():
+    """Test that calculate_phat_score returns a DataFrame with 'phat_score' column."""
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+    phat_df = metrics.calculate_phat_score(context)
+    assert 'phat_score' in phat_df.columns
+    assert phat_df['phat_score'].notna().all()
+
+    # Test for amino acids not in alphabet
+    residue_table.iloc[0, 2] = 'XXX' 
+    context = MockContext(residue_table)
+    phat_df = metrics.calculate_phat_score(context)
+    assert phat_df['phat_score'].iloc[0] == np.inf
