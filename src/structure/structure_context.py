@@ -105,7 +105,7 @@ def load_structure(
     return arr
 
 
-def _ensure_altloc_annotation(array: struc.AtomArray) -> struc.AtomArray:
+def ensure_altloc_annotation(array: struc.AtomArray) -> struc.AtomArray:
     """
     Ensure the array has an 'altloc' annotation.
     

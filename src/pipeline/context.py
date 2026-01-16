@@ -15,7 +15,7 @@ import biotite.structure as struc
 from pydantic import BaseModel
 
 # Import structure-loading helpers
-from src.structure.structure_context import residue_table, _ensure_altloc_annotation
+from src.structure.structure_context import residue_table, ensure_altloc_annotation
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class Context:
             self.config = Config()
 
         if isinstance(self.array, struc.AtomArray):
-            self.array = _ensure_altloc_annotation(self.array)
+            self.array = ensure_altloc_annotation(self.array)
             aa = self.array[struc.filter_amino_acids(self.array)]
         else:
             aa0 = self.array[0]
