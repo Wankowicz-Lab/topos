@@ -116,11 +116,12 @@ def alignment_to_index_map(alignment):
     Returns:
     -------
     list of tuples
-        list of (idx1, idx2) where either may be None for gaps
+        list of (align_pos, idx1, idx2) where either idx may be None for gaps
     """
 
     coords = alignment.coordinates  # shape (2, n_segments+1)
     map_list = []
+    align_pos = 0
 
     for col in range(coords.shape[1] - 1):
         start1, end1 = coords[0, col], coords[0, col + 1]
@@ -132,16 +133,19 @@ def alignment_to_index_map(alignment):
         if len1 == len2:
             # Match/substitution block
             for i in range(len1):
-                map_list.append((start1 + i, start2 + i))
+                map_list.append((align_pos, start1 + i, start2 + i))
+                align_pos += 1
         elif len1 > len2:
             # Deletion in seq2 (seq1 has extra)
             for i in range(len1):
                 # seq2 gap for positions beyond its end
-                map_list.append((start1 + i, start2 + i if i < len2 else None))
+                map_list.append((align_pos, start1 + i, start2 + i if i < len2 else None))
+                align_pos += 1
         else:
             # Insertion in seq2 (seq2 has extra)
             for i in range(len2):
-                map_list.append((start1 + i if i < len1 else None, start2 + i))
+                map_list.append((align_pos, start1 + i if i < len1 else None, start2 + i))
+                align_pos += 1
 
     return map_list
 
@@ -157,7 +161,7 @@ def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> p
     df2: pd.DataFrame
         Second DataFrame containing sequence information.
     mapping: list of tuples
-        List of (idx1, idx2) tuples mapping indices from df1 to df2. Either idx may be None for gaps.
+        List of (align_pos, idx1, idx2) tuples mapping indices from df1 to df2. Either idx may be None for gaps.
 
     Returns
     -------
@@ -165,7 +169,7 @@ def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> p
         Merged DataFrame containing combined sequence information from both DataFrames.
     """
 
-    map_df = pd.DataFrame(mapping, columns=["i1", "i2"])
+    map_df = pd.DataFrame(mapping, columns=["align_pos", "i1", "i2"])
 
     # copy dfs to avoid modifying originals
     df1 = df1.copy()
@@ -175,13 +179,17 @@ def merge_sequence_dfs(df1: pd.DataFrame, df2: pd.DataFrame, mapping: list) -> p
     df1['seq_idx'] = range(len(df1))
     df2['seq_idx'] = range(len(df2))
 
-    merged = map_df \
-        .merge(df1, how="left", left_on="i1", right_on="seq_idx", suffixes=("", "_df1")) \
+    merged = (
+        map_df
+        .merge(df1, how="left", left_on="i1", right_on="seq_idx", suffixes=("", "_df1"))
         .merge(df2, how="left", left_on="i2", right_on="seq_idx", suffixes=("", "_df2"))
+    )
 
     merged.drop(columns=["i1", "i2", "seq_idx", "seq_idx_df2"], inplace=True)
     merged.rename(columns={'resi': 'resi_df1', 'resn': 'resn_df1'}, inplace=True)
 
+    # guarantee stable alignment ordering
+    merged = merged.sort_values("align_pos", kind="mergesort").reset_index(drop=True)
     return merged
 
 
@@ -311,7 +319,10 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
 
     # Add mutation information into merged_df
-    merged_df = merged_df.merge(mutation_scores, how='outer', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
+    merged_df = merged_df.merge(mutation_scores, how='left', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
+    
+    # Drop duplicate columns from the merge (resi and resn are duplicates of resi_mut and resn_mut)
+    merged_df.drop(columns=['resi', 'resn'], inplace=True, errors='ignore')
 
     # Remove rows from mutation chain from residue table, update with merged rows
     residue_table = residue_table[residue_table['chain'] != chain]
@@ -323,7 +334,7 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     residue_table['struct_info'] = ~residue_table['resn_struct'].isna()
 
     # drop extra columns if present
-    keep_cols = ['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info']
+    keep_cols = ['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'type', 'effect', 'mut_info', 'struct_info', 'align_pos']
     keep_cols += ['pdbtm_region', 'pdbtm_region_detailed'] if 'pdbtm_region' in residue_table.columns else []
     residue_table = residue_table[keep_cols]
 

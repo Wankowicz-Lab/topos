@@ -90,7 +90,7 @@ def test_alignment_to_index_map():
     alignment = aligner.align(seq1, seq2)[0]
     index_map = alignment_to_index_map(alignment)
 
-    expected_map = [(0, 0), (1, 1), (2, 2), (3, None), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (None, 8), (None, 9)]
+    expected_map = [(0, 0, 0), (1, 1, 1), (2, 2, 2), (3, 3, None), (4, 4, 3), (5, 5, 4), (6, 6, 5), (7, 7, 6), (8, 8, 7), (9, None, 8), (10, None, 9)]
     assert index_map == expected_map
 
 
@@ -110,11 +110,11 @@ def test_merge_sequence_dfs():
     })
 
     # None for the deleted 'R' and for the added 'E'
-    mapping = [(0, 0), (1, None), (2, 1), (3, 2), (4, 3), (None, 4)]
+    mapping = [(0, 0, 0), (1, 1, None), (2, 2, 1), (3, 3, 2), (4, 4, 3), (5, None, 4)]
     merged_df = merge_sequence_dfs(df1=df1, df2=df2, mapping=mapping)
 
     assert len(merged_df) == 6
-    assert set(merged_df.columns) == {'resi_df1', 'resn_df1', 'feature1', 'resi_df2', 'resn_df2', 'feature2'}
+    assert set(merged_df.columns) == {'align_pos', 'resi_df1', 'resn_df1', 'feature1', 'resi_df2', 'resn_df2', 'feature2'}
 
     # Check that resn values are correctly aligned
     assert merged_df['resn_df1'].equals(pd.Series(['A', 'R', 'N', 'D', 'C', None]))
@@ -123,6 +123,9 @@ def test_merge_sequence_dfs():
     # Check that feature values are correctly aligned
     assert merged_df['feature1'].equals(pd.Series([0.1, 0.2, 0.3, 0.4, 0.5, None]))
     assert merged_df['feature2'].equals(pd.Series([1.0, None, 1.1, 1.2, 1.3, 1.4]))
+    
+    # Check that align_pos is correctly set
+    assert merged_df['align_pos'].equals(pd.Series([0, 1, 2, 3, 4, 5]))
 
 
 def test_evaluate_sequence_alignment():
@@ -227,6 +230,6 @@ def test_merge_mutation_scores(tmp_path):
 
         assert len(merged_df) == 8 # 1 row for each mutant, plus 1 for residue in chain B
         assert set(merged_df.columns) == {'resn_struct', 'resi_struct', 'resn_mut', 'resi_mut', 'resm', 'type',
-                                          'effect', 'chain', 'mut_info', 'struct_info', 'pdbtm_region', 'pdbtm_region_detailed'}
+                                          'effect', 'chain', 'mut_info', 'struct_info', 'pdbtm_region', 'pdbtm_region_detailed', 'align_pos'}
         assert merged_df['mut_info'].tolist() == [False, True, True, True, True, True, True, True]
         assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True]
