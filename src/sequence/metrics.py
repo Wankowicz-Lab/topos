@@ -6,6 +6,8 @@ import blosum as bl
 
 from src.sequence.utils import convert_amino_acid
 from src.structure.structure_context import Context, register_metric
+from Bio.Align import substitution_matrices
+
 
 from typing import List, Optional
 
@@ -190,6 +192,85 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     blosum_scores[f'blosum{blosum_threshold}'] = blosum_scores.apply(get_blosum_score, axis=1)
 
     return blosum_scores
+
+
+def make_phat75_73():
+    """
+    Make Phat 75/73 substitution matrix.
+
+    Returns
+    -------
+    substitution_matrices.Array
+        Phat 75/73 substitution matrix.
+    """
+
+    PHAT_ALPHABET = "ARNDCQEGHILKMFPSTWYV"
+
+    # PHAT 75/73 scores (symmetric). Values transcribed from the PHAT paper figure.
+    _PHAT_LOWER_TRI = [
+    [  5],
+    [ -6,  9],
+    [ -2, -3, 11],
+    [ -5, -7,  2, 12],
+    [  1, -8, -2, -7,  7],
+    [ -3, -2,  2,  0, -5,  9],
+    [ -5, -6,  0,  6, -7,  1, 12],
+    [  1, -5, -1, -2, -2, -2, -3,  9],
+    [ -3, -4,  4, -1, -7,  2, -1, -4, 11],
+    [  0, -6, -3, -5, -3, -3, -5, -2, -5,  5],
+    [ -1, -6, -3, -5, -2, -3, -5, -2, -4,  2,  4],
+    [ -7, -1, -2, -5,-10, -1, -4, -5, -5, -7, -7,  5],
+    [ -1, -6, -2, -5, -2, -1, -5, -1, -4,  3,  2, -6,  6],
+    [ -1, -7, -1, -5,  0, -2, -5, -2, -2,  0,  1, -7,  0,  6],
+    [ -3, -7, -4, -5, -8, -3, -5, -3, -6, -4, -5, -4, -5, -5, 13],
+    [  2, -6,  1, -4,  1, -1, -3,  1, -2, -2, -2, -5, -2, -2, -3,  6],
+    [  0, -6, -1, -5, -1, -3, -5, -1, -4, -1, -1, -6,  0, -2, -4,  1,  3],
+    [ -4, -7, -5, -7, -4,  1, -7, -5, -3, -4, -3, -8, -4,  0, -6, -5, -7, 11],
+    [ -3, -6,  2, -4, -1,  0, -2, -3,  3, -3, -2, -4, -2,  4, -5, -2, -3,  1, 11],
+    [  1, -7, -3, -5, -2, -3, -5, -2, -5,  3,  1, -8,  1, -1, -4, -2,  0, -4, -3,  4],
+    ]
+
+    n = len(PHAT_ALPHABET)
+    mat = np.zeros((n, n), dtype=int)
+    # fill lower triangle + diagonal
+    for i, row in enumerate(_PHAT_LOWER_TRI):
+        mat[i, :i+1] = row
+    # symmetrize
+    mat = mat + mat.T - np.diag(np.diag(mat))
+
+    return substitution_matrices.Array(alphabet=PHAT_ALPHABET, data=mat)
+
+
+@register_metric(name='phat_score', provides=['phat_score'], requires={'resm'}, tags={'sequence'})
+def calculate_phat_score(context: Context) -> pd.DataFrame:
+    """
+    Calculate Phat score for each mutation in the scores DataFrame.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'phat_score' along with residue metadata.
+    """    
+    residue_table = context.residue_table
+    phat_scores = residue_table.loc[residue_table.mut_info, KEEP_COLS].copy()
+
+    PHAT75_73 = make_phat75_73()
+
+    def get_phat_score(row):
+        wt = convert_amino_acid(row['resn_mut'])
+        mut = convert_amino_acid(row['resm'])
+        if wt not in PHAT75_73.alphabet or mut not in PHAT75_73.alphabet:
+            return np.inf
+        return PHAT75_73[wt][mut]
+
+    phat_scores['phat_score'] = phat_scores.apply(get_phat_score, axis=1)
+
+    return phat_scores
 
 
 @register_metric(name='aa_groupings', provides=['wildtype_aa_group', 'mut_aa_group', 'wildtype_mut_aa_group'],
