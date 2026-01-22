@@ -54,7 +54,7 @@ def test_expand_batch_arguments_single_value():
         'name': ['protein1', 'protein2'],
         'pdb_id': ['1abc', '2xyz'],
         'membrane_protein': [False, True],
-        'mutation_data_path': [None, 'mut_data.csv'],
+        'mutation_data_path': [pd.NA, 'mut_data.csv'],
         'config_path': ['config.toml1', 'config.toml2']
     })
     expanded_args = expand_batch_arguments(batch_df)
