@@ -130,8 +130,13 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
     effect_ranking = effect_ranking[keep_cols + ['effect']]
 
-    effect_ranking['effect_ranking'] = effect_ranking['effect'].rank(method='min')
-    effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / np.max(effect_ranking['effect_ranking'])
+    # Rank effects while keeping NaN values unranked
+    effect_ranking['effect_ranking'] = effect_ranking['effect'].rank(method='min', na_option='keep')
+
+    # Normalize ranks to [0, 1], ignoring NaNs in the denominator
+    max_rank = np.nanmax(effect_ranking['effect_ranking'].values)
+    if not np.isnan(max_rank) and max_rank > 0:
+        effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / max_rank
     
     return effect_ranking
 
