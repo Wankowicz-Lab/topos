@@ -316,7 +316,7 @@ class Runner:
             elif 'resi_struct' in df.columns:
                 merge_cols.extend(['resi_struct', 'resn_struct'])
             
-            merged_df = pd.merge(merged_df, df, on=merge_cols, how='outer')
+            merged_df = pd.merge(merged_df, df, on=merge_cols, how='left')
 
         # Sort using the same logic as residue_table
         mutation_chain = self.context.config.mutation_data_chain if mutations else None
