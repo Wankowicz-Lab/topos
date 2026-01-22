@@ -63,7 +63,11 @@ def test_expand_batch_arguments_single_value():
     for i, row in batch_df.iterrows():
         assert expanded_args[i]['pdb_id'] == row['pdb_id']
         assert expanded_args[i]['membrane_protein'] == row['membrane_protein']
-        assert expanded_args[i]['mutation_data_path'] == row['mutation_data_path']
+        mut_path = row['mutation_data_path']
+        if pd.isna(mut_path):
+            assert expanded_args[i]['mutation_data_path'] is None
+        else:
+            assert expanded_args[i]['mutation_data_path'] == mut_path
         assert expanded_args[i]['config_path'] == row['config_path']
 
 
