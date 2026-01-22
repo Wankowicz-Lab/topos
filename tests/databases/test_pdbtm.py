@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.structure import pdbtm
+from src.databases import pdbtm
 from tests.test_utils import _make_residue_table
 
 def test_describe_pdbtm_region():

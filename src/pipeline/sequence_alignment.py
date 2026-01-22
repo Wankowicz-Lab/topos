@@ -1,3 +1,9 @@
+"""
+Sequence alignment functions for protein analysis pipeline.
+
+This module provides functions for loading mutation scores, performing sequence
+alignment, and merging mutation data with structural context.
+"""
 
 import warnings
 import logging

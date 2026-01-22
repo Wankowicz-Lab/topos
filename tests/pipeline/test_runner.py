@@ -11,9 +11,10 @@ from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaind
 from src.pipeline import runner
 
 # import files containing metrics to register them in _REGISTRY
-import src.sequence.metrics
-import src.structure.metrics
-from src.structure.structure_context import _REGISTRY, Config
+import src.metrics.sequence
+import src.metrics.structure
+from src.metrics.registry import _REGISTRY
+from src.pipeline.context import Config
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)

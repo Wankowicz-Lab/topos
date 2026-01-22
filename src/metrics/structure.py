@@ -10,10 +10,11 @@ import logging
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
-from .structure_context import Context, register_metric
-from . import pdbtm
-from .utils import residue_key, is_heavy, get_metadata_cols, is_backbone_atom
-from .utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as _detect_hbonds
+from src.pipeline.context import Context
+from src.metrics.registry import register_metric
+from src.databases import pdbtm
+from src.structure.utils import residue_key, is_heavy, get_metadata_cols, is_backbone_atom
+from src.structure.utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as _detect_hbonds
 
 logger = logging.getLogger(__name__)
 

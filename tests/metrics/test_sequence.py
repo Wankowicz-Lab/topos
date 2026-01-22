@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 import random
 
-from src.sequence import metrics
+from src.metrics import sequence as metrics
 from src.sequence.utils import convert_amino_acid
 
 from tests.test_utils import _make_residue_table, _make_aaindex_data, AA_LIST

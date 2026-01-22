@@ -3,7 +3,7 @@ import pandas as pd
 from typing import List
 from itertools import groupby
 
-from src.structure.structure_context import Context
+from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
 import biotite.structure as struc
 

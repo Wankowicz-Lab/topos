@@ -5,9 +5,9 @@ import logging
 import blosum as bl
 
 from src.sequence.utils import convert_amino_acid
-from src.structure.structure_context import Context, register_metric
+from src.pipeline.context import Context
+from src.metrics.registry import register_metric
 from Bio.Align import substitution_matrices
-
 
 from typing import List, Optional
 

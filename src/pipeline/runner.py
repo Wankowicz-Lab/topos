@@ -11,16 +11,17 @@ import logging
 from biotite.database import rcsb
 import biotite.structure as struc
 
-from src.structure import structure_context
-from src.sequence import sequence_context
-from src.structure import pdbtm
+from src.structure.structure_context import load_structure
+from src.pipeline.context import Context, Config
+from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
+from src.databases import pdbtm
 
 from typing import List, Optional, Dict, Any
 
 # import files containing metrics to register them in _REGISTRY
-import src.sequence.metrics
-import src.structure.metrics
-from src.structure.structure_context import _REGISTRY, Config
+import src.metrics.sequence
+import src.metrics.structure
+from src.metrics.registry import _REGISTRY
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 
 logger = logging.getLogger(__name__)
@@ -122,7 +123,7 @@ class Runner:
 
         # Load structure using load_structure function
         logger.info("Loading structure")
-        arr = structure_context.load_structure(
+        arr = load_structure(
             path=config.pdb_path,
             pdb_id=config.pdb_id,
             altloc_policy=config.altloc_policy
@@ -135,7 +136,7 @@ class Runner:
 
         # create context object
         logger.info("Creating context object")
-        self.context = structure_context.Context(arr, config=config)
+        self.context = Context(arr, config=config)
 
         # Set up df with secondary structure info
         ss_df = get_secondary_structure_annotations(self.context)
@@ -156,7 +157,7 @@ class Runner:
         if self.context.config.mutation_data_path is not None:
             logger.info("Loading mutation data")
 
-            self.context.extras['mutation_data'] = sequence_context.load_mutation_scores(
+            self.context.extras['mutation_data'] = load_mutation_scores(
                 path=self.context.config.mutation_data_path,
                 residue_col_name=self.context.config.mutation_residue_col_name,
                 residue_idx_name=self.context.config.mutation_residue_idx_name,
@@ -169,7 +170,7 @@ class Runner:
                 raise ValueError(f"Specified mutation_data_chain '{self.context.config.mutation_data_chain}' not "
                                  f"found in structure chains {self.context.residue_table['chain'].unique()}")
 
-            self.context.residue_table = sequence_context.merge_mutation_scores(
+            self.context.residue_table = merge_mutation_scores(
                 mutation_scores=self.context.extras['mutation_data'],
                 residue_table=self.context.residue_table,
                 chain=self.context.config.mutation_data_chain,

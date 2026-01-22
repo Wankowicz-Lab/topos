@@ -3,7 +3,7 @@ import os
 import pytest
 import warnings
 
-from src.sequence.sequence_context import load_mutation_scores, merge_mutation_scores, alignment_to_index_map, merge_sequence_dfs, evaluate_sequence_alignment
+from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores, alignment_to_index_map, merge_sequence_dfs, evaluate_sequence_alignment
 
 from Bio.Align import PairwiseAligner
 
