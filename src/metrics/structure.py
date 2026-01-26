@@ -41,6 +41,12 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     
     # Calculate atom-wise SASA
     array = context.aa
+    
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
+    
     atom_sasa = struc.sasa(array=array, vdw_radii="ProtOr")
 
     # Sum up SASA for each residue (total)
@@ -104,6 +110,11 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
         "GLN": -3.5, "ASP": -3.5, "ASN": -3.5, "LYS": -3.9, "ARG": -4.5
     }
     array = context.aa
+    
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
 
     # Assign KD score per atom based on its residue name
     atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
@@ -137,6 +148,11 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
 
     # Calculate z-coordinate of each residue (mean of atom z-coordinates)
     array, membrane_thickness = context.array, context.config.membrane_thickness
+    
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
 
     atom_z = array.coord[:, 2]
     res_z = struc.apply_residue_wise(array, atom_z, np.mean)
@@ -169,6 +185,12 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     """
     
     array = context.array
+    
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
+    
     res_starts = struc.get_residue_starts(array)
     donors, acceptors = _build_sites_biotite(array)
     hbonds = _detect_hbonds(donors, acceptors)
@@ -249,6 +271,12 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     """
     
     array = context.array
+    
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
+    
     # Residue indexing for original array
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
