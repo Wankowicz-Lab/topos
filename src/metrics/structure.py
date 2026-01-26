@@ -321,3 +321,46 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     metadata_df['packing_n_neighbor_residues'] = n_neighbors
     metadata_df['packing_contact_density'] = contact_density
     return metadata_df
+
+
+@register_metric(name='center_of_mass_distance', provides=['distance_to_center_of_mass'], tags={'structure'})
+def calculate_center_of_mass_distance(context: Context) -> pd.DataFrame:
+    """
+    Calculate distance of each residue to the center of mass of the structure.
+
+    Computes the center of mass of all atoms in the structure, then calculates
+    the Euclidean distance from each residue's center (mean of atom coordinates)
+    to the structure's center of mass.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'distance_to_center_of_mass' along with residue metadata.
+    """
+    
+    array = context.array
+    coords = array.coord.astype(float)
+    
+    # Calculate center of mass of the entire structure
+    com = np.mean(coords, axis=0)
+    
+    # Calculate center of each residue (mean of atom coordinates) using apply_residue_wise
+    # Apply to each coordinate dimension separately
+    res_center_x = struc.apply_residue_wise(array, coords[:, 0], np.mean)
+    res_center_y = struc.apply_residue_wise(array, coords[:, 1], np.mean)
+    res_center_z = struc.apply_residue_wise(array, coords[:, 2], np.mean)
+    res_centers = np.column_stack([res_center_x, res_center_y, res_center_z])
+    
+    # Calculate Euclidean distance from each residue center to center of mass
+    distances = np.linalg.norm(res_centers - com, axis=1)
+    
+    # Attach to metadata DataFrame
+    metadata_df = get_metadata_cols(array)
+    metadata_df['distance_to_center_of_mass'] = distances
+    
+    return metadata_df

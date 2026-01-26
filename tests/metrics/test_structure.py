@@ -229,4 +229,47 @@ def test_calculate_hbond_metrics_with_altloc():
     hbond_metrics = metrics.calculate_hbond_metrics(context)
     assert 'bb_hbond_count' in hbond_metrics.columns
     assert 'sc_hbond_count' in hbond_metrics.columns
+
+
+def test_calculate_center_of_mass_distance():
+    """Test calculation of distance from each residue to center of mass."""
+    # Create a simple chain with a few residues at known positions
+    # ALA has 5 atoms (N, CA, C, O, CB)
+    # GLY has 4 atoms (N, CA, C, O)
+    # SER has 6 atoms (N, CA, C, O, CB, OG)
+    # Place all atoms of each residue at the same x coordinate for simplicity
+    aa_list = ['ALA', 'GLY', 'SER']
+    
+    # ALA: 5 atoms all at x=0
+    ala_coords = [[0.0, 0.0, 0.0] for _ in range(5)]
+    # GLY: 4 atoms all at x=15
+    gly_coords = [[15.0, 0.0, 0.0] for _ in range(4)]
+    # SER: 6 atoms all at x=30
+    ser_coords = [[30.0, 0.0, 0.0] for _ in range(6)]
+    
+    coords = [ala_coords, gly_coords, ser_coords]
+    arr = _make_chain(aa_list=aa_list, chain_id='A', coords=coords)
+    context = Context(array=arr)
+    
+    # Calculate center of mass distance
+    com_distances = metrics.calculate_center_of_mass_distance(context)
+    
+    # Check that expected column is present
+    assert 'distance_to_center_of_mass' in com_distances.columns
+    
+    # Check that we have one distance per residue
+    res_starts = struc.get_residue_starts(arr)
+    assert len(com_distances) == len(res_starts)
+    
+    # Check that distances are non-negative
+    distances = com_distances['distance_to_center_of_mass']
+    assert np.all(distances >= 0), "Distances should be non-negative"
+    
+    # Verify correctness with expected values
+    # Total atoms: 5 + 4 + 6 = 15
+    # Center of mass x-coordinate: (5*0 + 4*15 + 6*30) / 15 = 240/15 = 16.0
+    # Residue centers: ALA at x=0, GLY at x=15, SER at x=30
+    # Expected distances: ALA=16.0, GLY=1.0, SER=14.0
+    expected_distances = np.array([16.0, 1.0, 14.0])
+    np.testing.assert_allclose(distances.values, expected_distances, rtol=1e-10)
     
