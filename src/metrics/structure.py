@@ -328,7 +328,7 @@ def calculate_center_of_mass_distance(context: Context) -> pd.DataFrame:
     """
     Calculate distance of each residue to the center of mass of the structure.
 
-    Computes the center of mass of all atoms in the structure, then calculates
+    Computes the center of mass of amino acid atoms in the structure, then calculates
     the Euclidean distance from each residue's center (mean of atom coordinates)
     to the structure's center of mass.
 
@@ -343,7 +343,7 @@ def calculate_center_of_mass_distance(context: Context) -> pd.DataFrame:
         DataFrame with 'distance_to_center_of_mass' along with residue metadata.
     """
     
-    array = context.array
+    array = context.aa
     coords = array.coord.astype(float)
     
     # Calculate center of mass of the entire structure
