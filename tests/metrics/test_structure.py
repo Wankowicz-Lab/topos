@@ -147,6 +147,44 @@ def test_calculate_sasa():
             assert np.all(non_nan_values >= 0), f"{col} values should be non-negative"
 
 
+def test_calculate_distance_to_surface():
+    """Distance to nearest surface residue with default sasa_threshold=0.25."""
+    aa_list = ['ALA', 'GLY', 'SER']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    context = Context(array=arr)
+
+    result = metrics.calculate_distance_to_surface(context)
+
+    assert 'distance_to_nearest_surface_residue' in result.columns
+    res_starts = struc.get_residue_starts(arr)
+    assert len(result) == len(res_starts)
+
+    values = result['distance_to_nearest_surface_residue']
+    valid = values.dropna()
+    assert np.all(valid >= 0), "Distances should be non-negative"
+    # Either some residues are surface (distance 0) or none are (all nan)
+    assert (values == 0).any() or values.isna().all(), "Expect some surface residues or all nan"
+
+
+def test_calculate_distance_to_surface_threshold():
+    """Distance to surface depends on sasa_threshold."""
+    aa_list = ['ALA', 'GLY', 'SER', 'LEU']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    context = Context(array=arr)
+
+    low = metrics.calculate_distance_to_surface(context, sasa_threshold=0.01)
+    high = metrics.calculate_distance_to_surface(context, sasa_threshold=0.99)
+
+    # Low threshold: more residues count as surface -> more zeros
+    n_zero_low = (low['distance_to_nearest_surface_residue'] == 0).sum()
+    n_zero_high = (high['distance_to_nearest_surface_residue'] == 0).sum()
+    assert n_zero_low >= n_zero_high, "Lower threshold should yield at least as many surface residues"
+
+    # High threshold: fewer surface residues, so distances tend to be larger or nan
+    high_vals = high['distance_to_nearest_surface_residue'].dropna()
+    assert np.all(high_vals >= 0), "Distances with high threshold should be non-negative"
+
+
 def test_KD_values():  
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
