@@ -147,6 +147,30 @@ def test_calculate_sasa():
             assert np.all(non_nan_values >= 0), f"{col} values should be non-negative"
 
 
+def test_calculate_sasa_structural_feature_chains_subset():
+    """Test that calculate_sasa respects structural_feature_chains and returns only specified chains."""
+    aa_list = ['ALA', 'GLY', 'SER']
+    chain_a = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    chain_b = _make_chain(aa_list=aa_list, chain_id='B', altloc='')
+    arr = struc.concatenate([chain_a, chain_b])
+
+    class MockConfig:
+        structural_feature_chains = ['A']
+
+    class MockContext:
+        def __init__(self, array):
+            self.array = array
+            self.aa = array
+            self.config = MockConfig()
+
+    context = MockContext(array=arr)
+    sasa_df = metrics.calculate_sasa(context)
+
+    assert set(sasa_df['chain'].unique()) == {'A'}, "Should only contain chain A"
+    assert len(sasa_df) == len(aa_list), "Should have one row per residue in chain A"
+    assert 'sasa' in sasa_df.columns
+
+
 def test_KD_values():  
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
