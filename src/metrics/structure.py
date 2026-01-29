@@ -87,6 +87,74 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     return metadata_df
 
 
+# Reference (max) SASA per residue type, Tien et al. 2013 PLOS ONE empirical values (Å²)
+_REF_SASA = {
+    "ALA": 121.0, "ARG": 265.0, "ASN": 187.0, "ASP": 187.0, "CYS": 148.0,
+    "GLN": 214.0, "GLU": 214.0, "GLY": 97.0, "HIS": 216.0, "ILE": 195.0,
+    "LEU": 191.0, "LYS": 230.0, "MET": 203.0, "PHE": 228.0, "PRO": 154.0,
+    "SER": 143.0, "THR": 163.0, "TRP": 264.0, "TYR": 255.0, "VAL": 165.0,
+}
+
+
+@register_metric(name='distance_to_surface', provides=['distance_to_nearest_surface_residue'], tags={'structure'})
+def calculate_distance_to_surface(context: Context, sasa_threshold: float = 0.25) -> pd.DataFrame:
+    """
+    Calculate distance from each residue to the nearest surface residue.
+
+    Surface is defined as residues whose relative SASA exceeds sasa_threshold.
+    Relative SASA = (observed per-residue SASA) / (reference SASA for that residue type).
+    Distance is residue centroid to residue centroid.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata and structural information.
+    sasa_threshold : float, optional
+        Minimum relative SASA for a residue to be considered surface. Default is 0.25.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'distance_to_nearest_surface_residue' along with residue metadata.
+    """
+    # Per-residue SASA (same setup as calculate_sasa): atom-wise SASA, then sum per residue
+    array = context.aa
+
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
+
+    atom_sasa = struc.sasa(array=array, vdw_radii="ProtOr")
+    res_sasa = struc.apply_residue_wise(array, atom_sasa, np.sum)
+
+    # Relative SASA = observed / reference; surface = residues with relative SASA above threshold
+    res_starts = struc.get_residue_starts(array)
+    res_names = array.res_name[res_starts]
+    ref = np.array([_REF_SASA.get(str(r).strip(), np.nan) for r in res_names], dtype=float)
+    relative_sasa = np.where(ref > 0, res_sasa / ref, np.nan)
+    is_surface = relative_sasa > sasa_threshold
+
+    # Residue centroids (mean x, y, z of atoms per residue) for distance calculations
+    cx = struc.apply_residue_wise(array, array.coord[:, 0], np.mean)
+    cy = struc.apply_residue_wise(array, array.coord[:, 1], np.mean)
+    cz = struc.apply_residue_wise(array, array.coord[:, 2], np.mean)
+    centroids = np.stack([cx, cy, cz], axis=1)
+
+    # Min centroid-to-centroid distance from each residue to any surface residue; nan if no surface
+    n_res = len(res_starts)
+    distances = np.full(n_res, np.nan, dtype=float)
+    surface_centroids = centroids[is_surface]
+    if surface_centroids.size > 0:
+        diff = centroids[:, None, :] - surface_centroids[None, :, :]
+        d2 = (diff ** 2).sum(axis=2)
+        distances = np.sqrt(np.min(d2, axis=1))
+
+    metadata_df = get_metadata_cols(array)
+    metadata_df['distance_to_nearest_surface_residue'] = distances
+    return metadata_df
+
+
 @register_metric(name='kyte_doolittle', provides=['kyte_doolittle'], tags={'structure'})
 def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
     """
@@ -348,4 +416,53 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     metadata_df['packing_n_atoms'] = n_atoms
     metadata_df['packing_n_neighbor_residues'] = n_neighbors
     metadata_df['packing_contact_density'] = contact_density
+    return metadata_df
+
+
+@register_metric(name='center_of_mass_distance', provides=['distance_to_center_of_mass'], tags={'structure'})
+def calculate_center_of_mass_distance(context: Context) -> pd.DataFrame:
+    """
+    Calculate distance of each residue to the center of mass of the structure.
+
+    Computes the center of mass of amino acid atoms in the structure, then calculates
+    the Euclidean distance from each residue's center (mean of atom coordinates)
+    to the structure's center of mass.
+
+    Parameters
+    ----------
+    context : Context
+        Context object containing residue metadata, structural information, and mutation information.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'distance_to_center_of_mass' along with residue metadata.
+    """
+    
+    array = context.aa
+
+    # Filter by structural_feature_chains if specified
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
+
+    coords = array.coord.astype(float)
+
+    # Calculate center of mass of the entire structure
+    com = np.mean(coords, axis=0)
+    
+    # Calculate center of each residue (mean of atom coordinates) using apply_residue_wise
+    # Apply to each coordinate dimension separately
+    res_center_x = struc.apply_residue_wise(array, coords[:, 0], np.mean)
+    res_center_y = struc.apply_residue_wise(array, coords[:, 1], np.mean)
+    res_center_z = struc.apply_residue_wise(array, coords[:, 2], np.mean)
+    res_centers = np.column_stack([res_center_x, res_center_y, res_center_z])
+    
+    # Calculate Euclidean distance from each residue center to center of mass
+    distances = np.linalg.norm(res_centers - com, axis=1)
+    
+    # Attach to metadata DataFrame
+    metadata_df = get_metadata_cols(array)
+    metadata_df['distance_to_center_of_mass'] = distances
+    
     return metadata_df
