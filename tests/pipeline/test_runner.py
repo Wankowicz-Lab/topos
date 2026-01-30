@@ -455,9 +455,13 @@ def test_runner__merge_features():
 
     result_frames = [df1, df2, df3]
 
+    class MockConfig:
+        structural_feature_chains = None
+
     class MockContext:
         def __init__(self, residue_table):
             self.residue_table = residue_table
+            self.config = MockConfig()
     myrunner.context = MockContext(residue_table=residue_table)
 
     merged_df = myrunner._merge_features(result_frames, mutations=False)
@@ -523,6 +527,7 @@ def test_runner__merge_features_with_muts():
     class MockConfig:
         def __init__(self):
             self.mutation_data_chain = 'A'
+            self.structural_feature_chains = None
 
     class MockContext:
         def __init__(self, residue_table):
@@ -855,5 +860,109 @@ def test_run_neighborhood_fills_extras_and_merges(tmp_path):
     # n_ala_neighbors from count_ala_neighbors is merged into self.features
     assert 'n_ala_neighbors' in myrunner.features.columns
     assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
+def test_structural_feature_chains_validation(tmp_path):
+    """Test that structural_feature_chains validation works correctly in Runner.__post_init__."""
+    # Create a structure with multiple chains
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues, "B": residues, "C": residues})
+    
+    # Test 1: Invalid chain ID should raise ValueError
+    config_path = tmp_path / 'config_invalid.toml'
+    _make_config_file(config_path, pdb_id='test', structural_feature_chains=['Z'])
+    
+    with pytest.raises(ValueError, match="Specified structural_feature_chains.*not found in structure chains"):
+        runner.Runner(
+            pdb_id='test',
+            pdb_path=mmcif_path,
+            name='test_validation',
+            config_path=config_path
+        )
+    
+    # Test 2: Empty list should be treated as None (no error)
+    config_path_empty = tmp_path / 'config_empty.toml'
+    _make_config_file(config_path_empty, pdb_id='test', structural_feature_chains=[])
+    
+    runner_empty = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        name='test_empty',
+        config_path=config_path_empty
+    )
+    assert runner_empty.context.config.structural_feature_chains is None
+    assert runner_empty.context.residue_table.chain.unique().tolist() == ['A', 'B', 'C']
+    
+    # Test 3: Valid chains should work
+    config_path_valid = tmp_path / 'config_valid.toml'
+    _make_config_file(config_path_valid, pdb_id='test', structural_feature_chains=['A', 'B'])
+    
+    runner_valid = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        name='test_valid',
+        config_path=config_path_valid
+    )
+    assert runner_valid.context.config.structural_feature_chains == ['A', 'B']
+    # residue_table should still contain all chains (filtering happens in metrics, not globally)
+    assert set(runner_valid.context.residue_table.chain.unique().tolist()) == {'A', 'B', 'C'}
+
+
+def test_structural_feature_chains_filtering(tmp_path):
+    """Test that structural_feature_chains correctly filters structural metrics."""
+    # Create a structure with multiple chains
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues, "B": residues, "C": residues})
+    
+    # Test 1: None (default) - should include all chains
+    config_path_all = tmp_path / 'config_all.toml'
+    _make_config_file(config_path_all, pdb_id='test', structural_feature_chains=None)
+    
+    runner_all = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        name='test_all',
+        config_path=config_path_all
+    )
+    runner_all.run(metrics=['sasa'])
+    
+    # Should have residues from all 3 chains
+    result_chains = set(runner_all.features['chain'].unique())
+    assert result_chains == {'A', 'B', 'C'}, f"Expected all chains, got {result_chains}"
+    assert len(runner_all.features) == len(residues) * 3
+    
+    # Test 2: Single chain - should only include chain A
+    config_path_single = tmp_path / 'config_single.toml'
+    _make_config_file(config_path_single, pdb_id='test', structural_feature_chains=['A'])
+    
+    runner_single = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        name='test_single',
+        config_path=config_path_single
+    )
+    runner_single.run(metrics=['sasa'])
+    
+    # Should only have residues from chain A
+    result_chains = set(runner_single.features['chain'].unique())
+    assert result_chains == {'A'}, f"Expected only chain A, got {result_chains}"
+    assert len(runner_single.features) == len(residues)
+    
+    # Test 3: Multiple chains - should include chains A and B
+    config_path_multi = tmp_path / 'config_multi.toml'
+    _make_config_file(config_path_multi, pdb_id='test', structural_feature_chains=['A', 'B'])
+    
+    runner_multi = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        name='test_multi',
+        config_path=config_path_multi
+    )
+    runner_multi.run(metrics=['sasa'])
+    
+    # Should only have residues from chains A and B
+    result_chains = set(runner_multi.features['chain'].unique())
+    assert result_chains == {'A', 'B'}, f"Expected chains A and B, got {result_chains}"
+    assert len(runner_multi.features) == len(residues) * 2
 
 

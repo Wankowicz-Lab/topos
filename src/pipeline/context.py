@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Any, Literal
+from typing import Dict, Optional, Any, Literal, List
 import numpy as np
 import pandas as pd
 import biotite.structure as struc
@@ -62,6 +62,9 @@ class Config(BaseModel):
         Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
     kidera_path: Path
         Path to Kidera factors data (default: 'data/kidera_factors.csv').
+    structural_feature_chains : Optional[List[str]]
+        List of chain IDs to include in structural feature calculations.
+        If None (default), all chains are included.
     """
 
 
@@ -78,6 +81,7 @@ class Config(BaseModel):
     membrane_thickness: Optional[float] = 15
     remove_hydrogens: bool = True
     altloc_policy: Literal["highest", "all"] = "highest"
+    structural_feature_chains: Optional[List[str]] = None
 
     # mutagenesis data
     mutation_data_path: Optional[Path] = None
