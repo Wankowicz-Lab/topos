@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import tomli
 import warnings
@@ -22,10 +23,34 @@ from typing import List, Optional, Dict, Any
 import src.metrics.sequence
 import src.metrics.structure
 from src.metrics.registry import _REGISTRY
+from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 
 logger = logging.getLogger(__name__)
 
+# Metric column names eligible to be averaged per ss_domain (only those present in features are used)
+SS_METRICS: List[str] = [
+    "pos_effect",
+    "effect_variance",
+    "effect_variance_rank",
+    "effect",
+    "effect_ranking",
+    "sasa",
+    "sasa_backbone",
+    "sasa_sidechain",
+    "sasa_polar",
+    "sasa_nonpolar",
+    "kyte_doolittle",
+    "distance_from_membrane_edge",
+    "bb_hbond_count",
+    "sc_hbond_count",
+    "total_hbond_count",
+    "packing_n_atoms",
+    "packing_n_neighbor_residues",
+    "packing_contact_density",
+    "blosum90",
+    "phat_score",
+]
 
 def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[str] = None) -> pd.DataFrame:
     """Sort residue table by chain and alignment position.
@@ -327,6 +352,53 @@ class Runner:
         
         return merged_df
 
+
+    def run_secondary_structure(
+        self,
+        ss_metrics: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """Aggregate features by secondary structure domain and compute domain-level metrics.
+
+        Averages selected residue-level metrics per ss_domain (using ss_domains from
+        residue_table), then adds domain-level metrics via :mod:`src.metrics.secondary_structure`:
+        ss_length (residue count per domain) and log2 ratio of residue proportion per
+        aa group vs protein-wide proportion. AA group is derived from resn_struct in
+        that module. Only metric columns that exist in self.features and are listed in
+        ss_metrics are averaged; NA values are ignored when computing means. Rows with
+        missing ss_domains are excluded from aggregation.
+
+        Parameters
+        ----------
+        ss_metrics : Optional[List[str]] = None
+            Metric column names to average per ss_domain. If None, uses module-level SS_METRICS.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per ss_domain with columns: ss_domains, ss_length, averaged metric
+            columns (only those present), and log2_ratio_<group> for each aa group.
+        """
+        metrics_to_avg = ss_metrics if ss_metrics is not None else SS_METRICS
+        merge_cols = ['chain', 'resi_struct', 'resn_struct']
+
+        # Attach ss_domains to features
+        rt_subset = self.context.residue_table[merge_cols + ['ss_domains']].drop_duplicates(merge_cols)
+        merged = pd.merge(self.features, rt_subset, on=merge_cols, how='left')
+        merged = merged.dropna(subset=['ss_domains'])
+
+        cols_to_avg = [c for c in metrics_to_avg if c in merged.columns]
+
+        # Average metrics per ss_domain (skipna=True so NAs are ignored)
+        agg_dict = {c: 'mean' for c in cols_to_avg}
+        by_domain = merged.groupby('ss_domains', as_index=False).agg({**agg_dict})
+
+        # Compute domain-level metrics
+        lengths = ss_domain_lengths(merged)
+        by_domain = by_domain.merge(lengths, on='ss_domains', how='left')
+        log2_df = ss_domain_log2_aa_group_ratios(merged)
+        by_domain = by_domain.merge(log2_df, on='ss_domains', how='left')
+
+        return by_domain
 
     def save_results(self, output_dir: Path = None, output_prefix: str = None) -> None:
         """Save results to CSV files.
