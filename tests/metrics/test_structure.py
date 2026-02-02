@@ -147,6 +147,68 @@ def test_calculate_sasa():
             assert np.all(non_nan_values >= 0), f"{col} values should be non-negative"
 
 
+def test_calculate_sasa_structural_feature_chains_subset():
+    """Test that calculate_sasa respects structural_feature_chains and returns only specified chains."""
+    aa_list = ['ALA', 'GLY', 'SER']
+    chain_a = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    chain_b = _make_chain(aa_list=aa_list, chain_id='B', altloc='')
+    arr = struc.concatenate([chain_a, chain_b])
+
+    class MockConfig:
+        structural_feature_chains = ['A']
+
+    class MockContext:
+        def __init__(self, array):
+            self.array = array
+            self.aa = array
+            self.config = MockConfig()
+
+    context = MockContext(array=arr)
+    sasa_df = metrics.calculate_sasa(context)
+
+    assert set(sasa_df['chain'].unique()) == {'A'}, "Should only contain chain A"
+    assert len(sasa_df) == len(aa_list), "Should have one row per residue in chain A"
+    assert 'sasa' in sasa_df.columns
+
+
+def test_calculate_distance_to_surface():
+    """Distance to nearest surface residue with default sasa_threshold=0.25."""
+    aa_list = ['ALA', 'GLY', 'SER']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    context = Context(array=arr)
+
+    result = metrics.calculate_distance_to_surface(context)
+
+    assert 'distance_to_nearest_surface_residue' in result.columns
+    res_starts = struc.get_residue_starts(arr)
+    assert len(result) == len(res_starts)
+
+    values = result['distance_to_nearest_surface_residue']
+    valid = values.dropna()
+    assert np.all(valid >= 0), "Distances should be non-negative"
+    # Either some residues are surface (distance 0) or none are (all nan)
+    assert (values == 0).any() or values.isna().all(), "Expect some surface residues or all nan"
+
+
+def test_calculate_distance_to_surface_threshold():
+    """Distance to surface depends on sasa_threshold."""
+    aa_list = ['ALA', 'GLY', 'SER', 'LEU']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    context = Context(array=arr)
+
+    low = metrics.calculate_distance_to_surface(context, sasa_threshold=0.01)
+    high = metrics.calculate_distance_to_surface(context, sasa_threshold=0.99)
+
+    # Low threshold: more residues count as surface -> more zeros
+    n_zero_low = (low['distance_to_nearest_surface_residue'] == 0).sum()
+    n_zero_high = (high['distance_to_nearest_surface_residue'] == 0).sum()
+    assert n_zero_low >= n_zero_high, "Lower threshold should yield at least as many surface residues"
+
+    # High threshold: fewer surface residues, so distances tend to be larger or nan
+    high_vals = high['distance_to_nearest_surface_residue'].dropna()
+    assert np.all(high_vals >= 0), "Distances with high threshold should be non-negative"
+
+
 def test_KD_values():  
     # Create a chain with known hydrophobic and hydrophilic residues
     aa_list = ['ILE', 'VAL', 'ALA', 'ASP', 'GLU', 'LYS']
@@ -229,4 +291,47 @@ def test_calculate_hbond_metrics_with_altloc():
     hbond_metrics = metrics.calculate_hbond_metrics(context)
     assert 'bb_hbond_count' in hbond_metrics.columns
     assert 'sc_hbond_count' in hbond_metrics.columns
+
+
+def test_calculate_center_of_mass_distance():
+    """Test calculation of distance from each residue to center of mass."""
+    # Create a simple chain with a few residues at known positions
+    # ALA has 5 atoms (N, CA, C, O, CB)
+    # GLY has 4 atoms (N, CA, C, O)
+    # SER has 6 atoms (N, CA, C, O, CB, OG)
+    # Place all atoms of each residue at the same x coordinate for simplicity
+    aa_list = ['ALA', 'GLY', 'SER']
+    
+    # ALA: 5 atoms all at x=0
+    ala_coords = [[0.0, 0.0, 0.0] for _ in range(5)]
+    # GLY: 4 atoms all at x=15
+    gly_coords = [[15.0, 0.0, 0.0] for _ in range(4)]
+    # SER: 6 atoms all at x=30
+    ser_coords = [[30.0, 0.0, 0.0] for _ in range(6)]
+    
+    coords = [ala_coords, gly_coords, ser_coords]
+    arr = _make_chain(aa_list=aa_list, chain_id='A', coords=coords)
+    context = Context(array=arr)
+    
+    # Calculate center of mass distance
+    com_distances = metrics.calculate_center_of_mass_distance(context)
+    
+    # Check that expected column is present
+    assert 'distance_to_center_of_mass' in com_distances.columns
+    
+    # Check that we have one distance per residue
+    res_starts = struc.get_residue_starts(arr)
+    assert len(com_distances) == len(res_starts)
+    
+    # Check that distances are non-negative
+    distances = com_distances['distance_to_center_of_mass']
+    assert np.all(distances >= 0), "Distances should be non-negative"
+    
+    # Verify correctness with expected values
+    # Total atoms: 5 + 4 + 6 = 15
+    # Center of mass x-coordinate: (5*0 + 4*15 + 6*30) / 15 = 240/15 = 16.0
+    # Residue centers: ALA at x=0, GLY at x=15, SER at x=30
+    # Expected distances: ALA=16.0, GLY=1.0, SER=14.0
+    expected_distances = np.array([16.0, 1.0, 14.0])
+    np.testing.assert_allclose(distances.values, expected_distances, rtol=1e-10)
     

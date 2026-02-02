@@ -163,6 +163,20 @@ class Runner:
         logger.info("Creating context object")
         self.context = Context(arr, config=config)
 
+        # Validate structural_feature_chains if specified
+        if self.context.config.structural_feature_chains is not None:
+            if len(self.context.config.structural_feature_chains) == 0:
+                # Empty list treated as None
+                self.context.config.structural_feature_chains = None
+            else:
+                available_chains = self.context.residue_table['chain'].unique()
+                invalid_chains = set(self.context.config.structural_feature_chains) - set(available_chains)
+                if invalid_chains:
+                    raise ValueError(
+                        f"Specified structural_feature_chains {sorted(invalid_chains)} not "
+                        f"found in structure chains {sorted(available_chains)}"
+                    )
+
         # Set up df with secondary structure info
         ss_df = get_secondary_structure_annotations(self.context)
 
@@ -328,6 +342,14 @@ class Runner:
         keep_cols += ['resm'] if mutations else []
         
         merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
+
+        # Filter merged_df to only include structural_feature_chains if specified
+        # This ensures the final output only contains the specified chains, even though
+        # residue_table itself is not filtered (filtering happens in individual metrics)
+        if self.context.config.structural_feature_chains is not None:
+            merged_df = merged_df[
+                merged_df['chain'].isin(self.context.config.structural_feature_chains)
+            ].reset_index(drop=True)
 
         for df in dfs:
             # Determine merge columns based on what's available in the df
