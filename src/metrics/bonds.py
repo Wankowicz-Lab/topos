@@ -1,8 +1,3 @@
-import argparse
-import math
-from pathlib import Path
-from typing import Optional, List, Tuple, Dict, Any
-from collections import namedtuple
 from scipy.spatial import cKDTree
 import logging
 import numpy as np
@@ -10,7 +5,7 @@ import pandas as pd
 import biotite.structure as struc
 
 from src.metrics.registry import register_metric
-from src.structure.utils import get_metadata_cols
+from src.structure.utils import get_metadata_cols, is_heavy
 from src.pipeline.context import Context
 
 logger = logging.getLogger(__name__)
@@ -70,11 +65,6 @@ def get_ring_normal(array: struc.AtomArray, chain: str, resi: int, resname: str)
     if norm < 1e-6:
         return None
     return normal / norm
-
-
-def is_heavy(atom_name: str) -> bool:
-    """Return True if atom is a heavy atom (not hydrogen)."""
-    return not atom_name.strip().startswith("H")
 
 
 def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.DataFrame:
@@ -171,8 +161,9 @@ def calculate_salt_bridges(context: Context, cutoff: float = 4.0) -> pd.DataFram
     metadata = get_metadata_cols(array)
     metadata['salt_bridge_count'] = 0
     if len(salt_bridges) > 0:
-        for _, row in salt_bridges.iterrows():
-            metadata.loc[(metadata['chain'] == row['chain']) & (metadata['resi_struct'] == row['resi_struct']), 'salt_bridge_count'] += 1
+        counts = salt_bridges.groupby(['chain', 'resi_struct']).size()
+        for (chain, resi), count in counts.items():
+            metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'salt_bridge_count'] = count
     
     # Consolidate into bonds_df
     if 'bonds_df' not in context.extras:
@@ -271,8 +262,9 @@ def calculate_disulfide_bond_count(context: Context, cutoff: float = 2.5) -> pd.
     metadata = get_metadata_cols(array)
     metadata['disulfide_bond_count'] = 0
     if len(disulfide_bonds) > 0:
-        for _, row in disulfide_bonds.iterrows():
-            metadata.loc[(metadata['chain'] == row['chain']) & (metadata['resi_struct'] == row['resi_struct']), 'disulfide_bond_count'] += 1
+        counts = disulfide_bonds.groupby(['chain', 'resi_struct']).size()
+        for (chain, resi), count in counts.items():
+            metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'disulfide_bond_count'] = count
     
     # Consolidate into bonds_df
     if 'bonds_df' not in context.extras:
@@ -280,7 +272,6 @@ def calculate_disulfide_bond_count(context: Context, cutoff: float = 2.5) -> pd.
     if len(disulfide_bonds) > 0:
         context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], disulfide_bonds], ignore_index=True)
     return metadata
-
 
 
 
@@ -386,9 +377,10 @@ def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5, 
     metadata = get_metadata_cols(array)
     metadata['pi_stacking_count'] = 0
     if len(pi_stacking) > 0:
-        for _, row in pi_stacking.iterrows():
-            metadata.loc[(metadata['chain'] == row['chain']) & (metadata['resi_struct'] == row['resi_struct']), 'pi_stacking_count'] += 1
-    
+        counts = pi_stacking.groupby(['chain', 'resi_struct']).size()
+        for (chain, resi), count in counts.items():
+            metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'pi_stacking_count'] = count
+
     # Consolidate into bonds_df
     if 'bonds_df' not in context.extras:
         context.extras['bonds_df'] = pd.DataFrame(columns=['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras'])
@@ -494,8 +486,9 @@ def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataF
     metadata = get_metadata_cols(array)
     metadata['cation_pi_count'] = 0
     if len(cation_pi) > 0:
-        for _, row in cation_pi.iterrows():
-            metadata.loc[(metadata['chain'] == row['chain']) & (metadata['resi_struct'] == row['resi_struct']), 'cation_pi_count'] += 1
+        counts = cation_pi.groupby(['chain', 'resi_struct']).size()
+        for (chain, resi), count in counts.items():
+            metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'cation_pi_count'] = count
     
     # Consolidate into bonds_df
     if 'bonds_df' not in context.extras:
@@ -503,7 +496,6 @@ def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataF
     if len(cation_pi) > 0:
         context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], cation_pi], ignore_index=True)
     return metadata
-
 
 
 def identify_vdw_contacts(array: struc.AtomArray, cutoff_factor: float = 1.0) -> pd.DataFrame:
@@ -603,8 +595,9 @@ def calculate_vdw_contact_count(context: Context, cutoff_factor: float = 1.0) ->
     metadata = get_metadata_cols(array)
     metadata['vdw_contact_count'] = 0
     if len(vdw_contacts) > 0:
-        for _, row in vdw_contacts.iterrows():
-            metadata.loc[(metadata['chain'] == row['chain']) & (metadata['resi_struct'] == row['resi_struct']), 'vdw_contact_count'] += 1
+        counts = vdw_contacts.groupby(['chain', 'resi_struct']).size()
+        for (chain, resi), count in counts.items():
+            metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'vdw_contact_count'] = count
     
     # Consolidate into bonds_df
     if 'bonds_df' not in context.extras:

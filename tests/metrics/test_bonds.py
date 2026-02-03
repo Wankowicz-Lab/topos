@@ -1,11 +1,9 @@
 """Tests for bonds metrics module."""
-import numpy as np
 import pandas as pd
-import pytest
 
 from src.metrics import bonds
 from src.pipeline.context import Context
-from tests.test_utils import _make_chain, _make_residue
+from tests.test_utils import _make_residue
 
 import biotite.structure as struc
 
