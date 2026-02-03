@@ -65,6 +65,9 @@ class Config(BaseModel):
     structural_feature_chains : Optional[List[str]]
         List of chain IDs to include in structural feature calculations.
         If None (default), all chains are included.
+    ligand_chains : Optional[List[str]]
+        List of chain IDs treated as ligand. If None or empty, protein-ligand
+        interaction analysis is skipped.
     """
 
 
@@ -82,6 +85,9 @@ class Config(BaseModel):
     remove_hydrogens: bool = True
     altloc_policy: Literal["highest", "all"] = "highest"
     structural_feature_chains: Optional[List[str]] = None
+
+    # ligand interaction parameters
+    ligand_chains: Optional[List[str]] = None
 
     # mutagenesis data
     mutation_data_path: Optional[Path] = None

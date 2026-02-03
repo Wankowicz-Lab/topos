@@ -418,7 +418,7 @@ def _make_aaindex_data(accessions):
 def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membrane_protein=False,
                       mutation_data_path=None,
                       mutation_data_chain=None, aaindex_path=None, altloc_policy='highest',
-                      structural_feature_chains=None) -> None:
+                      structural_feature_chains=None, ligand_chains=None) -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
 
     defaults = {"pdb_id": pdb_id,
@@ -428,7 +428,8 @@ def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membr
                 "mutation_data_chain": mutation_data_chain,
                 "aaindex_path": str(aaindex_path) if aaindex_path is not None else None,
                 "altloc_policy": altloc_policy,
-                "structural_feature_chains": structural_feature_chains}
+                "structural_feature_chains": structural_feature_chains,
+                "ligand_chains": ligand_chains}
 
     # Remove any keys with None values
     remove_keys = [key for key, value in defaults.items() if value is None]

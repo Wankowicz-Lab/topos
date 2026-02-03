@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import tomli
 import warnings
@@ -64,6 +65,155 @@ def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[st
         ).reset_index(drop=True)
     
     return residue_table
+
+
+def _residue_key(chain: str, resi: Any, resn: str) -> tuple:
+    """Normalize (chain, resi, resn) for set/map lookups."""
+    return (str(chain).strip(), int(resi), str(resn).strip() if resn is not None else "")
+
+
+def calculate_protein_ligand_interactions(
+    context: Context,
+    contacting_residues_df: pd.DataFrame,
+    ligand_radius: float = 4.5,
+    second_shell_cutoff: float = 5.0,
+) -> pd.DataFrame:
+    """
+    Label protein residues as contact, binding site, or second shell per ligand chain.
+
+    For each chain in config.ligand_chains, finds protein residues within ligand_radius
+    of any ligand atom (contact if in contacting_residues_df, else binding site), and
+    residues within second_shell_cutoff of those (second shell). Adds one column
+    ligand_<chain>_interactions to the residue table.
+
+    Parameters
+    ----------
+    context : Context
+        Pipeline context (structure, config, residue_table).
+    contacting_residues_df : pd.DataFrame
+        DataFrame with columns chain, resi_struct, resn_struct, partner_chain; residues in this set
+        that also fall within ligand_radius of a ligand are labeled "contact".
+    ligand_radius : float, optional
+        Max distance (Å) from any ligand atom to a protein residue for binding site.
+        Default is 4.5.
+    second_shell_cutoff : float, optional
+        Max residue-residue distance (Å) for second shell. Default is 5.0.
+
+    Returns
+    -------
+    pd.DataFrame
+        context.residue_table with same rows plus columns ligand_<chain>_interactions
+        (values: "contact", "binding site", "second shell", or NaN). If
+        ligand_chains is None or empty, returns residue_table unchanged.
+    """
+    ligand_chains = context.config.ligand_chains
+    if ligand_chains is None or len(ligand_chains) == 0:
+        logger.warning(
+            "ligand_chains is None or empty; skipping protein-ligand interaction analysis."
+        )
+        return context.residue_table.copy()
+
+    # Protein atoms (amino acids only)
+    protein = context.aa
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(protein.chain_id, context.config.structural_feature_chains)
+        protein = protein[chain_mask]
+    
+    # Remove ligand chains from protein array
+    protein = protein[~np.isin(protein.chain_id, ligand_chains)]
+
+    # Contacting set from provided df: (chain, resi_struct, resn_struct) normalized
+    required = ["chain", "resi_struct", "resn_struct"]
+
+    # Residue metadata for protein array
+    res_starts = struc.get_residue_starts(protein)
+    protein_chains = protein.chain_id[res_starts]
+    protein_res_ids = protein.res_id[res_starts]
+    protein_res_names = protein.res_name[res_starts]
+    n_protein_res = len(res_starts)
+    
+    # Map protein atom index -> residue index
+    atom_to_res_idx = np.repeat(np.arange(n_protein_res), np.diff(list(res_starts) + [protein.array_length()]))
+
+    # Cell list on protein coords for radius queries
+    cell_size = max(ligand_radius, second_shell_cutoff) + 0.01
+    protein_cell = struc.CellList(protein, cell_size=cell_size)
+
+    out = context.residue_table.copy()
+    arr = context.array
+    
+    for L in ligand_chains:
+        
+        # Contacting residues for this ligand
+        contact_keys = set()
+        ligand_contacting_residues_df = contacting_residues_df[contacting_residues_df["partner_chain"] == L]
+        for _, row in ligand_contacting_residues_df[required].drop_duplicates().iterrows():
+            contact_keys.add(_residue_key(row["chain"], row["resi_struct"], row["resn_struct"]))
+        
+        ligand_mask = arr.chain_id == L
+        ligand_atoms = arr[ligand_mask]
+        ligand_coords = ligand_atoms.coord
+
+        # Protein atoms within radius of any ligand atom -> R_binding residues
+        protein_atom_indices = set()
+        for i in range(ligand_coords.shape[0]):
+            near = protein_cell.get_atoms(ligand_coords[i], radius=ligand_radius)
+            protein_atom_indices.update(near.tolist())
+        binding_res_indices = set(atom_to_res_idx[list(protein_atom_indices)])
+
+        # (chain, resi, resn) for R_binding
+        binding_keys = set()
+        for ri in binding_res_indices:
+            ch = protein_chains[ri]
+            rid = protein_res_ids[ri]
+            rn = protein_res_names[ri]
+            binding_keys.add(_residue_key(ch, rid, rn))
+
+        # Contact vs binding site
+        contact_labels = binding_keys & contact_keys
+        binding_only = binding_keys - contact_keys
+
+        # Create binding atom mask that is True for all atoms in the binding residues
+        binding_atom_mask = np.zeros(protein.array_length(), dtype=bool)
+        for ri in binding_res_indices:
+            start = res_starts[ri]
+            end = res_starts[ri + 1] if ri + 1 < n_protein_res else protein.array_length()
+            binding_atom_mask[start:end] = True
+        binding_coords = protein.coord[binding_atom_mask]
+
+        # Second shell: protein residues within second_shell_cutoff of any binding atom
+        second_shell_res_indices = set()
+        for i in range(binding_coords.shape[0]):
+            near = protein_cell.get_atoms(binding_coords[i], radius=second_shell_cutoff)
+            for ai in near:
+                ri = atom_to_res_idx[ai]
+                if ri not in binding_res_indices:
+                    second_shell_res_indices.add(ri)
+        
+        # (chain, resi, resn) for second shell
+        second_shell_keys = set()
+        for ri in second_shell_res_indices:
+            ch = protein_chains[ri]
+            rid = protein_res_ids[ri]
+            rn = protein_res_names[ri]
+            second_shell_keys.add(_residue_key(ch, rid, rn))
+
+        # Map (chain, resi, resn) -> label for this ligand chain
+        label_map = {}
+        for k in contact_labels:
+            label_map[k] = "contact"
+        for k in binding_only:
+            label_map[k] = "binding site"
+        for k in second_shell_keys:
+            label_map[k] = "second shell"
+
+        def lookup(row):
+            key = _residue_key(row["chain"], row["resi_struct"], row["resn_struct"])
+            return label_map.get(key, np.nan)
+
+        out[f"ligand_{L}_interactions"] = out.apply(lookup, axis=1)
+
+    return out
 
 
 @dataclass
@@ -150,6 +300,19 @@ class Runner:
                     raise ValueError(
                         f"Specified structural_feature_chains {sorted(invalid_chains)} not "
                         f"found in structure chains {sorted(available_chains)}"
+                    )
+
+        # Validate ligand_chains if specified
+        if self.context.config.ligand_chains is not None:
+            if len(self.context.config.ligand_chains) == 0:
+                self.context.config.ligand_chains = None
+            else:
+                array_chains = np.unique(self.context.array.chain_id)
+                invalid_ligand = set(self.context.config.ligand_chains) - set(array_chains)
+                if invalid_ligand:
+                    raise ValueError(
+                        f"Specified ligand_chains {sorted(invalid_ligand)} not "
+                        f"found in structure chains {sorted(array_chains)}"
                     )
 
         # Set up df with secondary structure info
