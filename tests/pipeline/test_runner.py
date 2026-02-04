@@ -6,9 +6,10 @@ import pytest
 import random
 import tomli_w
 
-
+import biotite.structure as struc
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
+from src.structure.structure_context import load_structure
 
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
@@ -793,46 +794,31 @@ def test_structural_feature_chains_filtering(tmp_path):
     assert len(runner_multi.features) == len(residues) * 2
 
 
-def test_ligand_chains_validation(tmp_path):
-    """Test that ligand_chains validation works in Runner.__post_init__."""
-    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
-    mmcif_path = tmp_path / "test_structure.cif"
-    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues, "B": residues})
+def test_format_ligand_id():
+    """Test format_ligand_id produces canonical ligand ID for matching."""
+    assert runner.format_ligand_id("A", 1, "ATP") == "A:1:ATP"
+    assert runner.format_ligand_id(" B ", 2, " NAG ") == "B:2:NAG"
+    assert runner.format_ligand_id("A", 10, None) == "A:10:"
 
-    # Invalid ligand chain ID should raise ValueError
-    config_path = tmp_path / 'config_ligand_invalid.toml'
-    _make_config_file(config_path, pdb_id='test', ligand_chains=['Z'])
 
-    with pytest.raises(ValueError, match="Specified ligand_chains.*not found in structure chains"):
-        runner.Runner(
-            pdb_id='test',
-            pdb_path=mmcif_path,
-            name='test_ligand_validation',
-            config_path=config_path
-        )
-
-    # Empty list should be treated as None (no error, no warning from Runner)
-    config_path_empty = tmp_path / 'config_ligand_empty.toml'
-    _make_config_file(config_path_empty, pdb_id='test', ligand_chains=[])
-
-    runner_empty = runner.Runner(
-        pdb_id='test',
-        pdb_path=mmcif_path,
-        name='test_ligand_empty',
-        config_path=config_path_empty
-    )
-    assert runner_empty.context.config.ligand_chains is None
+def test_find_ligands():
+    """Test find_ligands identifies ligands when run on PDB 8EFO (requires network)."""
+    arr = load_structure(pdb_id="8EFO")
+    ligands = runner.find_ligands(arr)
+    assert len(ligands) >= 1, "8EFO should have at least one ligand identified"
+    
+    ligands_with_cholesterol = runner.find_ligands(arr, exclude_cholesterol=False)
+    assert len(ligands_with_cholesterol) > len(ligands), "With cholesterol excluded, should have fewer ligands"
 
 
 def test_calculate_protein_ligand_interactions(tmp_path):
-    """Test calculate_protein_ligand_interactions with synthetic structure."""
-    # Structure: chain A and B (both protein for simplicity); we treat B as "ligand"
+    """Test calculate_protein_ligand_interactions with hetero-based ligands and partner_ligand_id."""
     residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues, "B": residues})
 
     config_path = tmp_path / 'config_ligand.toml'
-    _make_config_file(config_path, pdb_id='test', ligand_chains=['B'])
+    _make_config_file(config_path, pdb_id='test')
 
     myrunner = runner.Runner(
         pdb_id='test',
@@ -841,27 +827,34 @@ def test_calculate_protein_ligand_interactions(tmp_path):
         config_path=config_path
     )
 
-    # Contacting df: one residue from chain A (e.g. resi 1) as "contacting"
+    # Mark chain B as hetero so find_ligands returns B residues as ligands
+    arr = myrunner.context.array
+
+    if "hetero" not in arr.get_annotation_categories():
+        hetero = np.zeros(arr.array_length(), dtype=bool)
+        hetero[arr.chain_id == 'B'] = True
+        arr.set_annotation("hetero", hetero)
+    else:
+        arr.hetero[arr.chain_id == 'B'] = True
+
+    # Contacting df: protein residue (A, 1, ALA) contacting ligand B:1:ALA; use canonical partner_ligand_id
     contacting_df = pd.DataFrame({
         'chain': ['A'],
         'resi_struct': [1],
         'resn_struct': ['ALA'],
-        'partner_chain': ['B']
+        'partner_ligand_id': ['B:1:ALA']
     })
 
     result = runner.calculate_protein_ligand_interactions(myrunner.context, contacting_df)
 
-    assert 'ligand_B_interactions' in result.columns
+    assert 'ligand_B_1_ALA_interactions' in result.columns
     assert result.shape[0] == myrunner.context.residue_table.shape[0]
-    # At least binding site / contact / second shell should appear
-    vals = result['ligand_B_interactions'].dropna().unique()
+    vals = result['ligand_B_1_ALA_interactions'].dropna().unique()
     assert len(vals) >= 1
     assert set(vals).issubset({'contact', 'binding site', 'second shell'})
 
-    # When ligand_chains is None, no new columns
-    myrunner.context.config.ligand_chains = None
+    # When no ligands (clear hetero), returns residue_table unchanged
+    arr.hetero[:] = False
     out_skip = runner.calculate_protein_ligand_interactions(myrunner.context, contacting_df)
     assert out_skip.shape[1] == myrunner.context.residue_table.shape[1]
-    assert 'ligand_B_interactions' not in out_skip.columns
-
-
+    assert 'ligand_B_1_ALA_interactions' not in out_skip.columns
