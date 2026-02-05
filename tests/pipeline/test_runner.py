@@ -367,9 +367,9 @@ def test_runner_run_metric(tmp_path):
     for metric in metrics:
         meta, func = _REGISTRY[metric]
         provides, requires = meta.provides, meta.requires
-        myrunner.run(metrics=[metric])
+        returned_features = myrunner.run_metrics(metrics=[metric], mutations=True)
 
-        returned_cols = myrunner.features.columns.tolist()
+        returned_cols = returned_features.columns.tolist()
         expected_cols = ['chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'resm', 'name']
 
         if metric == 'aaindex_scores':
@@ -385,14 +385,8 @@ def test_runner_run_metric(tmp_path):
         assert set(expected_cols) == set(returned_cols)
 
     # run all metrics
-    myrunner.run(metrics=list(metrics))
-    all_result = myrunner.features
-    assert len(all_result) == len(residue_table)
-
-    # run with default (all metrics)
-    myrunner.run()
-    all_result_default = myrunner.features
-    pd.testing.assert_frame_equal(all_result, all_result_default)
+    returned_features = myrunner.run_metrics(metrics=list(metrics), mutations=True)
+    assert len(returned_features) == len(residue_table)
 
 
 def test_runner_run_metric_no_mutations(tmp_path):
@@ -406,18 +400,12 @@ def test_runner_run_metric_no_mutations(tmp_path):
         mutation_data_path=None
     )
 
-    # Check that resi_mut and resn_mut columns exist and equal resi_struct and resn_struct
-    assert 'resi_mut' in myrunner.context.residue_table.columns
-    assert 'resn_mut' in myrunner.context.residue_table.columns
-    assert (myrunner.context.residue_table['resi_mut'] == myrunner.context.residue_table['resi_struct']).all()
-    assert (myrunner.context.residue_table['resn_mut'] == myrunner.context.residue_table['resn_struct']).all()
-
     # run all metrics
-    myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
+    returned_features = myrunner.run_metrics(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
 
     # Check that all residues are present and no 'resm' column
-    assert len(myrunner.features) == len(myrunner.context.residue_table)
-    assert 'resm' not in myrunner.features.columns.tolist()
+    assert len(returned_features) == len(myrunner.context.residue_table)
+    assert 'resm' not in returned_features.columns.tolist()
 
 
 

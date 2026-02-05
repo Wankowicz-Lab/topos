@@ -254,6 +254,37 @@ class Runner:
         return Config(**base_dict)
 
 
+    def run_metrics(self, metrics: List[str], mutations: bool = False) -> None:
+        """Compute specified metrics and return as a merged DataFrame.
+
+        Parameters
+        ----------
+        metrics : Optional[List[str]] = None
+            List of metric names to compute.
+        mutations : bool
+            Whether to include mutation-level data.
+            
+        Returns
+        -------
+        pd.DataFrame
+            Merged DataFrame of all metrics.
+        """
+        
+        result_frames = []
+        for m in metrics:
+            meta, func = _REGISTRY[m]
+
+            logger.info(f"Calculating metric: {m}")
+            df = func(self.context)
+
+            result_frames.append(df)
+        
+        # merge features
+        features = self._merge_features(result_frames, mutations=mutations)
+        features['name'] = self.context.config.name
+        return features
+    
+    
     def run(self, metrics: List[str] = None) -> None:
         """Compute specified metrics and return as a merged DataFrame.
 
