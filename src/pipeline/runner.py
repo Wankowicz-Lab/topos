@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import tomli
 import warnings
@@ -16,7 +17,7 @@ from src.pipeline.context import Context, Config
 from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
 from src.databases import pdbtm
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
@@ -25,6 +26,146 @@ from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 
 logger = logging.getLogger(__name__)
+
+# Hetero residue sets for find_ligands
+PROTEIN_MODS = {
+    "MSE", "SEP", "TPO", "PTR", "HYP", "CSO", "MHO", "KCX", "CSD", "CME", "CSX",
+    "TRY", "LYS", "ALY", "CMH", "CAF",
+}
+SOLVENT = {"HOH", "WAT", "H2O", "DOD", "HOD"}
+COMMON_BUFFER = {"SO4", "PO4", "GOL", "MPD", "EDO", "PEG"}
+# Crystallization ions, metals, and common inorganic ions (3-letter codes)
+IONS = frozenset({
+    "NA", "CL", "K", "MG", "CA", "ZN", "MN", "FE", "CU", "NI", "CD", "CO",
+    "SO4", "PO4", "ACT", "F", "BR", "IOD", "AU", "AG", "BA", "SR", "LI", "RB",
+    "CS", "AL", "CR", "MO", "W", "V", "PT", "PD", "IR", "RH", "RU", "OS", "RE",
+    "AZI", "IUM", "MMC", "NO3",
+})
+# Known ligand 3-letter codes; used only for warning when absent (unknown ligands still included)
+KNOWN_LIGANDS = frozenset({
+    "ATP", "ADP", "AMP", "GTP", "GDP", "GMP", "NAD", "NAH", "NAI", "NAP", "NDP",
+    "FAD", "FMN", "HEM", "NAG", "NDG", "MAN", "GAL", "GLC", "BMA", "FUC", "SIA",
+    "DMS", "PG4", "LI1", "SQU", "PLP", "TPP", "COA", "ACP", "SAM", "SAH",
+    "STU", "BOG", "DDQ", "LDA", "MLA", "OLA", "RET", "CHL", "CLR", "LMT", "LPP",
+})
+
+
+def format_ligand_id(chain: str, res_id: int, res_name: str) -> str:
+    """
+    Canonical string identifier for a ligand (chain, res_id, res_name).
+
+    Use this format for partner_ligand_id in contacting_residues_df so rows
+    match ligands produced by find_ligands. Normalization: strip whitespace,
+    int for res_id, strip res_name.
+
+    Parameters
+    ----------
+    chain : str
+        Chain ID.
+    res_id : int
+        Residue index.
+    res_name : str
+        Residue name (3-letter code).
+
+    Returns
+    -------
+    str
+        Canonical ID, e.g. "A:1:ATP".
+    """
+    res_name_str = "" if res_name is None else str(res_name).strip()
+    return f"{str(chain).strip()}:{int(res_id)}:{res_name_str}"
+
+
+def find_ligands(
+    array: struc.AtomArray | struc.AtomArrayStack,
+    exclude_protein_mods: bool = True,
+    exclude_solvent: bool = True,
+    exclude_ions: bool = True,
+    exclude_common_buffer: bool = True,
+    exclude_cholesterol: bool = True,
+    warn_unknown_ligands: bool = True,
+) -> List[Tuple[str, int, str]]:
+    """
+    Identify ligand molecules from hetero atoms.
+
+    Each exclusion category is applied only when its corresponding flag is True.
+    Residue names are normalized (strip, upper) for set membership checks.
+    When warn_unknown_ligands is True, ligands whose res_name is not in KNOWN_LIGANDS
+    are reported with a warning but still included in the return value.
+
+    Parameters
+    ----------
+    array : struc.AtomArray or struc.AtomArrayStack
+        Structure; if stack, first model is used.
+    exclude_protein_mods : bool, optional
+        Exclude residues in PROTEIN_MODS (e.g. MSE, SEP, CSO). Default True.
+    exclude_solvent : bool, optional
+        Exclude solvent residues (HOH, WAT, H2O, etc.). Default True.
+    exclude_ions : bool, optional
+        Exclude residues in IONS (crystallization ions, metals). Default True.
+    exclude_common_buffer : bool, optional
+        Exclude common crystallization additives (SO4, GOL, MPD, etc.). Default False.
+    exclude_cholesterol : bool, optional
+        Exclude cholesterol residues (CLR). Default False.
+    warn_unknown_ligands : bool, optional
+        Log a warning for each remaining ligand not in KNOWN_LIGANDS; still include
+        it in the return list. Default True.
+
+    Returns
+    -------
+    list of tuple of (str, int, str)
+        List of (chain_id, res_id, res_name) for each distinct ligand molecule.
+    """
+    if isinstance(array, struc.AtomArrayStack):
+        array = array[0]
+    if "hetero" not in array.get_annotation_categories():
+        return []
+    
+    hetero_mask = array.hetero
+    if not np.any(hetero_mask):
+        return []
+    hetero_atoms = array[hetero_mask]
+
+    chains = hetero_atoms.chain_id
+    res_ids = hetero_atoms.res_id
+    res_names = hetero_atoms.res_name
+    res_starts = struc.get_residue_starts(hetero_atoms)
+    
+    unique_tuples = set()
+    
+    for i in range(len(res_starts)):
+        start = res_starts[i]
+        ch = chains[start]
+        rid = int(res_ids[start])
+        rn_raw = str(res_names[start]).strip() if res_names[start] is not None else ""
+        rn_upper = rn_raw.upper()
+        
+        if exclude_protein_mods and rn_upper in PROTEIN_MODS:
+            continue
+        if exclude_solvent and rn_upper in SOLVENT:
+            continue
+        if exclude_ions and rn_upper in IONS:
+            continue
+        if exclude_common_buffer and rn_upper in COMMON_BUFFER:
+            continue
+        if exclude_cholesterol and rn_upper == "CLR":
+            continue
+        unique_tuples.add((str(ch).strip(), rid, rn_raw))
+
+    result = sorted(unique_tuples, key=lambda t: (t[0], t[1], t[2]))
+
+    if warn_unknown_ligands:
+        for (ch, res_id, rn_raw) in result:
+            rn_upper = rn_raw.upper()
+            if rn_upper not in KNOWN_LIGANDS:
+                logger.warning(
+                    "Ligand not in KNOWN_LIGANDS: %s (chain=%s, res_id=%s)",
+                    rn_raw or "(empty)",
+                    ch,
+                    res_id,
+                )
+
+    return result
 
 
 def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[str] = None) -> pd.DataFrame:
@@ -64,6 +205,173 @@ def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[st
         ).reset_index(drop=True)
     
     return residue_table
+
+
+def _residue_key(chain: str, resi: Any, resn: str) -> tuple:
+    """Normalize (chain, resi, resn) for set/map lookups."""
+    return (str(chain).strip(), int(resi), str(resn).strip() if resn is not None else "")
+
+
+def _sanitize_column_name(s: str) -> str:
+    """Replace spaces with underscore for use in pandas column names."""
+    return str(s).strip().replace(" ", "_")
+
+
+def calculate_protein_ligand_interactions(
+    context: Context,
+    contacting_residues_df: pd.DataFrame,
+    ligand_radius: float = 4.5,
+    second_shell_cutoff: float = 5.0,
+) -> pd.DataFrame:
+    """
+    Label protein residues as contact, binding site, or second shell per ligand.
+
+    Ligands are detected via find_ligands (hetero flag). For each ligand (chain, res_id, res_name),
+    finds protein residues within ligand_radius of any ligand atom (contact if in
+    contacting_residues_df for that ligand, else binding site), and residues within
+    second_shell_cutoff of those (second shell). Adds one column per ligand, e.g.
+    ligand_<chain>_<res_id>_<resn>_interactions.
+
+    contacting_residues_df must include partner_ligand_id in the canonical format
+    produced by format_ligand_id (e.g. "A:1:ATP") so rows match ligands.
+
+    Parameters
+    ----------
+    context : Context
+        Pipeline context (structure, config, residue_table).
+    contacting_residues_df : pd.DataFrame
+        DataFrame with columns chain, resi_struct, resn_struct, and partner_ligand_id.
+        partner_ligand_id must be in the canonical format from format_ligand_id for matching.
+    ligand_radius : float, optional
+        Max distance (Å) from any ligand atom to a protein residue for binding site.
+        Default is 4.5.
+    second_shell_cutoff : float, optional
+        Max residue-residue distance (Å) for second shell. Default is 5.0.
+
+    Returns
+    -------
+    pd.DataFrame
+        context.residue_table with same rows plus one column per ligand
+        (values: "contact", "binding site", "second shell", or NaN). If no ligands
+        found, returns residue_table unchanged.
+    """
+    arr = context.array
+    if isinstance(arr, struc.AtomArrayStack):
+        arr = arr[0]
+    ligands = find_ligands(arr)
+    if len(ligands) == 0:
+        logger.warning(
+            "No ligands found (hetero atoms absent or all filtered); skipping protein-ligand interaction analysis."
+        )
+        return context.residue_table.copy()
+
+    # Protein atoms (amino acids only)
+    protein = context.aa
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(protein.chain_id, context.config.structural_feature_chains)
+        protein = protein[chain_mask]
+    
+    # get protein chains, res_ids, res_names
+    res_starts = struc.get_residue_starts(protein)
+    protein_chains = protein.chain_id[res_starts]
+    protein_res_ids = protein.res_id[res_starts]
+    protein_res_names = protein.res_name[res_starts]
+    n_protein_res = len(res_starts)
+
+    # get atom to residue index mapping
+    atom_to_res_idx = np.repeat(np.arange(n_protein_res), np.diff(list(res_starts) + [protein.array_length()]))
+
+    # create protein cell list
+    cell_size = max(ligand_radius, second_shell_cutoff) + 0.01
+    protein_cell = struc.CellList(protein, cell_size=cell_size)
+    out = context.residue_table.copy()
+
+    # iterate over ligands
+    for (lig_chain, lig_res_id, lig_res_name) in ligands:
+        # get ligand id
+        ligand_id = format_ligand_id(lig_chain, lig_res_id, lig_res_name)
+        
+        # get contacting residues
+        ligand_contacting_df = contacting_residues_df[contacting_residues_df["partner_ligand_id"] == ligand_id]
+        
+        # get contact keys (unique (chain, resi, resn) tuples)
+        contact_keys = set()
+        for _, row in ligand_contacting_df[["chain", "resi_struct", "resn_struct"]].drop_duplicates().iterrows():
+            contact_keys.add(_residue_key(row["chain"], row["resi_struct"], row["resn_struct"]))
+
+        # create ligand mask
+        ligand_mask = (
+            (arr.chain_id == lig_chain)
+            & (arr.res_id == lig_res_id)
+            & (arr.res_name == lig_res_name)
+        )
+        
+        ligand_atoms = arr[ligand_mask]
+        ligand_coords = ligand_atoms.coord
+
+        # loop over ligand atoms and get protein atoms within ligand_radius, which are the binding sites
+        protein_atom_indices = set()
+        for i in range(ligand_coords.shape[0]):
+            near = protein_cell.get_atoms(ligand_coords[i], radius=ligand_radius)
+            protein_atom_indices.update(near.tolist())
+        binding_res_indices = set(atom_to_res_idx[list(protein_atom_indices)])
+
+        # get binding keys (unique (chain, resi, resn) tuples)
+        binding_keys = set()
+        for ri in binding_res_indices:
+            ch = protein_chains[ri]
+            rid = protein_res_ids[ri]
+            rn = protein_res_names[ri]
+            binding_keys.add(_residue_key(ch, rid, rn))
+
+        # get contact labels (binding sites that are also contacting residues) and binding only (binding sites that are not contacting residues)
+        contact_labels = binding_keys & contact_keys
+        binding_only = binding_keys - contact_keys
+
+        # Get all atoms in binding site residues
+        binding_atom_mask = np.zeros(protein.array_length(), dtype=bool)
+        for ri in binding_res_indices:
+            start = res_starts[ri]
+            end = res_starts[ri + 1] if ri + 1 < n_protein_res else protein.array_length()
+            binding_atom_mask[start:end] = True
+        binding_coords = protein.coord[binding_atom_mask]
+
+        # Get all atoms that are within second_shell_cutoff of any binding site atom
+        second_shell_res_indices = set()
+        for i in range(binding_coords.shape[0]):
+            near = protein_cell.get_atoms(binding_coords[i], radius=second_shell_cutoff)
+            for ai in near:
+                ri = atom_to_res_idx[ai]
+                if ri not in binding_res_indices:
+                    second_shell_res_indices.add(ri)
+
+        # Get all unique (chain, resi, resn) tuples for second shell residues
+        second_shell_keys = set()
+        for ri in second_shell_res_indices:
+            ch = protein_chains[ri]
+            rid = protein_res_ids[ri]
+            rn = protein_res_names[ri]
+            second_shell_keys.add(_residue_key(ch, rid, rn))
+
+        # Create label map
+        label_map = {}
+        for k in contact_labels:
+            label_map[k] = "contact"
+        for k in binding_only:
+            label_map[k] = "binding site"
+        for k in second_shell_keys:
+            label_map[k] = "second shell"
+
+        # lookup label for each residue
+        def lookup(row):
+            key = _residue_key(row["chain"], row["resi_struct"], row["resn_struct"])
+            return label_map.get(key, np.nan)
+ 
+        # add column to residue table
+        col = f"ligand_{_sanitize_column_name(lig_chain)}_{lig_res_id}_{_sanitize_column_name(lig_res_name)}_interactions"
+        out[col] = out.apply(lookup, axis=1)
+
+    return out
 
 
 @dataclass
