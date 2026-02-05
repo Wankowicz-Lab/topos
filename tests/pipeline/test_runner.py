@@ -400,13 +400,32 @@ def test_runner_run_metric_no_mutations(tmp_path):
         mutation_data_path=None
     )
 
-    # run all metrics
-    returned_features = myrunner.run_metrics(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
+    # run multiple metrics
+    returned_features = myrunner.run_metrics(metrics=['sasa', 'kyte_doolittle'])
 
     # Check that all residues are present and no 'resm' column
     assert len(returned_features) == len(myrunner.context.residue_table)
     assert 'resm' not in returned_features.columns.tolist()
 
+
+def test_runner_run(tmp_path):
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        name='test_run',
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None
+    )
+
+    # run multiple metrics
+    myrunner.run()
+    returned_features = myrunner.features
+
+    # Check that output has same length as residue table and more columns
+    assert len(returned_features) == len(myrunner.context.residue_table)
+    assert len(returned_features.columns) > len(myrunner.context.residue_table.columns)
 
 
 def test_runner__merge_features():
