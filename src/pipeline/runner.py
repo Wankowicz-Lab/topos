@@ -21,7 +21,7 @@ from typing import List, Optional, Dict, Any
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
 import src.metrics.structure
-from src.metrics.registry import _REGISTRY
+from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 
 logger = logging.getLogger(__name__)
@@ -254,8 +254,41 @@ class Runner:
         return Config(**base_dict)
 
 
-    def run(self, metrics: List[str] = None) -> None:
+    def run_metrics(self, metrics: List[str], mutations: bool = False) -> None:
         """Compute specified metrics and return as a merged DataFrame.
+
+        Parameters
+        ----------
+        metrics : Optional[List[str]] = None
+            List of metric names to compute.
+        mutations : bool
+            Whether to include mutation-level data.
+            
+        Returns
+        -------
+        pd.DataFrame
+            Merged DataFrame of all metrics.
+        """
+        
+        result_frames = []
+        
+        for m in metrics:
+            meta, func = _REGISTRY[m]
+
+            logger.info(f"Calculating metric: {m}")
+            df = func(self.context)
+
+            result_frames.append(df)
+        
+        # merge features
+        logger.info("Merging features")
+        features = self._merge_features(result_frames, mutations=mutations)
+        features['name'] = self.context.config.name
+        return features
+    
+    
+    def run(self, metrics: List[str] = None) -> None:
+        """Compute features for the pipeline.
 
         Parameters
         ----------
@@ -263,33 +296,18 @@ class Runner:
             List of metric names to compute.
         """
 
+        # Run metrics
         if metrics is None:
             metrics = list(_REGISTRY.keys())
-
-        # filter unknown metrics
-        else:
-            metrics = [m for m in metrics if m in _REGISTRY]
-        # TODO: resolve dependencies
-        #order = _topological_order(metrics)
-        order = metrics.copy()
-        result_frames = []
-        for m in order:
-            meta, func = _REGISTRY[m]
-            
-            logger.info(f"Calculating metric: {m}")
-            df = func(self.context)
-
-            # ensure returned DataFrame has index aligned with ctx.res_keys (or positional)
-            result_frames.append(df)
-
-            # Optionally store in extras by name
-            self.context.extras[m] = df
-
-        # merge all results into one DataFrame
-        logger.info("Merging features")
+        
+        # Configure metrics based on presence of mutation data
         mutations = self.context.config.mutation_data_path is not None
-        self.features = self._merge_features(result_frames, mutations=mutations)
-        self.features['name'] = self.context.config.name
+        if not mutations:
+            exclude_metrics = metrics_with_tag('sequence')
+            metrics = [m for m in metrics if m not in exclude_metrics]
+        
+        # Run metrics
+        self.features = self.run_metrics(metrics=metrics, mutations=mutations)
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
