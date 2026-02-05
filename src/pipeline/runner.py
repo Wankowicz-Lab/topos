@@ -28,9 +28,26 @@ from src.structure.secondary_structure import get_secondary_structure_annotation
 logger = logging.getLogger(__name__)
 
 # Hetero residue sets for find_ligands
-PROTEIN_MODS = {"MSE", "SEP", "TPO", "PTR", "HYP", "CSO", "MHO", "KCX", "CSD", "CME", "CSX"}
+PROTEIN_MODS = {
+    "MSE", "SEP", "TPO", "PTR", "HYP", "CSO", "MHO", "KCX", "CSD", "CME", "CSX",
+    "TRY", "LYS", "ALY", "CMH", "CAF",
+}
 SOLVENT = {"HOH", "WAT", "H2O", "DOD", "HOD"}
 COMMON_BUFFER = {"SO4", "PO4", "GOL", "MPD", "EDO", "PEG"}
+# Crystallization ions, metals, and common inorganic ions (3-letter codes)
+IONS = frozenset({
+    "NA", "CL", "K", "MG", "CA", "ZN", "MN", "FE", "CU", "NI", "CD", "CO",
+    "SO4", "PO4", "ACT", "F", "BR", "IOD", "AU", "AG", "BA", "SR", "LI", "RB",
+    "CS", "AL", "CR", "MO", "W", "V", "PT", "PD", "IR", "RH", "RU", "OS", "RE",
+    "AZI", "IUM", "MMC", "NO3",
+})
+# Known ligand 3-letter codes; used only for warning when absent (unknown ligands still included)
+KNOWN_LIGANDS = frozenset({
+    "ATP", "ADP", "AMP", "GTP", "GDP", "GMP", "NAD", "NAH", "NAI", "NAP", "NDP",
+    "FAD", "FMN", "HEM", "NAG", "NDG", "MAN", "GAL", "GLC", "BMA", "FUC", "SIA",
+    "DMS", "PG4", "LI1", "SQU", "PLP", "TPP", "COA", "ACP", "SAM", "SAH",
+    "STU", "BOG", "DDQ", "LDA", "MLA", "OLA", "RET", "CHL", "CLR", "LMT", "LPP",
+})
 
 
 def format_ligand_id(chain: str, res_id: int, res_name: str) -> str:
@@ -61,23 +78,39 @@ def format_ligand_id(chain: str, res_id: int, res_name: str) -> str:
 
 def find_ligands(
     array: struc.AtomArray | struc.AtomArrayStack,
+    exclude_protein_mods: bool = True,
     exclude_solvent: bool = True,
-    exclude_common_buffer: bool = False,
+    exclude_ions: bool = True,
+    exclude_common_buffer: bool = True,
     exclude_cholesterol: bool = True,
+    warn_unknown_ligands: bool = True,
 ) -> List[Tuple[str, int, str]]:
     """
-    Identify ligand molecules from hetero atoms, excluding protein mods, solvent, and optionally buffer.
+    Identify ligand molecules from hetero atoms.
+
+    Each exclusion category is applied only when its corresponding flag is True.
+    Residue names are normalized (strip, upper) for set membership checks.
+    When warn_unknown_ligands is True, ligands whose res_name is not in KNOWN_LIGANDS
+    are reported with a warning but still included in the return value.
 
     Parameters
     ----------
     array : struc.AtomArray or struc.AtomArrayStack
         Structure; if stack, first model is used.
+    exclude_protein_mods : bool, optional
+        Exclude residues in PROTEIN_MODS (e.g. MSE, SEP, CSO). Default True.
     exclude_solvent : bool, optional
         Exclude solvent residues (HOH, WAT, H2O, etc.). Default True.
+    exclude_ions : bool, optional
+        Exclude residues in IONS (crystallization ions, metals). Default True.
     exclude_common_buffer : bool, optional
         Exclude common crystallization additives (SO4, GOL, MPD, etc.). Default False.
     exclude_cholesterol : bool, optional
-        Exclude cholesterol residues (CLR). Default True.
+        Exclude cholesterol residues (CLR). Default False.
+    warn_unknown_ligands : bool, optional
+        Log a warning for each remaining ligand not in KNOWN_LIGANDS; still include
+        it in the return list. Default True.
+
     Returns
     -------
     list of tuple of (str, int, str)
@@ -88,13 +121,11 @@ def find_ligands(
     if "hetero" not in array.get_annotation_categories():
         return []
     
-    # get hetero atoms
     hetero_mask = array.hetero
     if not np.any(hetero_mask):
         return []
     hetero_atoms = array[hetero_mask]
 
-    # get chains, res_ids, res_names
     chains = hetero_atoms.chain_id
     res_ids = hetero_atoms.res_id
     res_names = hetero_atoms.res_name
@@ -102,26 +133,39 @@ def find_ligands(
     
     unique_tuples = set()
     
-    # iterate over residues
     for i in range(len(res_starts)):
-        # get start, chain, res_id, res_name
         start = res_starts[i]
         ch = chains[start]
         rid = int(res_ids[start])
         rn_raw = str(res_names[start]).strip() if res_names[start] is not None else ""
         rn_upper = rn_raw.upper()
         
-        # check if residue is a protein mod, solvent, or common buffer
-        if rn_upper in PROTEIN_MODS:
+        if exclude_protein_mods and rn_upper in PROTEIN_MODS:
             continue
         if exclude_solvent and rn_upper in SOLVENT:
+            continue
+        if exclude_ions and rn_upper in IONS:
             continue
         if exclude_common_buffer and rn_upper in COMMON_BUFFER:
             continue
         if exclude_cholesterol and rn_upper == "CLR":
             continue
         unique_tuples.add((str(ch).strip(), rid, rn_raw))
-    return sorted(unique_tuples, key=lambda t: (t[0], t[1], t[2]))
+
+    result = sorted(unique_tuples, key=lambda t: (t[0], t[1], t[2]))
+
+    if warn_unknown_ligands:
+        for (ch, res_id, rn_raw) in result:
+            rn_upper = rn_raw.upper()
+            if rn_upper not in KNOWN_LIGANDS:
+                logger.warning(
+                    "Ligand not in KNOWN_LIGANDS: %s (chain=%s, res_id=%s)",
+                    rn_raw or "(empty)",
+                    ch,
+                    res_id,
+                )
+
+    return result
 
 
 def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[str] = None) -> pd.DataFrame:

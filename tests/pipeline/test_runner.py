@@ -15,6 +15,8 @@ from src.structure.structure_context import load_structure
 import src.metrics.sequence
 import src.metrics.structure
 from src.metrics.registry import _REGISTRY
+from tests.test_utils import _make_residue, _make_atoms
+
 from src.pipeline.context import Config
 
 # Seed RNGs for deterministic tests
@@ -809,6 +811,39 @@ def test_find_ligands():
     
     ligands_with_cholesterol = runner.find_ligands(arr, exclude_cholesterol=False)
     assert len(ligands_with_cholesterol) > len(ligands), "With cholesterol excluded, should have fewer ligands"
+
+
+def test_find_ligands_empty_when_no_hetero():
+    """Test find_ligands returns empty list when structure has no hetero atoms."""
+    arr = _make_residue("ALA", res_id=1, chain_id="A")
+    if "hetero" in arr.get_annotation_categories():
+        arr.del_annotation("hetero")
+    ligands = runner.find_ligands(arr)
+    assert ligands == []
+
+
+def test_find_ligands_inclusion_criteria():
+    """Test that find_ligands inclusion criteria work correctly."""
+    protein = _make_atoms(["N", "CA", "C"], [[0, 0, 0], [1, 0, 0], [2, 0, 0]], res_name="ALA", res_id=1, chain_id="A")
+    
+    # make a mg ion (res_id 2)
+    mg = _make_atoms(["MG"], [[10, 10, 10]], res_name="MG", res_id=2, chain_id="A")
+    
+    # make a mse protein mod (res_id 3 so it is a distinct residue from MG)
+    mse = _make_atoms(["N", "CA", "C"], [[20, 20, 20]] * 3, res_name="MSE", res_id=3, chain_id="A")
+
+    arr = struc.concatenate([protein, mg, mse])
+    arr.set_annotation("hetero", np.array([False, False, False, True, True, True, True]))
+    permissive_ligands = runner.find_ligands(arr, exclude_ions=False, exclude_protein_mods=False)
+    assert (
+        ("A", 2, "MG") in permissive_ligands
+        and ("A", 3, "MSE") in permissive_ligands
+    )
+    restrictive_ligands = runner.find_ligands(arr, exclude_ions=True, exclude_protein_mods=True)
+    assert (
+        ("A", 2, "MG") not in restrictive_ligands
+        and ("A", 3, "MSE") not in restrictive_ligands
+    )
 
 
 def test_calculate_protein_ligand_interactions(tmp_path):
