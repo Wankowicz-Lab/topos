@@ -697,6 +697,179 @@ def test_sort_residue_table():
         assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
 
 
+def test_compute_residue_neighbors_basic():
+    """Test _compute_residue_neighbors computes neighbors correctly and stores in extras."""
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    extras_key = 'test_neighbors'
+    
+    # Compute neighbors with a reasonable cutoff
+    mapping = myrunner._compute_residue_neighbors(cutoff=10.0, extras_key=extras_key)
+    
+    # Check that result is stored in extras
+    assert myrunner.context.extras[extras_key] == mapping
+    
+    # Check structure: Dict[str, List[str]]
+    assert isinstance(mapping, dict)
+    assert len(mapping) > 0
+    
+    # Check that all residues from structure are present
+    rt = myrunner.context.residue_table
+    expected_keys = {f"{row['chain']}:{row['resi_struct']}" for _, row in rt.iterrows()}
+    assert set(mapping.keys()) == expected_keys
+
+
+def test_compute_residue_neighbors_cutoff_effect():
+    """Test that different cutoffs produce different neighbor sets."""
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    
+    # Small cutoff - fewer neighbors
+    mapping_small = myrunner._compute_residue_neighbors(cutoff=5.0, extras_key='small')
+    
+    # Large cutoff - more neighbors
+    mapping_large = myrunner._compute_residue_neighbors(cutoff=20.0, extras_key='large')
+    
+    # Check that large cutoff has at least as many neighbors per residue
+    for res_key in mapping_small.keys():
+        assert res_key in mapping_large
+        assert len(mapping_large[res_key]) >= len(mapping_small[res_key])
+
+
+def test_calculate_neighborhood_features_basic():
+    """Test calculate_neighborhood_features loops over functions and aggregates correctly."""
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    myrunner.run(metrics=['sasa'])
+    
+    # Set up neighbor mapping in extras
+    myrunner._compute_residue_neighbors(cutoff=10.0, extras_key='residue_neighbors')
+    
+    # Call calculate_neighborhood_features
+    result = runner.calculate_neighborhood_features(
+        myrunner.context, myrunner.features, extras_key='residue_neighbors'
+    )
+    
+    # Check that result has merge columns
+    merge_cols = ['chain', 'resi_struct', 'resn_struct']
+    assert all(c in result.columns for c in merge_cols)
+    
+    # Check that neighborhood metric columns are present
+    assert 'n_ala_neighbors' in result.columns
+    
+    # Check that result has one row per unique (chain, resi_struct, resn_struct) from features
+    expected_rows = myrunner.features[merge_cols].drop_duplicates()
+    assert len(result) == len(expected_rows)
+    
+    # Check that merge columns match features
+    merged_check = pd.merge(
+        expected_rows, result[merge_cols],
+        on=merge_cols, how='inner'
+    )
+    assert len(merged_check) == len(expected_rows)
+
+
+def test_calculate_neighborhood_features_aggregates_multiple_metrics():
+    """Test that calculate_neighborhood_features aggregates multiple metric outputs."""
+    # TODO: replace this with multiple metrics once we have multiple neighborhood metrics in codebase
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    myrunner.run(metrics=['sasa'])
+    
+    # Set up neighbor mapping
+    myrunner._compute_residue_neighbors(cutoff=10.0, extras_key='residue_neighbors')
+    
+    # Temporarily add a second neighborhood metric function to test aggregation
+    from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
+    original_funcs = NEIGHBORHOOD_METRIC_FUNCTIONS.copy()
+    
+    # Create a dummy second metric
+    def dummy_metric(context, features, extras_key='residue_neighbors'):
+        neighbor_map = context.extras.get(extras_key, {})
+        unique = features[['chain', 'resi_struct', 'resn_struct']].drop_duplicates()
+        rows = []
+        for _, row in unique.iterrows():
+            chain, resi, resn = row['chain'], row['resi_struct'], row['resn_struct']
+            res_key = f"{chain}:{int(resi)}"
+            neighbor_keys = neighbor_map.get(res_key, [])
+            rows.append({
+                'chain': chain,
+                'resi_struct': resi,
+                'resn_struct': resn,
+                'dummy_count': len(neighbor_keys)
+            })
+        return pd.DataFrame(rows)
+    
+    try:
+        NEIGHBORHOOD_METRIC_FUNCTIONS.append(dummy_metric)
+        
+        result = runner.calculate_neighborhood_features(
+            myrunner.context, myrunner.features, extras_key='residue_neighbors'
+        )
+        
+        # Should have both metric columns
+        assert 'n_ala_neighbors' in result.columns
+        assert 'dummy_count' in result.columns
+        
+        # Both should have same number of rows
+        assert result['n_ala_neighbors'].notna().sum() == result['dummy_count'].notna().sum()
+    finally:
+        # Restore original functions
+        NEIGHBORHOOD_METRIC_FUNCTIONS[:] = original_funcs
+
+
+def test_run_neighborhood_requires_run_first(tmp_path):
+    """run_neighborhood must be called after run(); it raises if self.features is missing."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path)
+
+    base_runner = runner.Runner(config_path=config_path)
+    with pytest.raises(ValueError, match="No features to extend"):
+        base_runner.run_neighborhood(cutoff=10.0)
+
+
+def test_run_neighborhood_fills_extras_and_merges(tmp_path):
+    """run_neighborhood fills context.extras['residue_neighbors'] and merges n_ala_neighbors into self.features."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path)
+
+    myrunner = runner.Runner(config_path=config_path)
+    myrunner.run(metrics=['sasa', 'kyte_doolittle'])
+    assert hasattr(myrunner, 'features')
+
+    extras_key = 'residue_neighbors'
+    assert extras_key not in myrunner.context.extras
+
+    myrunner.run_neighborhood(cutoff=10.0, extras_key=extras_key)
+
+    # Extras filled with residue_key -> [residue_key, ...]; no self-neighbors
+    mapping = myrunner.context.extras[extras_key]
+    assert isinstance(mapping, dict)
+    for res_key, neighbors in mapping.items():
+        assert isinstance(res_key, str)
+        assert ":" in res_key
+        assert isinstance(neighbors, list)
+        assert res_key not in neighbors, "neighbors must not include self"
+
+    # n_ala_neighbors from count_ala_neighbors is merged into self.features
+    assert 'n_ala_neighbors' in myrunner.features.columns
+    assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
 def test_structural_feature_chains_validation(tmp_path):
     """Test that structural_feature_chains validation works correctly in Runner.__post_init__."""
     # Create a structure with multiple chains
