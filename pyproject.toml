@@ -13,6 +13,7 @@ dependencies = [
   "pandas>=2.0",
   "scipy>=1.11",
   "matplotlib>=3.8",
+  "networkx",
   "blosum",
   "lxml",
   "tomli-w",
