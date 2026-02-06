@@ -697,6 +697,98 @@ def test_sort_residue_table():
         assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
 
 
+def _make_synthetic_ss_fixture(include_na_ss=False, metric_with_nan=False, aa_groups=None):
+    """Build synthetic residue_table and features for run_secondary_structure tests.
+
+    Default: 6 residues, 1 chain, ss_domains alpha-helix_1 (2), beta-sheet_1 (2), coil_1 (2).
+    merge key: chain, resi_struct, resn_struct, resi_mut, resn_mut.
+    """
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 6,
+        'resi_struct': [1, 2, 3, 4, 5, 6],
+        'resn_struct': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'ss_domains': ['alpha-helix_1', 'alpha-helix_1', 'beta-sheet_1', 'beta-sheet_1', 'coil_1', 'coil_1'],
+    })
+    features = pd.DataFrame({
+        'chain': ['A'] * 6,
+        'resi_struct': [1, 2, 3, 4, 5, 6],
+        'resn_struct': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'metric_a': [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+    })
+    if aa_groups is not None:
+        features['wildtype_aa_group'] = aa_groups
+    if include_na_ss:
+        residue_table = pd.concat([
+            residue_table,
+            pd.DataFrame({
+                'chain': ['A'], 'resi_struct': [7], 'resn_struct': ['GLY'],
+                'resi_mut': [7], 'resn_mut': ['GLY'], 'ss_domains': [pd.NA],
+            }),
+        ], ignore_index=True)
+        features = pd.concat([
+            features,
+            pd.DataFrame({
+                'chain': ['A'], 'resi_struct': [7], 'resn_struct': ['GLY'],
+                'resi_mut': [7], 'resn_mut': ['GLY'], 'metric_a': [7.0],
+            }),
+        ], ignore_index=True)
+    if metric_with_nan:
+        features.loc[features['resi_struct'] == 1, 'metric_a'] = np.nan
+    return residue_table, features
+
+
+def test_run_secondary_structure_columns_exist(tmp_path):
+    """run_secondary_structure returns DataFrame with expected columns."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+    residue_table, features = _make_synthetic_ss_fixture()
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+
+    assert len(out) == 3
+    assert 'ss_domains' in out.columns
+    assert 'ss_length' in out.columns
+    assert 'metric_a' in out.columns
+    from src.metrics import secondary_structure as ss_metrics
+    for g in ss_metrics.AA_GROUPS:
+        assert f'log2_ratio_{g}' in out.columns
+
+def test_run_secondary_structure_na_in_metric(tmp_path):
+    """With NA in metric column, output has expected columns and one row per domain."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+    residue_table, features = _make_synthetic_ss_fixture(metric_with_nan=True)
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+    assert len(out) == 3
+    assert 'metric_a' in out.columns and 'ss_length' in out.columns
+
+    # Check that metric column is not NA
+    assert not out['metric_a'].isna().all()
+
+
+def test_run_secondary_structure_na_ss_domains_excluded(tmp_path):
+    """Row with NA ss_domains is excluded; output has expected columns and 3 domain rows."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+    residue_table, features = _make_synthetic_ss_fixture(include_na_ss=True)
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+    assert len(out) == 3
+    assert 'ss_domains' in out.columns and 'ss_length' in out.columns and 'metric_a' in out.columns
 def test_compute_residue_neighbors_basic():
     """Test _compute_residue_neighbors computes neighbors correctly and stores in extras."""
     myrunner = runner.Runner(
