@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 ACIDIC_RESIDUES = {'ASP', 'GLU'}
 BASIC_RESIDUES = {'LYS', 'ARG', 'HIS'}
+PROTONATION_STATE_RESIDUES = {'HIS', 'TYR', 'SER'}
 AROMATIC_RESIDUES = {'PHE', 'TYR', 'TRP'}
 CATIONIC_RESIDUES = {'LYS', 'ARG'}  
 
@@ -110,6 +111,11 @@ def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Dat
             base_atoms = get_residue_atoms(array, base_chain, base_resi, SALT_BRIDGE_ATOMS[base_resn])
             if len(base_atoms) == 0:
                 continue
+
+            # Exclude adjacent residues if part of the same chain
+            if acid_chain == base_chain:
+                if abs(acid_resi - base_resi) == 1:
+                    continue
             
             # Calculate distance between acid and base atoms
             diff = acid_atoms[:, None, :] - base_atoms[None, :, :]
@@ -137,7 +143,7 @@ def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Dat
         return pd.DataFrame(results)
     else:
         return pd.DataFrame(columns=standard_columns)
-        
+
 
 @register_metric(name='salt_bridge_count', provides=['salt_bridge_count'], tags={'bonds'})
 def calculate_salt_bridges(context: Context, cutoff: float = 4.0) -> pd.DataFrame:
@@ -171,6 +177,115 @@ def calculate_salt_bridges(context: Context, cutoff: float = 4.0) -> pd.DataFram
     if len(salt_bridges) > 0:
         context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], salt_bridges], ignore_index=True)
     
+    return metadata
+
+
+def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.DataFrame:
+    """Identify ionic bonds in a protein structure.
+
+    Parameters
+    ----------
+    array: struc.AtomArray
+        Biotite AtomArray containing protein structure data.
+    cutoff: float
+        Cutoff distance for ionic bonds.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with ionic bonds with columns:
+        chain, resi_struct, resn_struct, partner_chain, partner_resi, partner_resn, bond_type, extras
+    """
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    res_ids = array.res_id[res_starts]
+    resnames = array.res_name[res_starts]
+    
+    results = []
+    
+    acidic_indices = [i for i, rn in enumerate(resnames) if rn in ACIDIC_RESIDUES]
+    ionic_indices = [i for i, rn in enumerate(resnames) if rn in PROTONATION_STATE_RESIDUES]
+    
+    cutoff2 = cutoff * cutoff
+    
+    # Iterate over ionic residues
+    for ionic_idx in ionic_indices:
+        ionic_chain, ionic_resi, ionic_resn = chains[ionic_idx], res_ids[ionic_idx], resnames[ionic_idx]
+        ionic_atoms = get_residue_atoms(array, ionic_chain, ionic_resi, SALT_BRIDGE_ATOMS[ionic_resn])
+        if len(ionic_atoms) == 0:
+            continue
+            
+        # Iterate over acidic residues
+        for acidic_idx in acidic_indices:
+            acidic_chain, acidic_resi, acidic_resn = chains[acidic_idx], res_ids[acidic_idx], resnames[acidic_idx]
+            acidic_atoms = get_residue_atoms(array, acidic_chain, acidic_resi, SALT_BRIDGE_ATOMS[acidic_resn])
+            if len(acidic_atoms) == 0:
+                continue
+            
+            # Exclude adjacent residues if part of the same chain
+            if ionic_chain == acidic_chain:
+                if abs(ionic_resi - acidic_resi) == 1:
+                    continue
+            
+            # Calculate distance between ionic and acidic atoms
+            diff = ionic_atoms[:, None, :] - acidic_atoms[None, :, :]
+            d2 = np.einsum("ijk,ijk->ij", diff, diff)
+            
+            # If distance is less than cutoff, add to results (acidic first, then ionic, matching salt_bridge order)
+            if d2.min() <= cutoff2:
+                results.append({
+                    'chain': acidic_chain, 'resi_struct': int(acidic_resi), 'resn_struct': acidic_resn,
+                    'partner_chain': ionic_chain, 'partner_resi': int(ionic_resi), 'partner_resn': ionic_resn,
+                    'bond_type': 'ionic',
+                    'extras': {}
+                })
+                results.append({
+                    'chain': ionic_chain, 'resi_struct': int(ionic_resi), 'resn_struct': ionic_resn,
+                    'partner_chain': acidic_chain, 'partner_resi': int(acidic_resi), 'partner_resn': acidic_resn,
+                    'bond_type': 'ionic',
+                    'extras': {}
+                })
+    
+    # Define standard columns
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    
+    if results:
+        return pd.DataFrame(results)
+    else:
+        return pd.DataFrame(columns=standard_columns)
+
+
+@register_metric(name='ionic_bond_count', provides=['ionic_bond_count'], tags={'bonds'})
+def calculate_ionic_bond_count(context: Context, cutoff: float = 4.0) -> pd.DataFrame:
+    """Calculate the number of ionic bonds in a protein structure.
+
+    Parameters
+    ----------
+    context: Context
+        Context object containing residue metadata, structural information, and mutation information.
+    cutoff: float
+        Cutoff distance for ionic bonds.
+
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with the number of ionic bonds.
+    """
+    array = context.array
+    ionic_bonds = identify_ionic_bonds(array, cutoff)
+    metadata = get_metadata_cols(array)
+    metadata['ionic_bond_count'] = 0
+    if len(ionic_bonds) > 0:
+        counts = ionic_bonds.groupby(['chain', 'resi_struct']).size()
+        for (chain, resi), count in counts.items():
+            metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'ionic_bond_count'] = count
+    
+    # Consolidate into bonds_df
+    if 'bonds_df' not in context.extras:
+        context.extras['bonds_df'] = pd.DataFrame(columns=['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras'])
+    if len(ionic_bonds) > 0:
+        context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], ionic_bonds], ignore_index=True)
     return metadata
 
 
@@ -523,7 +638,7 @@ def identify_vdw_contacts(array: struc.AtomArray, cutoff_factor: float = 1.0) ->
     atom_chains = heavy_array.chain_id
     atom_res_ids = heavy_array.res_id
     atom_res_names = heavy_array.res_name
-    atom_elements = np.array([n[0] for n in heavy_array.atom_name])
+    atom_elements = heavy_array.element
     coords = heavy_array.coord
     
     radii = np.array([VDW_RADII.get(e, 1.70) for e in atom_elements])

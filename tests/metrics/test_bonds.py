@@ -9,7 +9,7 @@ import biotite.structure as struc
 
 
 def test_identify_salt_bridges():
-    """Test salt bridge identification with ASP-LYS and GLU-ARG pairs."""
+    """Test salt bridge identification with ASP-LYS pairs."""
     # Create ASP and LYS residues close together
     # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
     asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
@@ -20,7 +20,7 @@ def test_identify_salt_bridges():
                   [5.0, 0.0, 3.5]]  # CB, CG, CD, CE, NZ (3.5 A away from OD1)
     
     asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
-    lys = _make_residue('LYS', res_id=2, chain_id='A', coords=lys_coords)
+    lys = _make_residue('LYS', res_id=3, chain_id='A', coords=lys_coords)
     arr = struc.concatenate([asp, lys])
     
     result = bonds.identify_salt_bridges(arr, cutoff=4.0)
@@ -32,11 +32,11 @@ def test_identify_salt_bridges():
     assert result.iloc[0]['resi_struct'] == 1
     assert result.iloc[0]['resn_struct'] == 'ASP'
     assert result.iloc[0]['partner_chain'] == 'A'
-    assert result.iloc[0]['partner_resi'] == 2
+    assert result.iloc[0]['partner_resi'] == 3
     assert result.iloc[0]['partner_resn'] == 'LYS'
     assert result.iloc[0]['bond_type'] == 'salt_bridge'
     assert result.iloc[1]['chain'] == 'A'
-    assert result.iloc[1]['resi_struct'] == 2
+    assert result.iloc[1]['resi_struct'] == 3
     assert result.iloc[1]['resn_struct'] == 'LYS'
     assert result.iloc[1]['partner_chain'] == 'A'
     assert result.iloc[1]['partner_resi'] == 1
@@ -56,7 +56,7 @@ def test_calculate_salt_bridges():
                   [5.0, 0.0, 3.5]]  # CB, CG, CD, CE, NZ (3.5 A away from OD1)
     
     asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
-    lys = _make_residue('LYS', res_id=2, chain_id='A', coords=lys_coords)
+    lys = _make_residue('LYS', res_id=3, chain_id='A', coords=lys_coords)
     arr = struc.concatenate([asp, lys])
     context = Context(array=arr)
     
@@ -75,6 +75,61 @@ def test_calculate_salt_bridges():
     assert len(salt_bridge_rows) > 0
 
 
+def test_identify_ionic_bonds():
+    """Test ionic bond identification with ASP-HIS pairs."""
+    # Create ASP and HIS residues close together
+    # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
+    asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
+                  [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [5.0, 0.0, 0.0], [1.5, 1.5, -0.5]]  # CB, CG, OD1, OD2
+    # HIS: N, CA, C, O, CB, CG, ND1, CD2, CE1, NE2 (10 atoms)
+    # ND1 at [5.0, 0.0, 3.5] is 3.5 A from ASP OD1 at [5.0, 0.0, 0.0] (within 4 A cutoff)
+    his_coords = [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0], [13.0, 0.0, 0.0],
+                  [11.5, 1.0, 0.0], [11.5, 2.0, 0.0], [5.0, 0.0, 3.5], [11.5, 4.0, 0.0],
+                  [11.5, 5.0, 0.0], [11.5, 6.0, 0.0]]  # ND1, CD2, CE1, NE2
+                 
+    asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
+    his = _make_residue('HIS', res_id=3, chain_id='A', coords=his_coords)
+    arr = struc.concatenate([asp, his])
+    
+    result = bonds.identify_ionic_bonds(arr, cutoff=4.0)
+    
+    assert len(result) == 2
+    
+    # Check that expected residues are found
+    assert result.iloc[0]['chain'] == 'A'
+    assert result.iloc[0]['resi_struct'] == 1
+    assert result.iloc[0]['resn_struct'] == 'ASP'
+    assert result.iloc[0]['partner_chain'] == 'A'
+    assert result.iloc[0]['partner_resi'] == 3
+    assert result.iloc[0]['partner_resn'] == 'HIS'
+    assert result.iloc[0]['bond_type'] == 'ionic'
+    assert result.iloc[1]['chain'] == 'A'
+    assert result.iloc[1]['resi_struct'] == 3
+    assert result.iloc[1]['resn_struct'] == 'HIS'
+    assert result.iloc[1]['partner_chain'] == 'A'
+    assert result.iloc[1]['partner_resi'] == 1
+    assert result.iloc[1]['partner_resn'] == 'ASP'
+    assert result.iloc[1]['bond_type'] == 'ionic'
+
+
+def test_calculate_ionic_bond_count():
+    """Test ionic bond metric calculation and bonds_df storage."""
+    # Create ASP and LYS close together (same setup as identify test)
+    # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
+    asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
+                  [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [5.0, 0.0, 0.0], [1.5, 1.5, -0.5]]  # CB, CG, OD1, OD2
+    # LYS: N, CA, C, O, CB, CG, CD, CE, NZ (9 atoms)
+    lys_coords = [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0], [13.0, 0.0, 0.0],
+                  [11.5, 1.0, 0.0], [11.5, 2.0, 0.0], [11.5, 3.0, 0.0], [11.5, 4.0, 0.0],
+                  [5.0, 0.0, 3.5]]  # CB, CG, CD, CE, NZ (3.5 A away from OD1)
+    
+    asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
+    lys = _make_residue('LYS', res_id=3, chain_id='A', coords=lys_coords)
+    arr = struc.concatenate([asp, lys])
+    context = Context(array=arr)
+    
+    result = bonds.calculate_ionic_bond_count(context, cutoff=4.0)
+    
 def test_identify_disulfide_bonds():
     """Test disulfide bond identification with CYS residues."""
     # Create two CYS residues with SG atoms close together
