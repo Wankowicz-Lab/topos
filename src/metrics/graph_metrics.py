@@ -120,7 +120,6 @@ def calculate_graph_metrics(
     ]
 
     # Map metrics onto residue_table
-    n = len(result)
     result["graph_betweenness_centrality"] = [
         betweenness.get(k, float("nan")) for k in result_keys
     ]
