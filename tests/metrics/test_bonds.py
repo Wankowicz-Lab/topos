@@ -123,15 +123,14 @@ def test_identify_ionic_bonds():
     # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
     asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
                   [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [5.0, 0.0, 0.0], [1.5, 1.5, -0.5]]  # CB, CG, OD1, OD2
-    # HIS: N, CA, C, O, CB, CG, ND1, CD2, CE1, NE2 (10 atoms)
-    # ND1 at [5.0, 0.0, 3.5] is 3.5 A from ASP OD1 at [5.0, 0.0, 0.0] (within 4 A cutoff)
-    his_coords = [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0], [13.0, 0.0, 0.0],
-                  [11.5, 1.0, 0.0], [11.5, 2.0, 0.0], [5.0, 0.0, 3.5], [11.5, 4.0, 0.0],
-                  [11.5, 5.0, 0.0], [11.5, 6.0, 0.0]]  # ND1, CD2, CE1, NE2
+    # TYR: N, CA, C, O, CB, CG, CD1, CD2, CE1, CE2, CZ, OH (12 atoms)
+    tyr_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
+                  [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [1.5, 2.0, 0.0], [1.5, 2.5, 0.0],
+                  [1.5, 3.0, 0.0], [1.5, 3.5, 0.0], [1.5, 4.0, 0.0], [1.5, 4.5, 0.0]]  # CB, CG, CD1, CD2, CE1, CE2, CZ, OH
                  
     asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
-    his = _make_residue('HIS', res_id=3, chain_id='A', coords=his_coords)
-    arr = struc.concatenate([asp, his])
+    tyr = _make_residue('TYR', res_id=3, chain_id='A', coords=tyr_coords)
+    arr = struc.concatenate([asp, tyr])
     
     result = bonds.identify_ionic_bonds(arr, cutoff=4.0)
     
@@ -143,11 +142,11 @@ def test_identify_ionic_bonds():
     assert result.iloc[0]['resn_struct'] == 'ASP'
     assert result.iloc[0]['partner_chain'] == 'A'
     assert result.iloc[0]['partner_resi'] == 3
-    assert result.iloc[0]['partner_resn'] == 'HIS'
+    assert result.iloc[0]['partner_resn'] == 'TYR'
     assert result.iloc[0]['bond_type'] == 'ionic'
     assert result.iloc[1]['chain'] == 'A'
     assert result.iloc[1]['resi_struct'] == 3
-    assert result.iloc[1]['resn_struct'] == 'HIS'
+    assert result.iloc[1]['resn_struct'] == 'TYR'
     assert result.iloc[1]['partner_chain'] == 'A'
     assert result.iloc[1]['partner_resi'] == 1
     assert result.iloc[1]['partner_resn'] == 'ASP'

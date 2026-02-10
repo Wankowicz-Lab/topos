@@ -25,6 +25,8 @@ SALT_BRIDGE_ATOMS = {
     'LYS': ['NZ'],
     'ARG': ['NH1', 'NH2', 'NE'],
     'HIS': ['ND1', 'NE2'],
+    'SER': ['OG'],
+    'TYR': ['OH']
 }
 
 AROMATIC_RING_ATOMS = {
