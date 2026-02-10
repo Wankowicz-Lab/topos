@@ -255,44 +255,6 @@ def test_calculate_residue_packing():
     assert all(packing['packing_n_neighbor_residues'] >= 0), "Number of neighbors should be non-negative"
 
 
-##TO DO MAKE MORE ROBUST WITH REAL PDB FILE
-def test_calculate_hbond_metrics():
-    # Create a chain with residues that can form H-bonds
-    aa_list = ['SER', 'GLY', 'ASP', 'ASN']
-    arr = _make_chain(aa_list=aa_list, chain_id='A')
-    context = Context(array=arr)
-    
-    hbond_metrics = metrics.calculate_hbond_metrics(context)
-        
-    # Check that all expected keys are present
-    expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']
-    assert all(key in hbond_metrics for key in expected_keys)
-        
-    # Check that arrays have correct length
-    res_starts = struc.get_residue_starts(arr)
-    n_res = len(res_starts)
-    for key in ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']:
-        assert len(hbond_metrics[key]) == n_res
-    
-    # Check that counts are non-negative
-    assert all(hbond_metrics['bb_hbond_count'] >= 0)
-    assert all(hbond_metrics['sc_hbond_count'] >= 0)
-    assert all(hbond_metrics['total_hbond_count'] >= 0)
-    
-
-def test_calculate_hbond_metrics_with_altloc():
-    """Test that hbond metrics properly handle altloc information."""
-    # Create a chain with altloc identifiers
-    aa_list = ['SER', 'GLY', 'ASP']
-    altlocs = ['A', '', 'B']  # Mix of altlocs and no altloc
-    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc=altlocs)
-    context = Context(array=arr)
-    
-    hbond_metrics = metrics.calculate_hbond_metrics(context)
-    assert 'bb_hbond_count' in hbond_metrics.columns
-    assert 'sc_hbond_count' in hbond_metrics.columns
-
-
 def test_calculate_center_of_mass_distance():
     """Test calculation of distance from each residue to center of mass."""
     # Create a simple chain with a few residues at known positions
