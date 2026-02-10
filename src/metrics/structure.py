@@ -286,6 +286,7 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
         else:
             return acceptor_cat == "backbone"
 
+    results = []
     # Accumulate counts per residue
     for h in hbonds:
         cat = h["category"]
@@ -309,7 +310,34 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
                 bb_counts[a_idx] += 1
             else:
                 sc_counts[a_idx] += 1
+        
+
+        # Append donor and acceptor results to results list for bonds dataframe
+        results.append({
+            'chain': h['donor_chain'], 'resi_struct': int(h['donor_resi']), 'resn_struct': h['donor_resname'],
+            'partner_chain': h['acceptor_chain'], 'partner_resi': int(h['acceptor_resi']), 'partner_resn': h['acceptor_resname'],
+            'bond_type': 'hbond', 'extras': {}
+        })
+        results.append({
+            'chain': h['acceptor_chain'], 'resi_struct': int(h['acceptor_resi']), 'resn_struct': h['acceptor_resname'],
+            'partner_chain': h['donor_chain'], 'partner_resi': int(h['donor_resi']), 'partner_resn': h['donor_resname'],
+            'bond_type': 'hbond', 'extras': {}
+        })
     
+    # Define standard columns
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    
+    if results:
+        hbonds_df = pd.DataFrame(results)
+    else:
+        hbonds_df = pd.DataFrame(columns=standard_columns)
+    
+    if 'bonds_df' not in context.extras:
+        context.extras['bonds_df'] = pd.DataFrame(columns=standard_columns)
+    if len(hbonds_df) > 0:
+        context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], hbonds_df], ignore_index=True)
+
+
     metadata_df = get_metadata_cols(array)
     metadata_df['bb_hbond_count'] = bb_counts
     metadata_df['sc_hbond_count'] = sc_counts

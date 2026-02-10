@@ -278,7 +278,13 @@ def test_calculate_hbond_metrics():
     assert all(hbond_metrics['bb_hbond_count'] >= 0)
     assert all(hbond_metrics['sc_hbond_count'] >= 0)
     assert all(hbond_metrics['total_hbond_count'] >= 0)
-    
+
+    # check that hbonds_df is present in context.extras
+    assert 'bonds_df' in context.extras
+
+    total_hbonds = hbond_metrics['total_hbond_count'].sum()
+    assert total_hbonds == len(context.extras['bonds_df'])
+   
 
 def test_calculate_hbond_metrics_with_altloc():
     """Test that hbond metrics properly handle altloc information."""

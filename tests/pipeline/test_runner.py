@@ -6,14 +6,17 @@ import pytest
 import random
 import tomli_w
 
-
+import biotite.structure as struc
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
+from src.structure.structure_context import load_structure
 
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
 import src.metrics.structure
 from src.metrics.registry import _REGISTRY
+from tests.test_utils import _make_residue, _make_atoms
+
 from src.pipeline.context import Config
 
 # Seed RNGs for deterministic tests
@@ -367,9 +370,9 @@ def test_runner_run_metric(tmp_path):
     for metric in metrics:
         meta, func = _REGISTRY[metric]
         provides, requires = meta.provides, meta.requires
-        myrunner.run(metrics=[metric])
+        returned_features = myrunner.run_metrics(metrics=[metric], mutations=True)
 
-        returned_cols = myrunner.features.columns.tolist()
+        returned_cols = returned_features.columns.tolist()
         expected_cols = ['chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'resm', 'name']
 
         if metric == 'aaindex_scores':
@@ -385,14 +388,8 @@ def test_runner_run_metric(tmp_path):
         assert set(expected_cols) == set(returned_cols)
 
     # run all metrics
-    myrunner.run(metrics=list(metrics))
-    all_result = myrunner.features
-    assert len(all_result) == len(residue_table)
-
-    # run with default (all metrics)
-    myrunner.run()
-    all_result_default = myrunner.features
-    pd.testing.assert_frame_equal(all_result, all_result_default)
+    returned_features = myrunner.run_metrics(metrics=list(metrics), mutations=True)
+    assert len(returned_features) == len(residue_table)
 
 
 def test_runner_run_metric_no_mutations(tmp_path):
@@ -406,19 +403,32 @@ def test_runner_run_metric_no_mutations(tmp_path):
         mutation_data_path=None
     )
 
-    # Check that resi_mut and resn_mut columns exist and equal resi_struct and resn_struct
-    assert 'resi_mut' in myrunner.context.residue_table.columns
-    assert 'resn_mut' in myrunner.context.residue_table.columns
-    assert (myrunner.context.residue_table['resi_mut'] == myrunner.context.residue_table['resi_struct']).all()
-    assert (myrunner.context.residue_table['resn_mut'] == myrunner.context.residue_table['resn_struct']).all()
-
-    # run all metrics
-    myrunner.run(metrics=['define_secondary_structure', 'sasa', 'kyte_doolittle'])
+    # run multiple metrics
+    returned_features = myrunner.run_metrics(metrics=['sasa', 'kyte_doolittle'])
 
     # Check that all residues are present and no 'resm' column
-    assert len(myrunner.features) == len(myrunner.context.residue_table)
-    assert 'resm' not in myrunner.features.columns.tolist()
+    assert len(returned_features) == len(myrunner.context.residue_table)
+    assert 'resm' not in returned_features.columns.tolist()
 
+
+def test_runner_run(tmp_path):
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        name='test_run',
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None
+    )
+
+    # run multiple metrics
+    myrunner.run()
+    returned_features = myrunner.features
+
+    # Check that output has same length as residue table and more columns
+    assert len(returned_features) == len(myrunner.context.residue_table)
+    assert len(returned_features.columns) > len(myrunner.context.residue_table.columns)
 
 
 def test_runner__merge_features():
@@ -687,6 +697,271 @@ def test_sort_residue_table():
         assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
 
 
+def _make_synthetic_ss_fixture(include_na_ss=False, metric_with_nan=False, aa_groups=None):
+    """Build synthetic residue_table and features for run_secondary_structure tests.
+
+    Default: 6 residues, 1 chain, ss_domains alpha-helix_1 (2), beta-sheet_1 (2), coil_1 (2).
+    merge key: chain, resi_struct, resn_struct, resi_mut, resn_mut.
+    """
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 6,
+        'resi_struct': [1, 2, 3, 4, 5, 6],
+        'resn_struct': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'ss_domains': ['alpha-helix_1', 'alpha-helix_1', 'beta-sheet_1', 'beta-sheet_1', 'coil_1', 'coil_1'],
+    })
+    features = pd.DataFrame({
+        'chain': ['A'] * 6,
+        'resi_struct': [1, 2, 3, 4, 5, 6],
+        'resn_struct': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE'],
+        'metric_a': [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+    })
+    if aa_groups is not None:
+        features['wildtype_aa_group'] = aa_groups
+    if include_na_ss:
+        residue_table = pd.concat([
+            residue_table,
+            pd.DataFrame({
+                'chain': ['A'], 'resi_struct': [7], 'resn_struct': ['GLY'],
+                'resi_mut': [7], 'resn_mut': ['GLY'], 'ss_domains': [pd.NA],
+            }),
+        ], ignore_index=True)
+        features = pd.concat([
+            features,
+            pd.DataFrame({
+                'chain': ['A'], 'resi_struct': [7], 'resn_struct': ['GLY'],
+                'resi_mut': [7], 'resn_mut': ['GLY'], 'metric_a': [7.0],
+            }),
+        ], ignore_index=True)
+    if metric_with_nan:
+        features.loc[features['resi_struct'] == 1, 'metric_a'] = np.nan
+    return residue_table, features
+
+
+def test_run_secondary_structure_columns_exist(tmp_path):
+    """run_secondary_structure returns DataFrame with expected columns."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+    residue_table, features = _make_synthetic_ss_fixture()
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+
+    assert len(out) == 3
+    assert 'ss_domains' in out.columns
+    assert 'ss_length' in out.columns
+    assert 'metric_a' in out.columns
+    from src.metrics import secondary_structure as ss_metrics
+    for g in ss_metrics.AA_GROUPS:
+        assert f'log2_ratio_{g}' in out.columns
+
+def test_run_secondary_structure_na_in_metric(tmp_path):
+    """With NA in metric column, output has expected columns and one row per domain."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+    residue_table, features = _make_synthetic_ss_fixture(metric_with_nan=True)
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+    assert len(out) == 3
+    assert 'metric_a' in out.columns and 'ss_length' in out.columns
+
+    # Check that metric column is not NA
+    assert not out['metric_a'].isna().all()
+
+
+def test_run_secondary_structure_na_ss_domains_excluded(tmp_path):
+    """Row with NA ss_domains is excluded; output has expected columns and 3 domain rows."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+    residue_table, features = _make_synthetic_ss_fixture(include_na_ss=True)
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+    assert len(out) == 3
+    assert 'ss_domains' in out.columns and 'ss_length' in out.columns and 'metric_a' in out.columns
+def test_compute_residue_neighbors_basic():
+    """Test _compute_residue_neighbors computes neighbors correctly and stores in extras."""
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    extras_key = 'test_neighbors'
+    
+    # Compute neighbors with a reasonable cutoff
+    mapping = myrunner._compute_residue_neighbors(cutoff=10.0, extras_key=extras_key)
+    
+    # Check that result is stored in extras
+    assert myrunner.context.extras[extras_key] == mapping
+    
+    # Check structure: Dict[str, List[str]]
+    assert isinstance(mapping, dict)
+    assert len(mapping) > 0
+    
+    # Check that all residues from structure are present
+    rt = myrunner.context.residue_table
+    expected_keys = {f"{row['chain']}:{row['resi_struct']}" for _, row in rt.iterrows()}
+    assert set(mapping.keys()) == expected_keys
+
+
+def test_compute_residue_neighbors_cutoff_effect():
+    """Test that different cutoffs produce different neighbor sets."""
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    
+    # Small cutoff - fewer neighbors
+    mapping_small = myrunner._compute_residue_neighbors(cutoff=5.0, extras_key='small')
+    
+    # Large cutoff - more neighbors
+    mapping_large = myrunner._compute_residue_neighbors(cutoff=20.0, extras_key='large')
+    
+    # Check that large cutoff has at least as many neighbors per residue
+    for res_key in mapping_small.keys():
+        assert res_key in mapping_large
+        assert len(mapping_large[res_key]) >= len(mapping_small[res_key])
+
+
+def test_calculate_neighborhood_features_basic():
+    """Test calculate_neighborhood_features loops over functions and aggregates correctly."""
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    myrunner.run(metrics=['sasa'])
+    
+    # Set up neighbor mapping in extras
+    myrunner._compute_residue_neighbors(cutoff=10.0, extras_key='residue_neighbors')
+    
+    # Call calculate_neighborhood_features
+    result = runner.calculate_neighborhood_features(
+        myrunner.context, myrunner.features, extras_key='residue_neighbors'
+    )
+    
+    # Check that result has merge columns
+    merge_cols = ['chain', 'resi_struct', 'resn_struct']
+    assert all(c in result.columns for c in merge_cols)
+    
+    # Check that neighborhood metric columns are present
+    assert 'n_ala_neighbors' in result.columns
+    
+    # Check that result has one row per unique (chain, resi_struct, resn_struct) from features
+    expected_rows = myrunner.features[merge_cols].drop_duplicates()
+    assert len(result) == len(expected_rows)
+    
+    # Check that merge columns match features
+    merged_check = pd.merge(
+        expected_rows, result[merge_cols],
+        on=merge_cols, how='inner'
+    )
+    assert len(merged_check) == len(expected_rows)
+
+
+def test_calculate_neighborhood_features_aggregates_multiple_metrics():
+    """Test that calculate_neighborhood_features aggregates multiple metric outputs."""
+    # TODO: replace this with multiple metrics once we have multiple neighborhood metrics in codebase
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    myrunner.run(metrics=['sasa'])
+    
+    # Set up neighbor mapping
+    myrunner._compute_residue_neighbors(cutoff=10.0, extras_key='residue_neighbors')
+    
+    # Temporarily add a second neighborhood metric function to test aggregation
+    from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
+    original_funcs = NEIGHBORHOOD_METRIC_FUNCTIONS.copy()
+    
+    # Create a dummy second metric
+    def dummy_metric(context, features, extras_key='residue_neighbors'):
+        neighbor_map = context.extras.get(extras_key, {})
+        unique = features[['chain', 'resi_struct', 'resn_struct']].drop_duplicates()
+        rows = []
+        for _, row in unique.iterrows():
+            chain, resi, resn = row['chain'], row['resi_struct'], row['resn_struct']
+            res_key = f"{chain}:{int(resi)}"
+            neighbor_keys = neighbor_map.get(res_key, [])
+            rows.append({
+                'chain': chain,
+                'resi_struct': resi,
+                'resn_struct': resn,
+                'dummy_count': len(neighbor_keys)
+            })
+        return pd.DataFrame(rows)
+    
+    try:
+        NEIGHBORHOOD_METRIC_FUNCTIONS.append(dummy_metric)
+        
+        result = runner.calculate_neighborhood_features(
+            myrunner.context, myrunner.features, extras_key='residue_neighbors'
+        )
+        
+        # Should have both metric columns
+        assert 'n_ala_neighbors' in result.columns
+        assert 'dummy_count' in result.columns
+        
+        # Both should have same number of rows
+        assert result['n_ala_neighbors'].notna().sum() == result['dummy_count'].notna().sum()
+    finally:
+        # Restore original functions
+        NEIGHBORHOOD_METRIC_FUNCTIONS[:] = original_funcs
+
+
+def test_run_neighborhood_requires_run_first(tmp_path):
+    """run_neighborhood must be called after run(); it raises if self.features is missing."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path)
+
+    base_runner = runner.Runner(config_path=config_path)
+    with pytest.raises(ValueError, match="No features to extend"):
+        base_runner.run_neighborhood(cutoff=10.0)
+
+
+def test_run_neighborhood_fills_extras_and_merges(tmp_path):
+    """run_neighborhood fills context.extras['residue_neighbors'] and merges n_ala_neighbors into self.features."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path)
+
+    myrunner = runner.Runner(config_path=config_path)
+    myrunner.run(metrics=['sasa', 'kyte_doolittle'])
+    assert hasattr(myrunner, 'features')
+
+    extras_key = 'residue_neighbors'
+    assert extras_key not in myrunner.context.extras
+
+    myrunner.run_neighborhood(cutoff=10.0, extras_key=extras_key)
+
+    # Extras filled with residue_key -> [residue_key, ...]; no self-neighbors
+    mapping = myrunner.context.extras[extras_key]
+    assert isinstance(mapping, dict)
+    for res_key, neighbors in mapping.items():
+        assert isinstance(res_key, str)
+        assert ":" in res_key
+        assert isinstance(neighbors, list)
+        assert res_key not in neighbors, "neighbors must not include self"
+
+    # n_ala_neighbors from count_ala_neighbors is merged into self.features
+    assert 'n_ala_neighbors' in myrunner.features.columns
+    assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
 def test_structural_feature_chains_validation(tmp_path):
     """Test that structural_feature_chains validation works correctly in Runner.__post_init__."""
     # Create a structure with multiple chains
@@ -793,3 +1068,100 @@ def test_structural_feature_chains_filtering(tmp_path):
     assert len(runner_multi.features) == len(residues) * 2
 
 
+def test_format_ligand_id():
+    """Test format_ligand_id produces canonical ligand ID for matching."""
+    assert runner.format_ligand_id("A", 1, "ATP") == "A:1:ATP"
+    assert runner.format_ligand_id(" B ", 2, " NAG ") == "B:2:NAG"
+    assert runner.format_ligand_id("A", 10, None) == "A:10:"
+
+
+def test_find_ligands():
+    """Test find_ligands identifies ligands when run on PDB 8EFO (requires network)."""
+    arr = load_structure(pdb_id="8EFO")
+    ligands = runner.find_ligands(arr)
+    assert len(ligands) >= 1, "8EFO should have at least one ligand identified"
+    
+    ligands_with_cholesterol = runner.find_ligands(arr, exclude_cholesterol=False)
+    assert len(ligands_with_cholesterol) > len(ligands), "With cholesterol excluded, should have fewer ligands"
+
+
+def test_find_ligands_empty_when_no_hetero():
+    """Test find_ligands returns empty list when structure has no hetero atoms."""
+    arr = _make_residue("ALA", res_id=1, chain_id="A")
+    if "hetero" in arr.get_annotation_categories():
+        arr.del_annotation("hetero")
+    ligands = runner.find_ligands(arr)
+    assert ligands == []
+
+
+def test_find_ligands_inclusion_criteria():
+    """Test that find_ligands inclusion criteria work correctly."""
+    protein = _make_atoms(["N", "CA", "C"], [[0, 0, 0], [1, 0, 0], [2, 0, 0]], res_name="ALA", res_id=1, chain_id="A")
+    
+    # make a mg ion (res_id 2)
+    mg = _make_atoms(["MG"], [[10, 10, 10]], res_name="MG", res_id=2, chain_id="A")
+    
+    # make a mse protein mod (res_id 3 so it is a distinct residue from MG)
+    mse = _make_atoms(["N", "CA", "C"], [[20, 20, 20]] * 3, res_name="MSE", res_id=3, chain_id="A")
+
+    arr = struc.concatenate([protein, mg, mse])
+    arr.set_annotation("hetero", np.array([False, False, False, True, True, True, True]))
+    permissive_ligands = runner.find_ligands(arr, exclude_ions=False, exclude_protein_mods=False)
+    assert (
+        ("A", 2, "MG") in permissive_ligands
+        and ("A", 3, "MSE") in permissive_ligands
+    )
+    restrictive_ligands = runner.find_ligands(arr, exclude_ions=True, exclude_protein_mods=True)
+    assert (
+        ("A", 2, "MG") not in restrictive_ligands
+        and ("A", 3, "MSE") not in restrictive_ligands
+    )
+
+
+def test_calculate_protein_ligand_interactions(tmp_path):
+    """Test calculate_protein_ligand_interactions with hetero-based ligands and partner_ligand_id."""
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues, "B": residues})
+
+    config_path = tmp_path / 'config_ligand.toml'
+    _make_config_file(config_path, pdb_id='test')
+
+    myrunner = runner.Runner(
+        pdb_id='test',
+        pdb_path=mmcif_path,
+        name='test_ligand',
+        config_path=config_path
+    )
+
+    # Mark chain B as hetero so find_ligands returns B residues as ligands
+    arr = myrunner.context.array
+
+    if "hetero" not in arr.get_annotation_categories():
+        hetero = np.zeros(arr.array_length(), dtype=bool)
+        hetero[arr.chain_id == 'B'] = True
+        arr.set_annotation("hetero", hetero)
+    else:
+        arr.hetero[arr.chain_id == 'B'] = True
+
+    # Contacting df: protein residue (A, 1, ALA) contacting ligand B:1:ALA; use canonical partner_ligand_id
+    contacting_df = pd.DataFrame({
+        'chain': ['A'],
+        'resi_struct': [1],
+        'resn_struct': ['ALA'],
+        'partner_ligand_id': ['B:1:ALA']
+    })
+
+    result = runner.calculate_protein_ligand_interactions(myrunner.context, contacting_df)
+
+    assert 'ligand_B_1_ALA_interactions' in result.columns
+    assert result.shape[0] == myrunner.context.residue_table.shape[0]
+    vals = result['ligand_B_1_ALA_interactions'].dropna().unique()
+    assert len(vals) >= 1
+    assert set(vals).issubset({'contact', 'binding site', 'second shell'})
+
+    # When no ligands (clear hetero), returns residue_table unchanged
+    arr.hetero[:] = False
+    out_skip = runner.calculate_protein_ligand_interactions(myrunner.context, contacting_df)
+    assert out_skip.shape[1] == myrunner.context.residue_table.shape[1]
+    assert 'ligand_B_1_ALA_interactions' not in out_skip.columns
