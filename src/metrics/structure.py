@@ -14,7 +14,7 @@ from src.pipeline.context import Context
 from src.metrics.registry import register_metric
 from src.databases import pdbtm
 from src.structure.utils import residue_key, is_heavy, get_metadata_cols, is_backbone_atom
-from src.structure.utils import build_sites_biotite as _build_sites_biotite, detect_hbonds as _detect_hbonds
+from src.metrics.bonds import identify_hbonds, classify_bond_types
 
 logger = logging.getLogger(__name__)
 
@@ -253,95 +253,45 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     """
     
     array = context.array
-    
-    # Filter by structural_feature_chains if specified
     if context.config.structural_feature_chains is not None:
         chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
         array = array[chain_mask]
-    
-    res_starts = struc.get_residue_starts(array)
-    donors, acceptors = _build_sites_biotite(array)
-    hbonds = _detect_hbonds(donors, acceptors)
-    
-    chains = array.chain_id[res_starts]
-    res_ids = array.res_id[res_starts]
-    resnames = array.res_name[res_starts]
-    
-    n_res = len(res_starts)
+
+    hbonds_df = identify_hbonds(array)
+    hbonds_df = classify_bond_types(hbonds_df, array)
+
+    metadata_df = get_metadata_cols(array)
+    n_res = len(metadata_df)
     bb_counts = np.zeros(n_res, dtype=float)
     sc_counts = np.zeros(n_res, dtype=float)
     total_counts = np.zeros(n_res, dtype=float)
 
-    # Map "chain:resi:resname" -> residue index
-    key_to_idx = {
-        f"{ch}:{int(ri)}:{rn}": i
-        for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames))
-    }
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    res_ids = array.res_id[res_starts]
+    residue_to_idx = {(ch, int(ri)): i for i, (ch, ri) in enumerate(zip(chains, res_ids))}
 
-    #TO DO: MOVE TO UTILS
-    def _is_backbone_for_role(category: str, role: str) -> bool:
-        donor_cat, acceptor_cat = category.split("-")
-        if role == "donor":
-            return donor_cat == "backbone"
+    for _, row in hbonds_df[hbonds_df['protein_protein']].iterrows():
+        idx = residue_to_idx.get((row['chain'], row['resi_struct']))
+        if idx is None:
+            continue
+        total_counts[idx] += 1
+        parts = row['extras']['category'].split('-')
+        if parts[0] == 'backbone':
+            bb_counts[idx] += 1
         else:
-            return acceptor_cat == "backbone"
+            sc_counts[idx] += 1
 
-    results = []
-    # Accumulate counts per residue
-    for h in hbonds:
-        cat = h["category"]
+    metadata_df['bb_hbond_count'] = bb_counts
+    metadata_df['sc_hbond_count'] = sc_counts
+    metadata_df['total_hbond_count'] = total_counts
 
-        # Donor
-        d_key = f"{h['donor_chain']}:{h['donor_resi']}:{h['donor_resname']}"
-        d_idx = key_to_idx.get(d_key, None)
-        if d_idx is not None:
-            total_counts[d_idx] += 1
-            if _is_backbone_for_role(cat, "donor"):
-                bb_counts[d_idx] += 1
-            else:
-                sc_counts[d_idx] += 1
-
-        # Acceptor
-        a_key = f"{h['acceptor_chain']}:{h['acceptor_resi']}:{h['acceptor_resname']}"
-        a_idx = key_to_idx.get(a_key, None)
-        if a_idx is not None:
-            total_counts[a_idx] += 1
-            if _is_backbone_for_role(cat, "acceptor"):
-                bb_counts[a_idx] += 1
-            else:
-                sc_counts[a_idx] += 1
-        
-
-        # Append donor and acceptor results to results list for bonds dataframe
-        results.append({
-            'chain': h['donor_chain'], 'resi_struct': int(h['donor_resi']), 'resn_struct': h['donor_resname'],
-            'partner_chain': h['acceptor_chain'], 'partner_resi': int(h['acceptor_resi']), 'partner_resn': h['acceptor_resname'],
-            'bond_type': 'hbond', 'extras': {}
-        })
-        results.append({
-            'chain': h['acceptor_chain'], 'resi_struct': int(h['acceptor_resi']), 'resn_struct': h['acceptor_resname'],
-            'partner_chain': h['donor_chain'], 'partner_resi': int(h['donor_resi']), 'partner_resn': h['donor_resname'],
-            'bond_type': 'hbond', 'extras': {}
-        })
-    
-    # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
-    
-    if results:
-        hbonds_df = pd.DataFrame(results)
-    else:
-        hbonds_df = pd.DataFrame(columns=standard_columns)
-    
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     if 'bonds_df' not in context.extras:
         context.extras['bonds_df'] = pd.DataFrame(columns=standard_columns)
     if len(hbonds_df) > 0:
         context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], hbonds_df], ignore_index=True)
 
-
-    metadata_df = get_metadata_cols(array)
-    metadata_df['bb_hbond_count'] = bb_counts
-    metadata_df['sc_hbond_count'] = sc_counts
-    metadata_df['total_hbond_count'] = total_counts
     return metadata_df
 
 

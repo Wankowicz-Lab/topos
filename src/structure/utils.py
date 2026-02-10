@@ -44,7 +44,7 @@ H_A_MAX = 2.6          # Å H–acceptor distance
 ANGLE_MIN = 120.0      # degrees minimum angle
 
 INCLUDE_WATER = False
-INCLUDE_LIGANDS = False
+INCLUDE_LIGANDS = True
 
 DonorSite = namedtuple(
     "DonorSite",

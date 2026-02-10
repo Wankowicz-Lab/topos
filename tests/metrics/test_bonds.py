@@ -4,7 +4,7 @@ import pandas as pd
 from src.metrics import bonds
 from src.pipeline.context import Context
 from src.structure.utils import _res_key
-from tests.test_utils import _make_atoms, _make_residue
+from tests.test_utils import _make_atoms, _make_chain, _make_residue
 
 import biotite.structure as struc
 
@@ -63,6 +63,27 @@ def test_classify_bond_types():
 
     # Protein–protein (ALA–GLY) is True; protein–ligand rows are False
     assert result['protein_protein'].tolist() == [True, False, False]
+
+
+def test_identify_hbonds():
+    """Identify hbonds returns two rows per bond with extras category (residue_type-partner_type)."""
+    aa_list = ['SER', 'GLY', 'ASP', 'ASN']
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    result = bonds.identify_hbonds(arr)
+
+    expected_cols = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
+    for col in expected_cols:
+        assert col in result.columns
+    assert all(result['bond_type'] == 'hbond')
+    # Two rows per hbond
+    assert len(result) % 2 == 0
+    # Each row has extras['category'] with first part = this row's residue type (backbone or sidechain)
+    for _, row in result.iterrows():
+        assert 'category' in row['extras']
+        parts = row['extras']['category'].split('-')
+        assert len(parts) == 2
+        assert parts[0] in ('backbone', 'sidechain')
+        assert parts[1] in ('backbone', 'sidechain')
 
 
 def test_calculate_salt_bridges():

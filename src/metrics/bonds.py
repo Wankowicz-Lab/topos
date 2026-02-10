@@ -6,6 +6,7 @@ import biotite.structure as struc
 
 from src.metrics.registry import register_metric
 from src.structure.utils import get_metadata_cols, is_heavy, _res_key
+from src.structure.utils import build_sites_biotite, detect_hbonds
 from src.pipeline.context import Context
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,50 @@ def classify_bond_types(bond_results: pd.DataFrame, array: struc.AtomArray) -> p
 
     return bond_results
 
+
+def identify_hbonds(array: struc.AtomArray) -> pd.DataFrame:
+    """Identify hydrogen bonds between donor and acceptor sites.
+
+    Returns a DataFrame with two rows per hbond (donor as residue, acceptor as partner;
+    acceptor as residue, donor as partner). extras['category'] is 'residue_type-partner_type'
+    so the first part always describes this row's residue (backbone or sidechain).
+
+    Parameters
+    ----------
+    array : struc.AtomArray
+        Biotite AtomArray containing structure data.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with standard bond columns and extras['category'].
+    """
+    donors, acceptors = build_sites_biotite(array)
+    hbonds = detect_hbonds(donors, acceptors)
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
+    results = []
+    for h in hbonds:
+        cat = h['category']
+        # Donor-view row: residue = donor, partner = acceptor; category is already donor-acceptor
+        results.append({
+            'chain': h['donor_chain'], 'resi_struct': int(h['donor_resi']), 'resn_struct': h['donor_resname'],
+            'residue_key': _res_key(h['donor_chain'], h['donor_resi'], h['donor_resname']),
+            'partner_chain': h['acceptor_chain'], 'partner_resi': int(h['acceptor_resi']), 'partner_resn': h['acceptor_resname'],
+            'partner_residue_key': _res_key(h['acceptor_chain'], h['acceptor_resi'], h['acceptor_resname']),
+            'bond_type': 'hbond', 'extras': {'category': cat}
+        })
+        # Acceptor-view row: residue = acceptor, partner = donor; category so first part = this row's residue (acceptor)
+        donor_part, acceptor_part = cat.split('-')
+        results.append({
+            'chain': h['acceptor_chain'], 'resi_struct': int(h['acceptor_resi']), 'resn_struct': h['acceptor_resname'],
+            'residue_key': _res_key(h['acceptor_chain'], h['acceptor_resi'], h['acceptor_resname']),
+            'partner_chain': h['donor_chain'], 'partner_resi': int(h['donor_resi']), 'partner_resn': h['donor_resname'],
+            'partner_residue_key': _res_key(h['donor_chain'], h['donor_resi'], h['donor_resname']),
+            'bond_type': 'hbond', 'extras': {'category': f'{acceptor_part}-{donor_part}'}
+        })
+    if results:
+        return pd.DataFrame(results)
+    return pd.DataFrame(columns=standard_columns)
 
 
 def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.DataFrame:
