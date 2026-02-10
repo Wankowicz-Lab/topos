@@ -14,7 +14,6 @@ from src.pipeline.context import Context
 from src.metrics.registry import register_metric
 from src.databases import pdbtm
 from src.structure.utils import residue_key, is_heavy, get_metadata_cols, is_backbone_atom
-from src.metrics.bonds import identify_hbonds, classify_bond_types
 
 logger = logging.getLogger(__name__)
 
@@ -232,71 +231,6 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     metadata_df['distance_from_membrane_edge'] = distance_from_edge
 
     return metadata_df
-
- 
-@register_metric(name='calculate_hbond_metrics', provides=['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count'], tags={'structure', 'interaction'})
-def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
-    """
-    Compute per-residue hydrogen bond metrics.
-
-    Uses an altloc-aware donor/acceptor model to detect hydrogen bonds and count them per residue.
-
-    Parameters
-    ----------
-    context : Context
-        Context object containing residue metadata, structural information, and mutation information.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with 'bb_hbond_count', 'sc_hbond_count', 'total_hbond_count' along with residue metadata.
-    """
-    
-    array = context.array
-    if context.config.structural_feature_chains is not None:
-        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
-        array = array[chain_mask]
-
-    hbonds_df = identify_hbonds(array)
-    hbonds_df = classify_bond_types(hbonds_df, array)
-
-    metadata_df = get_metadata_cols(array)
-    n_res = len(metadata_df)
-    bb_counts = np.zeros(n_res, dtype=float)
-    sc_counts = np.zeros(n_res, dtype=float)
-    total_counts = np.zeros(n_res, dtype=float)
-
-    res_starts = struc.get_residue_starts(array)
-    chains = array.chain_id[res_starts]
-    res_ids = array.res_id[res_starts]
-    resnames = array.res_name[res_starts]
-    # Key by (chain, resi, resname) to match main and support altloc (same resi, different resn)
-    residue_to_idx = {(ch, int(ri), rn): i for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames))}
-
-    for _, row in hbonds_df[hbonds_df['protein_protein']].iterrows():
-        idx = residue_to_idx.get((row['chain'], int(row['resi_struct']), row['resn_struct']))
-        if idx is None:
-            continue
-        total_counts[idx] += 1
-        parts = row['extras']['category'].split('-')
-        if parts[0] == 'backbone':
-            bb_counts[idx] += 1
-        else:
-            sc_counts[idx] += 1
-
-    metadata_df['bb_hbond_count'] = bb_counts
-    metadata_df['sc_hbond_count'] = sc_counts
-    metadata_df['total_hbond_count'] = total_counts
-
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
-    if 'bonds_df' not in context.extras:
-        context.extras['bonds_df'] = pd.DataFrame(columns=standard_columns)
-    if len(hbonds_df) > 0:
-        context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], hbonds_df], ignore_index=True)
-
-    return metadata_df
-
-
 @register_metric(name='calculate_packing_metrics', provides=['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density'], tags={'structure', 'interaction'})
 def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataFrame:
     """

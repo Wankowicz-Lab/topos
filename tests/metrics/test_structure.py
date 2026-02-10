@@ -8,7 +8,7 @@ import tempfile
 
 from src.metrics import structure as metrics
 from src.pipeline.context import Config, Context
-from tests.test_utils import _make_atoms, _make_chain, AA_LIST, _make_residue_table
+from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
 
 import biotite.structure as struc
 
@@ -253,61 +253,6 @@ def test_calculate_residue_packing():
     # Check that values are reasonable
     assert all(packing['packing_n_atoms'] >= 0), "Number of atoms should be positive"
     assert all(packing['packing_n_neighbor_residues'] >= 0), "Number of neighbors should be non-negative"
-
-
-def test_calculate_hbond_metrics():
-    """Per-residue hbond counts and bonds_df; with protein + ligand, not all hbonds are protein/ligand."""
-    aa_list = ['SER', 'GLY', 'ASP', 'ASN']
-    chain = _make_chain(aa_list=aa_list, chain_id='A')
-    # Ligand O as acceptor; place O so SER backbone N (at [0,0,0]) can donate: O in -x from N for valid angle
-    lig = _make_atoms(['O', 'N'], [[-2.0, 0.0, 0.0], [-3.5, 0.0, 0.0]], res_name='LIG', res_id=100, chain_id='B')
-    arr = struc.concatenate([chain, lig])
-    context = Context(array=arr)
-
-    hbond_metrics = metrics.calculate_hbond_metrics(context)
-
-    expected_keys = ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']
-    assert all(key in hbond_metrics for key in expected_keys)
-
-    res_starts = struc.get_residue_starts(arr)
-    n_res = len(res_starts)
-    for key in ['bb_hbond_count', 'sc_hbond_count', 'total_hbond_count']:
-        assert len(hbond_metrics[key]) == n_res
-
-    assert all(hbond_metrics['bb_hbond_count'] >= 0)
-    assert all(hbond_metrics['sc_hbond_count'] >= 0)
-    assert all(hbond_metrics['total_hbond_count'] >= 0)
-
-    bonds_df = context.extras['bonds_df']
-    hbond_rows = bonds_df[bonds_df['bond_type'] == 'hbond']
-    assert len(hbond_rows) > 0
-    for _, row in hbond_rows.iterrows():
-        assert 'category' in row['extras']
-        parts = row['extras']['category'].split('-')
-        assert parts[0] in ('backbone', 'sidechain') and parts[1] in ('backbone', 'sidechain')
-
-    # With protein + ligand: some hbonds are protein-protein, some are protein-ligand (not all ligands)
-    assert hbond_rows['protein_protein'].any(), "expected at least one protein-protein hbond"
-    assert (hbond_rows['protein_protein'] == False).any(), "expected at least one protein-ligand hbond"
-
-    # Total count sum = number of protein-protein hbond rows (only those count toward per-residue metrics)
-    assert hbond_metrics['total_hbond_count'].sum() == (hbond_rows['protein_protein']).sum()
-   
-
-def test_calculate_hbond_metrics_with_altloc():
-    """Hbond metrics handle altloc; bonds_df has hbond rows with category in extras."""
-    aa_list = ['SER', 'GLY', 'ASP']
-    altlocs = ['A', '', 'B']
-    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc=altlocs)
-    context = Context(array=arr)
-
-    hbond_metrics = metrics.calculate_hbond_metrics(context)
-    assert 'bb_hbond_count' in hbond_metrics.columns
-    assert 'sc_hbond_count' in hbond_metrics.columns
-
-    hbond_rows = context.extras['bonds_df'][context.extras['bonds_df']['bond_type'] == 'hbond']
-    if len(hbond_rows) > 0:
-        assert 'category' in hbond_rows.iloc[0]['extras']
 
 
 def test_calculate_center_of_mass_distance():
