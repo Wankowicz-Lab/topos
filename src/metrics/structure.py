@@ -269,10 +269,12 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
-    residue_to_idx = {(ch, int(ri)): i for i, (ch, ri) in enumerate(zip(chains, res_ids))}
+    resnames = array.res_name[res_starts]
+    # Key by (chain, resi, resname) to match main and support altloc (same resi, different resn)
+    residue_to_idx = {(ch, int(ri), rn): i for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames))}
 
     for _, row in hbonds_df[hbonds_df['protein_protein']].iterrows():
-        idx = residue_to_idx.get((row['chain'], row['resi_struct']))
+        idx = residue_to_idx.get((row['chain'], int(row['resi_struct']), row['resn_struct']))
         if idx is None:
             continue
         total_counts[idx] += 1
