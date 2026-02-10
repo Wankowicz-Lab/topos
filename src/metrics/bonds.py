@@ -5,7 +5,7 @@ import pandas as pd
 import biotite.structure as struc
 
 from src.metrics.registry import register_metric
-from src.structure.utils import get_metadata_cols, is_heavy
+from src.structure.utils import get_metadata_cols, is_heavy, _res_key
 from src.pipeline.context import Context
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,31 @@ def get_ring_normal(array: struc.AtomArray, chain: str, resi: int, resname: str)
     return normal / norm
 
 
+def classify_bond_types(bond_results: pd.DataFrame, array: struc.AtomArray) -> pd.DataFrame:
+    """Classify bond types to categorize whether they are protein-protein or not.
+    
+    Parameters
+    ----------
+    bond_results: pd.DataFrame
+        DataFrame with bond results.
+    array: struc.AtomArray
+        Biotite AtomArray containing protein structure data.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with bond types classified as protein-protein or not. 
+    """
+    filtered_array = array[struc.filter_amino_acids(array)]
+    metadata = get_metadata_cols(filtered_array)
+    metadata['residue_key'] = metadata.apply(lambda x: _res_key(x['chain'], x['resi_struct'], x['resn_struct']), axis=1)
+
+    bond_results['protein_protein'] = bond_results['residue_key'].isin(metadata['residue_key']) & bond_results['partner_residue_key'].isin(metadata['residue_key'])
+
+    return bond_results
+
+
+
 def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.DataFrame:
     """
     Identify salt bridge interactions in a protein structure.
@@ -124,20 +149,20 @@ def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Dat
             # If distance is less than cutoff, add to results
             if d2.min() <= cutoff2:
                 results.append({
-                    'chain': acid_chain, 'resi_struct': int(acid_resi), 'resn_struct': acid_resn,
-                    'partner_chain': base_chain, 'partner_resi': int(base_resi), 'partner_resn': base_resn,
+                    'chain': acid_chain, 'resi_struct': int(acid_resi), 'resn_struct': acid_resn, 'residue_key': _res_key(acid_chain, acid_resi, acid_resn),
+                    'partner_chain': base_chain, 'partner_resi': int(base_resi), 'partner_resn': base_resn, 'partner_residue_key': _res_key(base_chain, base_resi, base_resn),
                     'bond_type': 'salt_bridge',
                     'extras': {}
                 })
                 results.append({
-                    'chain': base_chain, 'resi_struct': int(base_resi), 'resn_struct': base_resn,
-                    'partner_chain': acid_chain, 'partner_resi': int(acid_resi), 'partner_resn': acid_resn,
+                    'chain': base_chain, 'resi_struct': int(base_resi), 'resn_struct': base_resn, 'residue_key': _res_key(base_chain, base_resi, base_resn),
+                    'partner_chain': acid_chain, 'partner_resi': int(acid_resi), 'partner_resn': acid_resn, 'partner_residue_key': _res_key(acid_chain, acid_resi, acid_resn),
                     'bond_type': 'salt_bridge',
                     'extras': {}
                 })
     
     # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
@@ -164,10 +189,11 @@ def calculate_salt_bridges(context: Context, cutoff: float = 4.0) -> pd.DataFram
     """
     array = context.array
     salt_bridges = identify_salt_bridges(array, cutoff)
+    salt_bridges = classify_bond_types(salt_bridges, array)
     metadata = get_metadata_cols(array)
     metadata['salt_bridge_count'] = 0
     if len(salt_bridges) > 0:
-        counts = salt_bridges.groupby(['chain', 'resi_struct']).size()
+        counts = salt_bridges[salt_bridges['protein_protein']].groupby(['chain', 'resi_struct']).size()
         for (chain, resi), count in counts.items():
             metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'salt_bridge_count'] = count
     
@@ -234,20 +260,20 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
             # If distance is less than cutoff, add to results (acidic first, then ionic, matching salt_bridge order)
             if d2.min() <= cutoff2:
                 results.append({
-                    'chain': acidic_chain, 'resi_struct': int(acidic_resi), 'resn_struct': acidic_resn,
-                    'partner_chain': ionic_chain, 'partner_resi': int(ionic_resi), 'partner_resn': ionic_resn,
+                    'chain': acidic_chain, 'resi_struct': int(acidic_resi), 'resn_struct': acidic_resn, 'residue_key': _res_key(acidic_chain, acidic_resi, acidic_resn),
+                    'partner_chain': ionic_chain, 'partner_resi': int(ionic_resi), 'partner_resn': ionic_resn, 'partner_residue_key': _res_key(ionic_chain, ionic_resi, ionic_resn),
                     'bond_type': 'ionic',
                     'extras': {}
                 })
                 results.append({
-                    'chain': ionic_chain, 'resi_struct': int(ionic_resi), 'resn_struct': ionic_resn,
-                    'partner_chain': acidic_chain, 'partner_resi': int(acidic_resi), 'partner_resn': acidic_resn,
+                    'chain': ionic_chain, 'resi_struct': int(ionic_resi), 'resn_struct': ionic_resn, 'residue_key': _res_key(ionic_chain, ionic_resi, ionic_resn),
+                    'partner_chain': acidic_chain, 'partner_resi': int(acidic_resi), 'partner_resn': acidic_resn, 'partner_residue_key': _res_key(acidic_chain, acidic_resi, acidic_resn),
                     'bond_type': 'ionic',
                     'extras': {}
                 })
     
     # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
@@ -274,10 +300,11 @@ def calculate_ionic_bond_count(context: Context, cutoff: float = 4.0) -> pd.Data
     """
     array = context.array
     ionic_bonds = identify_ionic_bonds(array, cutoff)
+    ionic_bonds = classify_bond_types(ionic_bonds, array)
     metadata = get_metadata_cols(array)
     metadata['ionic_bond_count'] = 0
     if len(ionic_bonds) > 0:
-        counts = ionic_bonds.groupby(['chain', 'resi_struct']).size()
+        counts = ionic_bonds[ionic_bonds['protein_protein']].groupby(['chain', 'resi_struct']).size()
         for (chain, resi), count in counts.items():
             metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'ionic_bond_count'] = count
     
@@ -335,20 +362,20 @@ def identify_disulfide_bonds(array: struc.AtomArray, cutoff: float = 2.5) -> pd.
             # If distance is less than cutoff, add to results
             if d2 <= cutoff2:
                 results.append({
-                    'chain': cys1_chain, 'resi_struct': int(cys1_resi), 'resn_struct': 'CYS',
-                    'partner_chain': cys2_chain, 'partner_resi': int(cys2_resi), 'partner_resn': 'CYS',
+                    'chain': cys1_chain, 'resi_struct': int(cys1_resi), 'resn_struct': 'CYS', 'residue_key': _res_key(cys1_chain, cys1_resi, 'CYS'),
+                    'partner_chain': cys2_chain, 'partner_resi': int(cys2_resi), 'partner_resn': 'CYS', 'partner_residue_key': _res_key(cys2_chain, cys2_resi, 'CYS'),
                     'bond_type': 'disulfide',
                     'extras': {}
                 })
                 results.append({
-                    'chain': cys2_chain, 'resi_struct': int(cys2_resi), 'resn_struct': 'CYS',
-                    'partner_chain': cys1_chain, 'partner_resi': int(cys1_resi), 'partner_resn': 'CYS',
+                    'chain': cys2_chain, 'resi_struct': int(cys2_resi), 'resn_struct': 'CYS', 'residue_key': _res_key(cys2_chain, cys2_resi, 'CYS'),
+                    'partner_chain': cys1_chain, 'partner_resi': int(cys1_resi), 'partner_resn': 'CYS', 'partner_residue_key': _res_key(cys1_chain, cys1_resi, 'CYS'),
                     'bond_type': 'disulfide',
                     'extras': {}
                 })
     
     # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
@@ -374,10 +401,11 @@ def calculate_disulfide_bond_count(context: Context, cutoff: float = 2.5) -> pd.
     """
     array = context.array
     disulfide_bonds = identify_disulfide_bonds(array, cutoff)
+    disulfide_bonds = classify_bond_types(disulfide_bonds, array)
     metadata = get_metadata_cols(array)
     metadata['disulfide_bond_count'] = 0
     if len(disulfide_bonds) > 0:
-        counts = disulfide_bonds.groupby(['chain', 'resi_struct']).size()
+        counts = disulfide_bonds[disulfide_bonds['protein_protein']].groupby(['chain', 'resi_struct']).size()
         for (chain, resi), count in counts.items():
             metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'disulfide_bond_count'] = count
     
@@ -448,20 +476,20 @@ def identify_pi_stacking(array: struc.AtomArray, distance_cutoff: float = 5.5,
             if is_parallel or is_perpendicular:
                 geometry = 'parallel' if is_parallel else 't-shaped'
                 results.append({
-                    'chain': ch1, 'resi_struct': int(ri1), 'resn_struct': rn1,
-                    'partner_chain': ch2, 'partner_resi': int(ri2), 'partner_resn': rn2,
+                    'chain': ch1, 'resi_struct': int(ri1), 'resn_struct': rn1, 'residue_key': _res_key(ch1, ri1, rn1),
+                    'partner_chain': ch2, 'partner_resi': int(ri2), 'partner_resn': rn2, 'partner_residue_key': _res_key(ch2, ri2, rn2),
                     'bond_type': 'pi_stacking',
                     'extras': {'geometry': geometry}
                 })
                 results.append({
-                    'chain': ch2, 'resi_struct': int(ri2), 'resn_struct': rn2,
-                    'partner_chain': ch1, 'partner_resi': int(ri1), 'partner_resn': rn1,
+                    'chain': ch2, 'resi_struct': int(ri2), 'resn_struct': rn2, 'residue_key': _res_key(ch2, ri2, rn2),
+                    'partner_chain': ch1, 'partner_resi': int(ri1), 'partner_resn': rn1, 'partner_residue_key': _res_key(ch1, ri1, rn1),
                     'bond_type': 'pi_stacking',
                     'extras': {'geometry': geometry}
                 })
     
     # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
@@ -489,6 +517,7 @@ def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5, 
     """
     array = context.array
     pi_stacking = identify_pi_stacking(array, distance_cutoff, angle_cutoff)
+    pi_stacking = classify_bond_types(pi_stacking, array)
     metadata = get_metadata_cols(array)
     metadata['pi_stacking_count'] = 0
     if len(pi_stacking) > 0:
@@ -559,20 +588,20 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
             
             if d2 <= cutoff2:
                 results.append({
-                    'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn,
-                    'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn,
+                    'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': _res_key(cat_ch, cat_ri, cat_rn),
+                    'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn, 'partner_residue_key': _res_key(aro_ch, aro_ri, aro_rn),
                     'bond_type': 'cation_pi',
                     'extras': {'role': 'cation'}
                 })
                 results.append({
-                    'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn,
-                    'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn,
+                    'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn, 'residue_key': _res_key(aro_ch, aro_ri, aro_rn),
+                    'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn, 'partner_residue_key': _res_key(cat_ch, cat_ri, cat_rn),
                     'bond_type': 'cation_pi',
                     'extras': {'role': 'aromatic'}
                 })
     
     # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
@@ -598,10 +627,11 @@ def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataF
     """
     array = context.array
     cation_pi = identify_cation_pi(array, cutoff)
+    cation_pi = classify_bond_types(cation_pi, array)
     metadata = get_metadata_cols(array)
     metadata['cation_pi_count'] = 0
     if len(cation_pi) > 0:
-        counts = cation_pi.groupby(['chain', 'resi_struct']).size()
+        counts = cation_pi[cation_pi['protein_protein']].groupby(['chain', 'resi_struct']).size()
         for (chain, resi), count in counts.items():
             metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'cation_pi_count'] = count
     
@@ -668,20 +698,20 @@ def identify_vdw_contacts(array: struc.AtomArray, cutoff_factor: float = 1.0) ->
         if dist <= vdw_sum:
             seen_pairs.add(pair_key)
             results.append({
-                'chain': atom_chains[i], 'resi_struct': int(atom_res_ids[i]), 'resn_struct': atom_res_names[i],
-                'partner_chain': atom_chains[j], 'partner_resi': int(atom_res_ids[j]), 'partner_resn': atom_res_names[j],
+                'chain': atom_chains[i], 'resi_struct': int(atom_res_ids[i]), 'resn_struct': atom_res_names[i], 'residue_key': _res_key(atom_chains[i], atom_res_ids[i], atom_res_names[i]),
+                'partner_chain': atom_chains[j], 'partner_resi': int(atom_res_ids[j]), 'partner_resn': atom_res_names[j], 'partner_residue_key': _res_key(atom_chains[j], atom_res_ids[j], atom_res_names[j]),
                 'bond_type': 'vdw_contact',
                 'extras': {}
             })
             results.append({
-                'chain': atom_chains[j], 'resi_struct': int(atom_res_ids[j]), 'resn_struct': atom_res_names[j],
-                'partner_chain': atom_chains[i], 'partner_resi': int(atom_res_ids[i]), 'partner_resn': atom_res_names[i],
+                'chain': atom_chains[j], 'resi_struct': int(atom_res_ids[j]), 'resn_struct': atom_res_names[j], 'residue_key': _res_key(atom_chains[j], atom_res_ids[j], atom_res_names[j]),
+                'partner_chain': atom_chains[i], 'partner_resi': int(atom_res_ids[i]), 'partner_resn': atom_res_names[i], 'partner_residue_key': _res_key(atom_chains[i], atom_res_ids[i], atom_res_names[i]),
                 'bond_type': 'vdw_contact',
                 'extras': {}
             })
     
     # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'partner_chain', 'partner_resi', 'partner_resn', 'bond_type', 'extras']
+    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
@@ -707,10 +737,11 @@ def calculate_vdw_contact_count(context: Context, cutoff_factor: float = 1.0) ->
     """
     array = context.array
     vdw_contacts = identify_vdw_contacts(array, cutoff_factor)
+    vdw_contacts = classify_bond_types(vdw_contacts, array)
     metadata = get_metadata_cols(array)
     metadata['vdw_contact_count'] = 0
     if len(vdw_contacts) > 0:
-        counts = vdw_contacts.groupby(['chain', 'resi_struct']).size()
+        counts = vdw_contacts[vdw_contacts['protein_protein']].groupby(['chain', 'resi_struct']).size()
         for (chain, resi), count in counts.items():
             metadata.loc[(metadata['chain'] == chain) & (metadata['resi_struct'] == resi), 'vdw_contact_count'] = count
     

@@ -3,9 +3,12 @@ import pandas as pd
 
 from src.metrics import bonds
 from src.pipeline.context import Context
-from tests.test_utils import _make_residue
+from src.structure.utils import _res_key
+from tests.test_utils import _make_atoms, _make_residue
 
 import biotite.structure as struc
+
+
 
 
 def test_identify_salt_bridges():
@@ -42,6 +45,24 @@ def test_identify_salt_bridges():
     assert result.iloc[1]['partner_resi'] == 1
     assert result.iloc[1]['partner_resn'] == 'ASP'
     assert result.iloc[1]['bond_type'] == 'salt_bridge'
+
+
+def test_classify_bond_types():
+    """Classify bond types correctly flags protein/protein vs protein/ligand."""
+    ala = _make_residue('ALA', res_id=1, chain_id='A')
+    gly = _make_residue('GLY', res_id=2, chain_id='A')
+    lig = _make_atoms(['C1', 'N1'], [[0, 0, 0], [1, 0, 0]], res_name='LIG', res_id=100, chain_id='B')
+    arr = struc.concatenate([ala, gly, lig])
+
+    bond_results = pd.DataFrame({
+        'residue_key': [_res_key('A', 1, 'ALA'), _res_key('A', 1, 'ALA'), _res_key('A', 2, 'GLY')],
+        'partner_residue_key': [_res_key('A', 2, 'GLY'), _res_key('B', 100, 'LIG'), _res_key('B', 100, 'LIG')],
+    })
+
+    result = bonds.classify_bond_types(bond_results, arr)
+
+    # Protein–protein (ALA–GLY) is True; protein–ligand rows are False
+    assert result['protein_protein'].tolist() == [True, False, False]
 
 
 def test_calculate_salt_bridges():
@@ -429,22 +450,21 @@ def test_calculate_vdw_contact_count():
     
     ala1 = _make_residue('ALA', res_id=1, chain_id='A', coords=ala1_coords)
     ala2 = _make_residue('ALA', res_id=2, chain_id='A', coords=ala2_coords)
-    arr = struc.concatenate([ala1, ala2])
+    # Ligand with one atom within vdw distance of ALA2 CB (1.5, 1.0, 3.0)
+    lig = _make_atoms(['C1', 'N1'], [[1.5, 1.0, 4.0], [2.0, 1.0, 4.0]], res_name='LIG', res_id=100, chain_id='B')
+    arr = struc.concatenate([ala1, ala2, lig])
     context = Context(array=arr)
     
     result = bonds.calculate_vdw_contact_count(context, cutoff_factor=1.0)
     
     assert isinstance(result, pd.DataFrame)
     assert 'vdw_contact_count' in result.columns
-    # Check that we have nonzero counts
     assert result['vdw_contact_count'].sum() > 0
-    # Check bonds_df in context
-    assert 'bonds_df' in context.extras
-    assert isinstance(context.extras['bonds_df'], pd.DataFrame)
     bonds_df = context.extras['bonds_df']
-    # Check that bonds_df contains vdw_contact bond type
     vdw_rows = bonds_df[bonds_df['bond_type'] == 'vdw_contact']
-    assert len(vdw_rows) > 0
+    # 2 rows per pair: 1 protein-protein pair (ALA1-ALA2) + 2 protein-ligand pairs (ALA1-LIG, ALA2-LIG)
+    assert len(vdw_rows) == 6
+    assert (vdw_rows['protein_protein']).sum() == 2
 
 
 def test_bonds_df_consolidation():
