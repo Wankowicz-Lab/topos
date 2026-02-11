@@ -8,15 +8,16 @@ from src.metrics.graph_metrics import calculate_graph_metrics
 def test_calculate_graph_metrics_simple():
     """Simple graph: 2-3 residues, 1-2 bonds; verify metrics present and merge correct."""
     bonds_df = pd.DataFrame({
-        "chain_1": ["A", "A"],
-        "resi_1": [1, 2],
-        "chain_2": ["A", "A"],
-        "resi_2": [2, 3],
+        "chain": ["A", "A"],
+        "resi_struct": [1, 2],
+        "partner_chain": ["A", "A"],
+        "partner_resi": [2, 3]
     })
     residue_table = pd.DataFrame({
         "chain": ["A", "A", "A"],
         "resi_struct": [1, 2, 3],
         "resn_struct": ["ALA", "GLY", "SER"],
+        "struct_info": [True, True, True],
     })
 
     result = calculate_graph_metrics(bonds_df, residue_table)
@@ -25,7 +26,6 @@ def test_calculate_graph_metrics_simple():
         "graph_betweenness_centrality",
         "graph_closeness_centrality",
         "graph_eigenvector_centrality",
-        "graph_pagerank",
         "graph_core_number",
         "graph_community_id",
         "graph_in_lcc",
@@ -43,15 +43,16 @@ def test_calculate_graph_metrics_disconnected_lcc():
     """Disconnected graph: verify LCC subset and excluded residue reporting."""
     # Two components: A:1-A:2 (size 2) and A:3-A:4-A:5 (size 3, LCC)
     bonds_df = pd.DataFrame({
-        "chain_1": ["A", "A", "A"],
-        "resi_1": [1, 3, 4],
-        "chain_2": ["A", "A", "A"],
-        "resi_2": [2, 4, 5],
+        "chain": ["A", "A", "A"],
+        "resi_struct": [1, 3, 4],
+        "partner_chain": ["A", "A", "A"],
+        "partner_resi": [2, 4, 5]
     })
     residue_table = pd.DataFrame({
         "chain": ["A"] * 5,
         "resi_struct": [1, 2, 3, 4, 5],
         "resn_struct": ["ALA", "GLY", "SER", "THR", "VAL"],
+        "struct_info": [True, True, True, True, True],
     })
 
     result = calculate_graph_metrics(bonds_df, residue_table)
@@ -70,16 +71,17 @@ def test_calculate_graph_metrics_disconnected_lcc():
 def test_calculate_graph_metrics_extra_residues_not_in_bonds():
     """Residue_table with extra residues not in bonds: verify NaN for those."""
     bonds_df = pd.DataFrame({
-        "chain_1": ["A"],
-        "resi_1": [1],
-        "chain_2": ["A"],
-        "resi_2": [2],
+        "chain": ["A"],
+        "resi_struct": [1],
+        "partner_chain": ["A"],
+        "partner_resi": [2]
     })
     # Residue 3 is in residue_table but not in graph (isolated)
     residue_table = pd.DataFrame({
         "chain": ["A", "A", "A"],
         "resi_struct": [1, 2, 3],
         "resn_struct": ["ALA", "GLY", "SER"],
+        "struct_info": [True, True, True],
     })
 
     result = calculate_graph_metrics(bonds_df, residue_table)
@@ -94,15 +96,16 @@ def test_calculate_graph_metrics_centrality_identifies_hub():
     """Star graph: central node should have highest betweenness centrality."""
     # Star: A:2 connected to A:1, A:3, A:4 (central node)
     bonds_df = pd.DataFrame({
-        "chain_1": ["A", "A", "A"],
-        "resi_1": [2, 2, 2],
-        "chain_2": ["A", "A", "A"],
-        "resi_2": [1, 3, 4],
+        "chain": ["A", "A", "A"],
+        "resi_struct": [2, 2, 2],
+        "partner_chain": ["A", "A", "A"],
+        "partner_resi": [1, 3, 4]
     })
     residue_table = pd.DataFrame({
         "chain": ["A", "A", "A", "A"],
         "resi_struct": [1, 2, 3, 4],
         "resn_struct": ["ALA", "GLY", "SER", "THR"],
+        "struct_info": [True, True, True, True],
     })
 
     result = calculate_graph_metrics(bonds_df, residue_table)

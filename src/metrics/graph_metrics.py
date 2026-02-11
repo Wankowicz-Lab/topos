@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 def calculate_graph_metrics(
     bonds_df: pd.DataFrame,
     residue_table: pd.DataFrame,
+    connected_components: bool = True,
 ) -> pd.DataFrame:
     """
     Compute graph-based metrics on a residue-bond graph and map them to residues.
@@ -33,6 +34,8 @@ def calculate_graph_metrics(
         DataFrame with columns chain_1, resi_1, chain_2, resi_2. Each row represents a bond between two residues.
     residue_table : pd.DataFrame
         DataFrame with at least chain and resi_struct columns to identify residues.
+    connected_components: bool = True,
+        Whether to restrict to the largest connected component.
 
     Returns
     -------
@@ -41,7 +44,6 @@ def calculate_graph_metrics(
         - graph_betweenness_centrality
         - graph_closeness_centrality
         - graph_eigenvector_centrality
-        - graph_pagerank
         - graph_core_number
         - graph_community_id
         - graph_in_lcc
@@ -51,12 +53,17 @@ def calculate_graph_metrics(
     """
     result = residue_table.copy()
 
+    # Remove residues without structural information
+    result = result[result['struct_info']]
+
+    # Subset to relevant output columns
+    result = result[['chain', 'resi_struct', 'resn_struct']]
+
     # Initialize metric columns with NaN
     metric_cols = [
         "graph_betweenness_centrality",
         "graph_closeness_centrality",
         "graph_eigenvector_centrality",
-        "graph_pagerank",
         "graph_core_number",
         "graph_community_id",
         "graph_in_lcc",
@@ -65,7 +72,7 @@ def calculate_graph_metrics(
         result[col] = pd.NA if col != "graph_in_lcc" else False
 
     # Normalize column names
-    c1, r1, c2, r2 = 'chain_1', 'resi_1', 'chain_2', 'resi_2'
+    c1, r1, c2, r2 = 'chain', 'resi_struct', 'partner_chain', 'partner_resi'
 
     # Build undirected graph
     G = nx.Graph()
@@ -83,7 +90,7 @@ def calculate_graph_metrics(
     components = list(nx.connected_components(G))
     largest_cc = max(components, key=len)
     G_lcc = G.subgraph(largest_cc).copy()
-
+    
     # Report excluded residues
     excluded = set(G.nodes()) - largest_cc
     if excluded:
@@ -95,17 +102,19 @@ def calculate_graph_metrics(
         if len(excluded) > 20:
             logger.info("... and %d more", len(excluded) - 20)
 
+    if connected_components:
+        G = G_lcc        
+    
     # Compute metrics on LCC
-    betweenness = nx.betweenness_centrality(G_lcc)
-    closeness = nx.closeness_centrality(G_lcc)
+    betweenness = nx.betweenness_centrality(G)
+    closeness = nx.closeness_centrality(G)
     try:
-        eigenvector = nx.eigenvector_centrality(G_lcc, max_iter=1000)
+        eigenvector = nx.eigenvector_centrality(G, max_iter=1000)
     except nx.PowerIterationFailedConvergence:
         logger.warning("eigenvector_centrality failed to converge; using zeros")
-        eigenvector = {n: 0.0 for n in G_lcc.nodes()}
-    pagerank = nx.pagerank(G_lcc, alpha=0.85)
-    core_num = nx.core_number(G_lcc)
-    comms = list(nx.community.greedy_modularity_communities(G_lcc))
+        eigenvector = {n: 0.0 for n in G.nodes()}
+    core_num = nx.core_number(G)
+    comms = list(nx.community.greedy_modularity_communities(G))
 
     # Map community id (0-indexed)
     node_to_community = {}
@@ -116,7 +125,7 @@ def calculate_graph_metrics(
     # Build residue keys for residue_table
     result_keys = [
         residue_key(str(row["chain"]), int(row['resi_struct']))
-        for _, row in residue_table.iterrows()
+        for _, row in result.iterrows()
     ]
 
     # Map metrics onto residue_table
@@ -129,7 +138,6 @@ def calculate_graph_metrics(
     result["graph_eigenvector_centrality"] = [
         eigenvector.get(k, float("nan")) for k in result_keys
     ]
-    result["graph_pagerank"] = [pagerank.get(k, float("nan")) for k in result_keys]
     result["graph_core_number"] = [core_num.get(k, float("nan")) for k in result_keys]
     result["graph_community_id"] = [
         node_to_community.get(k, float("nan")) for k in result_keys
