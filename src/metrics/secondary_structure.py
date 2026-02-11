@@ -40,10 +40,11 @@ def ss_domain_lengths(merged: pd.DataFrame) -> pd.DataFrame:
 
 
 def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
-    """Compute log2(prop_in_domain / prop_global) per ss_domain and aa group.
+    """Compute log2(prop_in_domain / prop_global) per (chain, ss_domain) and aa group.
 
+    Prop_global is computed per chain (chain-wide proportion of each aa group).
     Uses residue-level counts (one row per residue). Derives aa_group from
-    resn_struct via AA_TO_GROUP. Returns a DataFrame with ss_domains and
+    resn_struct via AA_TO_GROUP. Returns a DataFrame with chain, ss_domains and
     log2_ratio_<group> for each group in AA_GROUPS.
 
     Parameters
@@ -54,23 +55,24 @@ def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Columns: ss_domains, log2_ratio_<g> for each g in AA_GROUPS.
+        Columns: chain, ss_domains, log2_ratio_<g> for each g in AA_GROUPS.
     """
-    out = merged[['chain', 'ss_domains']].drop_duplicates().copy()
-
     res_key = ['chain', 'resi_struct']
     residues = merged[res_key + ['ss_domains', 'resn_struct']].copy()
     residues['aa_group'] = residues['resn_struct'].map(AA_TO_GROUP)
     residues = residues[res_key + ['ss_domains', 'aa_group']].drop_duplicates(res_key)
 
-    n_total = len(residues)
-    global_counts = residues['aa_group'].value_counts()
+    # Per-chain global proportions for each aa group
+    chain_totals = residues.groupby('chain').size()
+    chain_group_counts = residues.groupby(['chain', 'aa_group']).size().unstack(fill_value=0)
+
+    out = merged[['chain', 'ss_domains']].drop_duplicates().copy()
 
     for g in AA_GROUPS.keys():
-        prop_global = global_counts.get(g, 0) / n_total
-        if prop_global == 0 or np.isnan(prop_global):
-            out[f'log2_ratio_{g}'] = np.nan
-            continue
+        # Chain-specific prop_global
+        group_in_chain = chain_group_counts[g] if g in chain_group_counts.columns else 0
+        chain_prop_global = group_in_chain / chain_totals
+        chain_prop_global = chain_prop_global.reindex(chain_totals.index).fillna(0)
 
         domain_counts = residues.groupby(['chain', 'ss_domains'])['aa_group'].agg(
             total='count',
@@ -82,16 +84,25 @@ def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
             domain_counts['in_group'] / domain_counts['total'],
             np.nan,
         )
+        domain_counts['prop_global'] = domain_counts['chain'].map(chain_prop_global)
 
         domain_counts['log2_ratio'] = np.nan
-        valid = domain_counts['prop_domain'].notna() & (domain_counts['prop_domain'] > 0)
+        valid = (
+            domain_counts['prop_domain'].notna()
+            & (domain_counts['prop_domain'] > 0)
+            & (domain_counts['prop_global'] > 0)
+        )
         domain_counts.loc[valid, 'log2_ratio'] = np.log2(
-            domain_counts.loc[valid, 'prop_domain'] / prop_global
+            domain_counts.loc[valid, 'prop_domain'] / domain_counts.loc[valid, 'prop_global']
         )
         domain_counts.loc[domain_counts['prop_domain'] == 0, 'log2_ratio'] = -np.inf
+        # When prop_global is 0, ratio is undefined
+        domain_counts.loc[domain_counts['prop_global'] == 0, 'log2_ratio'] = np.nan
 
         out = out.merge(
-            domain_counts[['chain', 'ss_domains', 'log2_ratio']].rename(columns={'log2_ratio': f'log2_ratio_{g}'}),
+            domain_counts[['chain', 'ss_domains', 'log2_ratio']].rename(
+                columns={'log2_ratio': f'log2_ratio_{g}'}
+            ),
             on=['chain', 'ss_domains'],
             how='left',
         )

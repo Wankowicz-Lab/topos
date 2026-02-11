@@ -38,7 +38,7 @@ def test_ss_domain_log2_aa_group_ratios():
     assert d2['log2_ratio_Nonpolar_Aliphatic'] == pytest.approx(np.log2(0.5 / (3/4)))
     assert d2['log2_ratio_Aromatic'] == pytest.approx(np.log2(0.5 / (1/4)))
     
-    # B1: 1 Nonpolar_Aliphatic, 0 Aromatic -> prop 1/1, 0/1
+    # B1 (chain B): 1 Nonpolar_Aliphatic, 0 Aromatic -> prop 1/1, 0/1
     assert b1['log2_ratio_Nonpolar_Aliphatic'] == pytest.approx(np.log2(1.0 / (1/1)))
-    assert b1['log2_ratio_Aromatic'] == pytest.approx(np.log2(0.0 / (0/1)))
-    
+    assert pd.isna(b1['log2_ratio_Aromatic'])  # prop_global=0 for Aromatic in chain B
+

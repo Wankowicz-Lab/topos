@@ -776,9 +776,9 @@ class Runner:
 
         # Compute domain-level metrics
         lengths = ss_domain_lengths(merged)
-        by_domain = by_domain.merge(lengths, on='ss_domains', how='left')
+        by_domain = by_domain.merge(lengths, on=['chain', 'ss_domains'], how='left')
         log2_df = ss_domain_log2_aa_group_ratios(merged)
-        by_domain = by_domain.merge(log2_df, on='ss_domains', how='left')
+        by_domain = by_domain.merge(log2_df, on=['chain', 'ss_domains'], how='left')
 
         return by_domain
     
