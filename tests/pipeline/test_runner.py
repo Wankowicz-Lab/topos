@@ -10,6 +10,7 @@ import biotite.structure as struc
 from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
 from src.pipeline import runner
 from src.structure.structure_context import load_structure
+from src.structure.utils import res_key
 
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
@@ -811,7 +812,7 @@ def test_compute_residue_neighbors_basic():
     
     # Check that all residues from structure are present
     rt = myrunner.context.residue_table
-    expected_keys = {f"{row['chain']}:{row['resi_struct']}" for _, row in rt.iterrows()}
+    expected_keys = {res_key(row["chain"], row["resi_struct"], row["resn_struct"]) for _, row in rt.iterrows()}
     assert set(mapping.keys()) == expected_keys
 
 
@@ -898,8 +899,8 @@ def test_calculate_neighborhood_features_aggregates_multiple_metrics():
         rows = []
         for _, row in unique.iterrows():
             chain, resi, resn = row['chain'], row['resi_struct'], row['resn_struct']
-            res_key = f"{chain}:{int(resi)}"
-            neighbor_keys = neighbor_map.get(res_key, [])
+            residue_id = res_key(chain, resi, resn)
+            neighbor_keys = neighbor_map.get(residue_id, [])
             rows.append({
                 'chain': chain,
                 'resi_struct': resi,

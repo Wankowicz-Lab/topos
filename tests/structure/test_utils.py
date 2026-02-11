@@ -28,15 +28,15 @@ def test_is_heavy():
     assert utils.is_heavy("  H  ") == False  # with whitespace
 
 
-def test_residue_key():
+def test_res_key():
     # Test basic residue key generation
-    assert utils.residue_key("A", 1) == "A:1"
-    assert utils.residue_key("B", 42) == "B:42"
-    assert utils.residue_key("X", 100) == "X:100"
+    assert utils.res_key("A", 1, "ALA") == "A:1:ALA"
+    assert utils.res_key("B", 42, "GLY") == "B:42:GLY"
+    assert utils.res_key("X", 100, "TYR") == "X:100:TYR"
     
     # Test with float residue ID (should convert to int)
-    assert utils.residue_key("A", 1.0) == "A:1"
-    assert utils.residue_key("A", 1.9) == "A:1"
+    assert utils.res_key("A", 1.0, "ALA") == "A:1:ALA"
+    assert utils.res_key("A", 1.9, "ALA") == "A:1:ALA"
 
 
 def test_is_backbone_atom():

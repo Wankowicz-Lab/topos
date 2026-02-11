@@ -89,8 +89,11 @@ def angle_deg(u: np.ndarray, v: np.ndarray) -> float:
     return float(math.degrees(math.acos(dot)))
 
 
-def _res_key(chain, resi, resname) -> str:
-    return f"{chain}:{int(resi)}:{resname}"
+def res_key(chain: str, resi: Any, resn: str) -> str:
+    """Build canonical residue identifier in the format 'chain:resi:resn'."""
+    chain_str = str(chain).strip()
+    resn_str = "" if resn is None else str(resn).strip()
+    return f"{chain_str}:{int(resi)}:{resn_str}"
 
 
 def is_backbone_atom(atom_name: str) -> bool:
@@ -350,7 +353,7 @@ def build_sites_biotite(
         if not _residue_ok(resname, is_protein, include_water, include_ligands):
             continue
 
-        res_key = _res_key(chain_id, resi, resname)
+        residue_id = res_key(chain_id, resi, resname)
         name_to_alt = _index_by_name_alt(base_arr, idxs)
         names_set = set(name_to_alt.keys())
         dtempl, atempl = _donor_acceptor_templates(resname, names_set)
@@ -363,7 +366,7 @@ def build_sites_biotite(
                 coord = base_arr.coord[ai].astype(float)
                 acceptors.append(
                     AcceptorSite(
-                        res_key,
+                        residue_id,
                         resname,
                         chain_id,
                         resi,
@@ -393,7 +396,7 @@ def build_sites_biotite(
 
                 donors.append(
                     DonorSite(
-                        res_key,
+                        residue_id,
                         resname,
                         chain_id,
                         resi,
@@ -526,20 +529,3 @@ def is_heavy(atom_name: str) -> bool:
     return not (n.startswith("H") or n.startswith("D"))
 
 
-def residue_key(chain_id: str, res_id: int) -> str:
-    """
-    Build a unique residue identifier string.
-
-    Parameters
-    ----------
-    chain_id : str
-        Chain identifier.
-    res_id : int
-        Residue number.
-
-    Returns
-    -------
-    str
-        A unique identifier in the format 'chain:resi'.
-    """
-    return f"{chain_id}:{int(res_id)}"

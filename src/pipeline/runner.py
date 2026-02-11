@@ -26,7 +26,7 @@ from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
 
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
-from src.structure.utils import residue_key, is_heavy
+from src.structure.utils import res_key, is_heavy
 from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
 
 logger = logging.getLogger(__name__)
@@ -266,11 +266,6 @@ def _sort_residue_table(residue_table: pd.DataFrame, mutation_chain: Optional[st
     return residue_table
 
 
-def _residue_key(chain: str, resi: Any, resn: str) -> tuple:
-    """Normalize (chain, resi, resn) for set/map lookups."""
-    return (str(chain).strip(), int(resi), str(resn).strip() if resn is not None else "")
-
-
 def _sanitize_column_name(s: str) -> str:
     """Replace spaces with underscore for use in pandas column names."""
     return str(s).strip().replace(" ", "_")
@@ -353,10 +348,10 @@ def calculate_protein_ligand_interactions(
         # get contacting residues
         ligand_contacting_df = contacting_residues_df[contacting_residues_df["partner_ligand_id"] == ligand_id]
         
-        # get contact keys (unique (chain, resi, resn) tuples)
+        # get contact keys
         contact_keys = set()
         for _, row in ligand_contacting_df[["chain", "resi_struct", "resn_struct"]].drop_duplicates().iterrows():
-            contact_keys.add(_residue_key(row["chain"], row["resi_struct"], row["resn_struct"]))
+            contact_keys.add(res_key(row["chain"], row["resi_struct"], row["resn_struct"]))
 
         # create ligand mask
         ligand_mask = (
@@ -375,13 +370,13 @@ def calculate_protein_ligand_interactions(
             protein_atom_indices.update(near.tolist())
         binding_res_indices = set(atom_to_res_idx[list(protein_atom_indices)])
 
-        # get binding keys (unique (chain, resi, resn) tuples)
+        # get binding keys
         binding_keys = set()
         for ri in binding_res_indices:
             ch = protein_chains[ri]
             rid = protein_res_ids[ri]
             rn = protein_res_names[ri]
-            binding_keys.add(_residue_key(ch, rid, rn))
+            binding_keys.add(res_key(ch, rid, rn))
 
         # get contact labels (binding sites that are also contacting residues) and binding only (binding sites that are not contacting residues)
         contact_labels = binding_keys & contact_keys
@@ -404,13 +399,13 @@ def calculate_protein_ligand_interactions(
                 if ri not in binding_res_indices:
                     second_shell_res_indices.add(ri)
 
-        # Get all unique (chain, resi, resn) tuples for second shell residues
+        # Get all second-shell residue keys
         second_shell_keys = set()
         for ri in second_shell_res_indices:
             ch = protein_chains[ri]
             rid = protein_res_ids[ri]
             rn = protein_res_names[ri]
-            second_shell_keys.add(_residue_key(ch, rid, rn))
+            second_shell_keys.add(res_key(ch, rid, rn))
 
         # Create label map
         label_map = {}
@@ -423,7 +418,7 @@ def calculate_protein_ligand_interactions(
 
         # lookup label for each residue
         def lookup(row):
-            key = _residue_key(row["chain"], row["resi_struct"], row["resn_struct"])
+            key = res_key(row["chain"], row["resi_struct"], row["resn_struct"])
             return label_map.get(key, np.nan)
  
         # add column to residue table
@@ -794,8 +789,9 @@ class Runner:
         res_starts = struc.get_residue_starts(array)
         chains = array.chain_id[res_starts]
         res_ids = array.res_id[res_starts]
+        res_names = array.res_name[res_starts]
         full_keys = np.array(
-            [residue_key(ch, ri) for ch, ri in zip(chains, res_ids)],
+            [res_key(ch, ri, rn) for ch, ri, rn in zip(chains, res_ids, res_names)],
             dtype=object,
         )
 
@@ -811,7 +807,7 @@ class Runner:
             return mapping
 
         residue_ids = np.array(
-            [residue_key(c, r) for c, r in zip(arr.chain_id, arr.res_id)],
+            [res_key(c, r, rn) for c, r, rn in zip(arr.chain_id, arr.res_id, arr.res_name)],
             dtype=object,
         )
 
