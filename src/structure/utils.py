@@ -92,7 +92,7 @@ def angle_deg(u: np.ndarray, v: np.ndarray) -> float:
 def res_key(chain: str, resi: Any, resn: str) -> str:
     """Build canonical residue identifier in the format 'chain:resi:resn'."""
     chain_str = str(chain).strip()
-    resn_str = "" if resn is None else str(resn).strip()
+    resn_str = str(resn).strip()
     return f"{chain_str}:{int(resi)}:{resn_str}"
 
 
@@ -353,7 +353,7 @@ def build_sites_biotite(
         if not _residue_ok(resname, is_protein, include_water, include_ligands):
             continue
 
-        residue_id = res_key(chain_id, resi, resname)
+        residue_key = res_key(chain_id, resi, resname)
         name_to_alt = _index_by_name_alt(base_arr, idxs)
         names_set = set(name_to_alt.keys())
         dtempl, atempl = _donor_acceptor_templates(resname, names_set)
@@ -366,7 +366,7 @@ def build_sites_biotite(
                 coord = base_arr.coord[ai].astype(float)
                 acceptors.append(
                     AcceptorSite(
-                        residue_id,
+                        residue_key,
                         resname,
                         chain_id,
                         resi,
@@ -396,7 +396,7 @@ def build_sites_biotite(
 
                 donors.append(
                     DonorSite(
-                        residue_id,
+                        residue_key,
                         resname,
                         chain_id,
                         resi,

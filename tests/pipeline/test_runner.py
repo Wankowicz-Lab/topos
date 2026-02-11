@@ -899,8 +899,8 @@ def test_calculate_neighborhood_features_aggregates_multiple_metrics():
         rows = []
         for _, row in unique.iterrows():
             chain, resi, resn = row['chain'], row['resi_struct'], row['resn_struct']
-            residue_id = res_key(chain, resi, resn)
-            neighbor_keys = neighbor_map.get(residue_id, [])
+            residue_key = res_key(chain, resi, resn)
+            neighbor_keys = neighbor_map.get(residue_key, [])
             rows.append({
                 'chain': chain,
                 'resi_struct': resi,

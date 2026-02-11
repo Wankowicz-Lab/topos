@@ -55,8 +55,8 @@ def count_ala_neighbors(
     rows = []
     for _, row in unique.iterrows():
         chain, resi, resn = row["chain"], row["resi_struct"], row["resn_struct"]
-        residue_id = res_key(chain, resi, resn)
-        neighbor_keys = neighbor_map.get(residue_id, [])
+        residue_key = res_key(chain, resi, resn)
+        neighbor_keys = neighbor_map.get(residue_key, [])
         n_ala = sum(1 for k in neighbor_keys if key_to_resn.get(k) == "ALA")
         rows.append({"chain": chain, "resi_struct": resi, "resn_struct": resn, "n_ala_neighbors": n_ala})
 
