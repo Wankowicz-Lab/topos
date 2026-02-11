@@ -3,7 +3,7 @@ import pandas as pd
 
 from src.metrics import bonds
 from src.pipeline.context import Context
-from src.structure.utils import _res_key
+from src.structure.utils import res_key
 from tests.test_utils import _make_atoms, _make_chain, _make_residue
 
 import biotite.structure as struc
@@ -55,8 +55,8 @@ def test_classify_bond_types():
     arr = struc.concatenate([ala, gly, lig])
 
     bond_results = pd.DataFrame({
-        'residue_key': [_res_key('A', 1, 'ALA'), _res_key('A', 1, 'ALA'), _res_key('A', 2, 'GLY')],
-        'partner_residue_key': [_res_key('A', 2, 'GLY'), _res_key('B', 100, 'LIG'), _res_key('B', 100, 'LIG')],
+        'residue_key': [res_key('A', 1, 'ALA'), res_key('A', 1, 'ALA'), res_key('A', 2, 'GLY')],
+        'partner_residue_key': [res_key('A', 2, 'GLY'), res_key('B', 100, 'LIG'), res_key('B', 100, 'LIG')],
     })
 
     result = bonds.classify_bond_types(bond_results, arr)

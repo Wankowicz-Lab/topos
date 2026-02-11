@@ -13,7 +13,7 @@ import biotite.structure as struc
 from src.pipeline.context import Context
 from src.metrics.registry import register_metric
 from src.databases import pdbtm
-from src.structure.utils import residue_key, is_heavy, get_metadata_cols, is_backbone_atom
+from src.structure.utils import res_key, is_heavy, get_metadata_cols, is_backbone_atom
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +263,7 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
+    res_names = array.res_name[res_starts]
     n_res = len(res_starts)
 
     # Initialize output arrays
@@ -271,7 +272,7 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
     contact_density = np.full(n_res, np.nan, dtype=float)
 
     full_keys = np.array(
-        [residue_key(ch, ri) for ch, ri in zip(chains, res_ids)],
+        [res_key(ch, ri, rn) for ch, ri, rn in zip(chains, res_ids, res_names)],
         dtype=object,
     )
     key_to_idx = {k: i for i, k in enumerate(full_keys)}
@@ -292,7 +293,7 @@ def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataF
 
     # Residue keys for filtered array
     residue_ids = np.array(
-        [residue_key(c, r) for c, r in zip(arr.chain_id, arr.res_id)],
+        [res_key(c, r, rn) for c, r, rn in zip(arr.chain_id, arr.res_id, arr.res_name)],
         dtype=object,
     )
     unique_res = np.unique(residue_ids)

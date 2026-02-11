@@ -10,8 +10,10 @@ def test_calculate_graph_metrics_simple():
     bonds_df = pd.DataFrame({
         "chain": ["A", "A"],
         "resi_struct": [1, 2],
+        "resn_struct": ["ALA", "GLY"],
         "partner_chain": ["A", "A"],
-        "partner_resi": [2, 3]
+        "partner_resi": [2, 3],
+        "partner_resn": ["GLY", "SER"],
     })
     residue_table = pd.DataFrame({
         "chain": ["A", "A", "A"],
@@ -45,8 +47,10 @@ def test_calculate_graph_metrics_disconnected_lcc():
     bonds_df = pd.DataFrame({
         "chain": ["A", "A", "A"],
         "resi_struct": [1, 3, 4],
+        "resn_struct": ["ALA", "SER", "THR"],
         "partner_chain": ["A", "A", "A"],
-        "partner_resi": [2, 4, 5]
+        "partner_resi": [2, 4, 5],
+        "partner_resn": ["GLY", "THR", "VAL"],
     })
     residue_table = pd.DataFrame({
         "chain": ["A"] * 5,
@@ -73,8 +77,10 @@ def test_calculate_graph_metrics_extra_residues_not_in_bonds():
     bonds_df = pd.DataFrame({
         "chain": ["A"],
         "resi_struct": [1],
+        "resn_struct": ["ALA"],
         "partner_chain": ["A"],
-        "partner_resi": [2]
+        "partner_resi": [2],
+        "partner_resn": ["GLY"],
     })
     # Residue 3 is in residue_table but not in graph (isolated)
     residue_table = pd.DataFrame({
@@ -98,8 +104,10 @@ def test_calculate_graph_metrics_centrality_identifies_hub():
     bonds_df = pd.DataFrame({
         "chain": ["A", "A", "A"],
         "resi_struct": [2, 2, 2],
+        "resn_struct": ["GLY", "GLY", "GLY"],
         "partner_chain": ["A", "A", "A"],
-        "partner_resi": [1, 3, 4]
+        "partner_resi": [1, 3, 4],
+        "partner_resn": ["ALA", "SER", "THR"],
     })
     residue_table = pd.DataFrame({
         "chain": ["A", "A", "A", "A"],

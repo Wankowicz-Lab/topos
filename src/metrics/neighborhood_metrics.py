@@ -10,6 +10,7 @@ from __future__ import annotations
 import pandas as pd
 
 from src.pipeline.context import Context
+from src.structure.utils import res_key
 
 
 def count_ala_neighbors(
@@ -42,11 +43,11 @@ def count_ala_neighbors(
     if not all(c in features.columns for c in struct_cols):
         return pd.DataFrame(columns=struct_cols + ["n_ala_neighbors"])
 
-    # One row per (chain, resi_struct) in features
+    # One row per (chain, resi_struct, resn_struct) in features
     unique = features[struct_cols].drop_duplicates()
     key_to_resn = dict(
         zip(
-            (f"{c}:{r}" for c, r in zip(features["chain"], features["resi_struct"])),
+            (res_key(c, r, n) for c, r, n in zip(features["chain"], features["resi_struct"], features["resn_struct"])),
             features["resn_struct"],
         )
     )
@@ -54,8 +55,8 @@ def count_ala_neighbors(
     rows = []
     for _, row in unique.iterrows():
         chain, resi, resn = row["chain"], row["resi_struct"], row["resn_struct"]
-        res_key = f"{chain}:{int(resi)}"
-        neighbor_keys = neighbor_map.get(res_key, [])
+        residue_key = res_key(chain, resi, resn)
+        neighbor_keys = neighbor_map.get(residue_key, [])
         n_ala = sum(1 for k in neighbor_keys if key_to_resn.get(k) == "ALA")
         rows.append({"chain": chain, "resi_struct": resi, "resn_struct": resn, "n_ala_neighbors": n_ala})
 

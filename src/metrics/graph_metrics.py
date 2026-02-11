@@ -11,7 +11,7 @@ import logging
 import networkx as nx
 import pandas as pd
 
-from src.structure.utils import residue_key
+from src.structure.utils import res_key
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +77,8 @@ def calculate_graph_metrics(
     # Build undirected graph
     G = nx.Graph()
     for _, row in bonds_df.iterrows():
-        key1 = residue_key(str(row[c1]), int(row[r1]))
-        key2 = residue_key(str(row[c2]), int(row[r2]))
+        key1 = res_key(row[c1], row[r1], row["resn_struct"])
+        key2 = res_key(row[c2], row[r2], row["partner_resn"])
         if key1 != key2:
             G.add_edge(key1, key2)
 
@@ -124,7 +124,7 @@ def calculate_graph_metrics(
 
     # Build residue keys for residue_table
     result_keys = [
-        residue_key(str(row["chain"]), int(row['resi_struct']))
+        res_key(row["chain"], row["resi_struct"], row["resn_struct"])
         for _, row in result.iterrows()
     ]
 
