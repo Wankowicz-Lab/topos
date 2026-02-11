@@ -15,6 +15,9 @@ def test_b2ar_example(tmp_path):
     runner.run()
     assert runner.features is not None
     assert {'packing_contact_density', 'sasa', 'blosum90'}.issubset(runner.features.columns)
+    assert len(runner.features) == len(runner.context.residue_table), (
+        "features must match residue_table length (no row explosion from merge)"
+    )
 
     output_dir = tmp_path / "b2ar_test_output"
     runner.save_results(output_dir=output_dir)

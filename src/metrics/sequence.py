@@ -95,18 +95,28 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
         DataFrame with 'effect_variance' and 'effect_variance_rank' along with residue metadata.
     """
     
-    # Calculate SEM for each position
-    seq_data = context.residue_table.loc[context.residue_table.mut_info, :]
-    effect_variance = seq_data.groupby('resi_mut')['effect'].sem().reset_index()
-    effect_variance.rename(columns={'effect': 'effect_variance'}, inplace=True)
+    # Calculate SEM for each position from rows that actually have mutation context.
+    seq_data = context.residue_table.loc[context.residue_table.mut_info, :].copy()
+    position_cols = ['chain', 'resi_mut', 'resn_mut']
+    effect_variance = (
+        seq_data
+        .groupby(position_cols, dropna=False)['effect']
+        .sem()
+        .reset_index(name='effect_variance')
+    )
     
     # Rank positions based on variance
     effect_variance['effect_variance_rank'] = effect_variance['effect_variance'].rank(method='min')
     effect_variance['effect_variance_rank'] = effect_variance['effect_variance_rank'] / np.max(effect_variance['effect_variance_rank'])
     
     # Add relevant metadata from original table
-    keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
-    effect_variance = pd.merge(context.residue_table[keep_cols], effect_variance, on='resi_mut', how='left')
+    keep_cols = [col for col in KEEP_COLS if col in seq_data.columns]
+    effect_variance = pd.merge(
+        seq_data[keep_cols],
+        effect_variance,
+        on=position_cols,
+        how='left'
+    )
     
     return effect_variance
 
@@ -366,7 +376,7 @@ def calculate_aa_groupings(context: Context) -> pd.DataFrame:
     # Extract residue table and subset to KEEP_COLS
     residue_table = context.residue_table
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
-    aa_groupings = residue_table[keep_cols].copy()
+    aa_groupings = residue_table.loc[residue_table.mut_info, keep_cols].copy()
     
     # Map wildtype amino acid to group
     aa_groupings['wildtype_aa_group'] = aa_groupings['resn_mut'].map(aa_to_group)
