@@ -413,7 +413,7 @@ def test_runner_run_metric_no_mutations(tmp_path):
 
 
 def test_runner_run(tmp_path):
-    pdb_id = '8smv'
+    pdb_id = '8efo'
 
     myrunner = runner.Runner(
         pdb_id=pdb_id,
@@ -427,9 +427,27 @@ def test_runner_run(tmp_path):
     myrunner.run()
     returned_features = myrunner.features
 
-    # Check that output has same length as residue table and more columns
+    # Check that output has same length as residue table.
     assert len(returned_features) == len(myrunner.context.residue_table)
-    assert len(returned_features.columns) > len(myrunner.context.residue_table.columns)
+
+    # Stage-level smoke checks: verify integration outputs are present and populated.
+    ss_cols = [c for c in returned_features.columns if c.startswith('ss_')]
+    neighborhood_cols = [c for c in returned_features.columns if c.startswith('n_')]
+    ligand_cols = [
+        c for c in returned_features.columns
+        if c.startswith('ligand_') and c.endswith('_interactions')
+    ]
+    graph_cols = [c for c in returned_features.columns if c.startswith('graph_')]
+
+    assert ss_cols, "Expected at least one secondary-structure column (prefix 'ss_')."
+    assert neighborhood_cols, "Expected at least one neighborhood column (prefix 'n_')."
+    assert ligand_cols, "Expected at least one ligand interaction column (pattern 'ligand_*_interactions')."
+    assert graph_cols, "Expected at least one graph column (prefix 'graph_')."
+
+    assert returned_features[ss_cols].notna().any().any(), "Secondary-structure columns are all null."
+    assert returned_features[neighborhood_cols].notna().any().any(), "Neighborhood columns are all null."
+    assert returned_features[ligand_cols].notna().any().any(), "Ligand interaction columns are all null."
+    assert returned_features[graph_cols].notna().any().any(), "Graph columns are all null."
 
 
 def test_runner__merge_features():
@@ -743,7 +761,7 @@ def _make_synthetic_ss_fixture(include_na_ss=False, metric_with_nan=False, aa_gr
 
 
 def test_run_secondary_structure_columns_exist(tmp_path):
-    """run_secondary_structure returns DataFrame with expected columns."""
+    """run_secondary_structure averages features per domain; each residue in a domain gets the same domain mean."""
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
     myrunner = runner.Runner(config_path=config_path)
@@ -753,16 +771,28 @@ def test_run_secondary_structure_columns_exist(tmp_path):
 
     out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
 
-    assert len(out) == 3
-    assert 'ss_domains' in out.columns
-    assert 'ss_length' in out.columns
-    assert 'metric_a' in out.columns
+    # Check that output has expected columns
+    assert len(out) == len(residue_table)
+    assert 'ss_domains' in out.columns and 'ss_domain_length' in out.columns and 'ss_domain_metric_a' in out.columns
     from src.metrics import secondary_structure as ss_metrics
     for g in ss_metrics.AA_GROUPS:
-        assert f'log2_ratio_{g}' in out.columns
+        assert f'ss_domain_log2_aa_group_ratio_{g}' in out.columns
+
+    # Check that each residue in a domain gets the same domain mean
+    feat_with_ss = features.merge(
+        residue_table[['chain', 'resi_struct', 'resn_struct', 'ss_domains']],
+        on=['chain', 'resi_struct', 'resn_struct'],
+    )
+    merged = feat_with_ss.merge(
+        out[['chain', 'resi_struct', 'resn_struct', 'ss_domain_metric_a']],
+        on=['chain', 'resi_struct', 'resn_struct'],
+    )
+    merged['expected'] = merged.groupby(['chain', 'ss_domains'])['metric_a'].transform('mean')
+    assert set(merged['ss_domain_metric_a'].tolist()) == set(merged['expected'].tolist())
+
 
 def test_run_secondary_structure_na_in_metric(tmp_path):
-    """With NA in metric column, output has expected columns and one row per domain."""
+    """With NA in metric column, output has expected columns and one row per residue."""
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
     myrunner = runner.Runner(config_path=config_path)
@@ -771,15 +801,15 @@ def test_run_secondary_structure_na_in_metric(tmp_path):
     myrunner.features = features
 
     out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
-    assert len(out) == 3
-    assert 'metric_a' in out.columns and 'ss_length' in out.columns
+    assert len(out) == len(residue_table)
+    assert 'ss_domain_metric_a' in out.columns and 'ss_domain_length' in out.columns
 
     # Check that metric column is not NA
-    assert not out['metric_a'].isna().all()
+    assert not out['ss_domain_metric_a'].isna().all()
 
 
 def test_run_secondary_structure_na_ss_domains_excluded(tmp_path):
-    """Row with NA ss_domains is excluded; output has expected columns and 3 domain rows."""
+    """Row with NA ss_domains is excluded; output has expected columns and one row per residue."""
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
     myrunner = runner.Runner(config_path=config_path)
@@ -788,8 +818,10 @@ def test_run_secondary_structure_na_ss_domains_excluded(tmp_path):
     myrunner.features = features
 
     out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
-    assert len(out) == 3
-    assert 'ss_domains' in out.columns and 'ss_length' in out.columns and 'metric_a' in out.columns
+    assert len(out) == len(residue_table) - 1 # 1 row with NA ss_domains is excluded
+    assert 'ss_domains' in out.columns and 'ss_domain_length' in out.columns and 'ss_domain_metric_a' in out.columns
+
+
 def test_compute_residue_neighbors_basic():
     """Test _compute_residue_neighbors computes neighbors correctly and stores in extras."""
     myrunner = runner.Runner(

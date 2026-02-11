@@ -34,9 +34,9 @@ def ss_domain_lengths(merged: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Columns: ss_domains, ss_length.
+        Columns: chain, ss_domains, ss_domain_length.
     """
-    return merged.groupby(['chain', 'ss_domains'], as_index=False).size().rename(columns={'size': 'ss_length'})
+    return merged.groupby(['chain', 'ss_domains'], as_index=False).size().rename(columns={'size': 'ss_domain_length'})
 
 
 def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
@@ -55,7 +55,7 @@ def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Columns: chain, ss_domains, log2_ratio_<g> for each g in AA_GROUPS.
+        Columns: chain, ss_domains, ss_domain_log2_ratio_<g> for each g in AA_GROUPS.
     """
     res_key = ['chain', 'resi_struct']
     residues = merged[res_key + ['ss_domains', 'resn_struct']].copy()
@@ -101,7 +101,7 @@ def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
 
         out = out.merge(
             domain_counts[['chain', 'ss_domains', 'log2_ratio']].rename(
-                columns={'log2_ratio': f'log2_ratio_{g}'}
+                columns={'log2_ratio': f'ss_domain_log2_aa_group_ratio_{g}'}
             ),
             on=['chain', 'ss_domains'],
             how='left',

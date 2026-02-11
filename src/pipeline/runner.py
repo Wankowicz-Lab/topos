@@ -25,6 +25,7 @@ import src.metrics.structure
 import src.metrics.bonds
 from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
+from src.metrics.graph_metrics import calculate_graph_metrics
 
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 from src.structure.utils import res_key, is_heavy
@@ -347,7 +348,7 @@ def calculate_protein_ligand_interactions(
         ligand_id = format_ligand_id(lig_chain, lig_res_id, lig_res_name)
         
         # get contacting residues
-        ligand_contacting_df = contacting_residues_df[contacting_residues_df["partner_ligand_id"] == ligand_id]
+        ligand_contacting_df = contacting_residues_df[contacting_residues_df["partner_residue_key"] == ligand_id]
         
         # get contact keys
         contact_keys = set()
@@ -676,6 +677,17 @@ class Runner:
         secondary_structure_features = self.run_secondary_structure(ss_metrics=SS_METRICS)
         self.features = pd.merge(self.features, secondary_structure_features, on=['chain', 'resi_struct', 'resn_struct'], how='left')
 
+        # Run neighborhood metrics
+        self.run_neighborhood(cutoff=5)
+
+        # Run ligand interactions
+        protein_ligand_interactions = calculate_protein_ligand_interactions(self.context, self.context.extras['bonds_df'])
+        self.features = pd.merge(self.features, protein_ligand_interactions, on=['chain', 'resi_struct', 'resn_struct'], how='left')
+
+        # Run graph metrics
+        graph_metrics = calculate_graph_metrics(self.context.extras['bonds_df'], self.context.residue_table)
+        self.features = pd.merge(self.features, graph_metrics, on=['chain', 'resi_struct', 'resn_struct'], how='left')
+
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
         """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
@@ -757,7 +769,7 @@ class Runner:
         Returns
         -------
         pd.DataFrame
-            One row per ss_domain with columns: ss_domains, ss_length, averaged metric
+            One row per ss_domain with columns: chain, ss_domains, ss_domain_length, averaged metric
             columns (only those present), and log2_ratio_<group> for each aa group.
         """
         metrics_to_avg = ss_metrics if ss_metrics is not None else SS_METRICS
@@ -773,6 +785,7 @@ class Runner:
         # Average metrics per ss_domain (skipna=True so NAs are ignored)
         agg_dict = {c: 'mean' for c in cols_to_avg}
         by_domain = merged.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict})
+        by_domain = by_domain.rename(columns={c: f'ss_domain_{c}' for c in cols_to_avg})
 
         # Compute domain-level metrics
         lengths = ss_domain_lengths(merged)
@@ -780,7 +793,10 @@ class Runner:
         log2_df = ss_domain_log2_aa_group_ratios(merged)
         by_domain = by_domain.merge(log2_df, on=['chain', 'ss_domains'], how='left')
 
-        return by_domain
+        # Merge back into rt_subset; exclude rows with NA ss_domains from output
+        rt_subset = rt_subset.dropna(subset=['ss_domains'])
+        output = rt_subset.merge(by_domain, on=['chain', 'ss_domains'], how='left')
+        return output
     
     
     def _compute_residue_neighbors(
