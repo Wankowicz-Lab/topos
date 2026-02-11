@@ -438,16 +438,32 @@ def test_runner_run(tmp_path):
         if c.startswith('ligand_') and c.endswith('_interactions')
     ]
     graph_cols = [c for c in returned_features.columns if c.startswith('graph_')]
+    expected_graph_cols = {
+        f'graph_{bond_type}_{metric_col}'
+        for bond_type in ['all', 'vdw_contact', 'hbond']
+        for metric_col in [
+            'graph_betweenness_centrality',
+            'graph_closeness_centrality',
+            'graph_eigenvector_centrality',
+            'graph_core_number',
+            'graph_community_id',
+            'graph_in_lcc',
+        ]
+    }
 
     assert ss_cols, "Expected at least one secondary-structure column (prefix 'ss_')."
     assert neighborhood_cols, "Expected at least one neighborhood column (prefix 'n_')."
     assert ligand_cols, "Expected at least one ligand interaction column (pattern 'ligand_*_interactions')."
     assert graph_cols, "Expected at least one graph column (prefix 'graph_')."
+    assert expected_graph_cols.issubset(set(returned_features.columns.tolist())), (
+        "Expected graph columns from all/vdw_contact/hbond graph metric passes."
+    )
 
     assert returned_features[ss_cols].notna().any().any(), "Secondary-structure columns are all null."
     assert returned_features[neighborhood_cols].notna().any().any(), "Neighborhood columns are all null."
     assert returned_features[ligand_cols].notna().any().any(), "Ligand interaction columns are all null."
-    assert returned_features[graph_cols].notna().any().any(), "Graph columns are all null."
+    all_graph_cols = [c for c in returned_features.columns if c.startswith('graph_all_')]
+    assert returned_features[all_graph_cols].notna().any().any(), "graph_all_* columns are all null."
 
 
 def test_runner__merge_features():

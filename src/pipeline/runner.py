@@ -702,14 +702,25 @@ class Runner:
         )
 
         # Run graph metrics
-        graph_metrics = calculate_graph_metrics(self.context.extras['bonds_df'], self.context.residue_table)
-        self.features = pd.merge(
-            self.features,
-            graph_metrics,
-            on=merge_cols,
-            how='left',
-            validate='many_to_one',
-        )
+        bond_types = ['all', 'vdw_contact', 'hbond']
+        for bond_type in bond_types:
+            if bond_type == 'all':
+                bonds_df = self.context.extras['bonds_df']
+            else:
+                bonds_df = self.context.extras['bonds_df'][self.context.extras['bonds_df']['bond_type'] == bond_type]
+            if len(bonds_df) == 0:
+                continue
+            graph_metrics = calculate_graph_metrics(bonds_df, self.context.residue_table)
+
+            graph_metric_columns = [c for c in graph_metrics.columns if c.startswith('graph_')]
+            graph_metrics.rename(columns={c: f'graph_{bond_type}_{c}' for c in graph_metric_columns}, inplace=True)
+            self.features = pd.merge(
+                self.features,
+                graph_metrics,
+                on=merge_cols,
+                how='left',
+                validate='many_to_one',
+            )
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
