@@ -311,6 +311,11 @@ def calculate_protein_ligand_interactions(
         (values: "contact", "binding site", "second shell", or NaN). If no ligands
         found, returns residue_table unchanged.
     """
+    merge_cols = ["chain", "resi_struct", "resn_struct"]
+    out = context.residue_table.loc[
+        context.residue_table.resi_struct.notna(), merge_cols
+    ].drop_duplicates(subset=merge_cols).reset_index(drop=True)
+
     arr = context.array
     if isinstance(arr, struc.AtomArrayStack):
         arr = arr[0]
@@ -319,7 +324,7 @@ def calculate_protein_ligand_interactions(
         logger.warning(
             "No ligands found (hetero atoms absent or all filtered); skipping protein-ligand interaction analysis."
         )
-        return context.residue_table.copy()
+        return out
 
     # Protein atoms (amino acids only)
     protein = context.aa
@@ -340,9 +345,6 @@ def calculate_protein_ligand_interactions(
     # create protein cell list
     cell_size = max(ligand_radius, second_shell_cutoff) + 0.01
     protein_cell = struc.CellList(protein, cell_size=cell_size)
-    out = context.residue_table.copy()
-    out = out.loc[out.resi_struct.notna(), :]
-
     # iterate over ligands
     for (lig_chain, lig_res_id, lig_res_name) in ligands:
         # get ligand id
@@ -674,20 +676,40 @@ class Runner:
         # Run metrics
         self.features = self.run_metrics(metrics=metrics, mutations=mutations)
 
+        merge_cols = ['chain', 'resi_struct', 'resn_struct']
+
         # Run secondary structure metrics
         secondary_structure_features = self.run_secondary_structure(ss_metrics=SS_METRICS)
-        self.features = pd.merge(self.features, secondary_structure_features, on=['chain', 'resi_struct', 'resn_struct'], how='left')
+        self.features = pd.merge(
+            self.features,
+            secondary_structure_features,
+            on=merge_cols,
+            how='left',
+            validate='many_to_one',
+        )
 
         # Run neighborhood metrics
         self.run_neighborhood(cutoff=5)
 
         # Run ligand interactions
         protein_ligand_interactions = calculate_protein_ligand_interactions(self.context, self.context.extras['bonds_df'])
-        self.features = pd.merge(self.features, protein_ligand_interactions, on=['chain', 'resi_struct', 'resn_struct'], how='left')
+        self.features = pd.merge(
+            self.features,
+            protein_ligand_interactions,
+            on=merge_cols,
+            how='left',
+            validate='many_to_one',
+        )
 
         # Run graph metrics
         graph_metrics = calculate_graph_metrics(self.context.extras['bonds_df'], self.context.residue_table)
-        self.features = pd.merge(self.features, graph_metrics, on=['chain', 'resi_struct', 'resn_struct'], how='left')
+        self.features = pd.merge(
+            self.features,
+            graph_metrics,
+            on=merge_cols,
+            how='left',
+            validate='many_to_one',
+        )
 
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
@@ -896,7 +918,7 @@ class Runner:
         merge_cols = ["chain", "resi_struct", "resn_struct"]
         
         self.features = pd.merge(
-            self.features, neighborhood_df, on=merge_cols, how="left"
+            self.features, neighborhood_df, on=merge_cols, how="left", validate="many_to_one"
         )
 
 
