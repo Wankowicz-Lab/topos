@@ -341,6 +341,7 @@ def calculate_protein_ligand_interactions(
     cell_size = max(ligand_radius, second_shell_cutoff) + 0.01
     protein_cell = struc.CellList(protein, cell_size=cell_size)
     out = context.residue_table.copy()
+    out = out.loc[out.resi_struct.notna(), :]
 
     # iterate over ligands
     for (lig_chain, lig_res_id, lig_res_name) in ligands:
