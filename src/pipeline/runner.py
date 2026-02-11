@@ -959,9 +959,8 @@ class Runner:
         self.features.to_csv(merged_path, index=False)
 
         # Save metadata from residue table
-        metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info'] +
-                         (['resm'] if self.context.config.mutation_data_path is not None else []) +
-                         (['pdbtm_region', 'pdbtm_region_detailed'] if self.context.config.membrane_protein else []))
+        metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info', 'ss_domains', 'ss_group'] +
+                         (['resm'] if self.context.config.mutation_data_path is not None else []))
 
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{prefix}_metadata.csv"
