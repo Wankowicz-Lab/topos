@@ -10,7 +10,7 @@ def test_b2ar_example(tmp_path):
     )
 
     assert runner.context.extras['mutation_data'] is not None
-    assert {'resi_struct', 'resi_mut', 'pdbtm_region'}.issubset(runner.context.residue_table.columns)
+    assert {'resi_struct', 'resi_mut', 'ss_domains'}.issubset(runner.context.residue_table.columns)
 
     runner.run()
     assert runner.features is not None
@@ -33,5 +33,5 @@ def test_b2ar_example(tmp_path):
     saved_metadata = pd.read_csv(output_dir / "4LDE_metadata.csv")
     assert 'resi_struct' in saved_metadata.columns
     assert 'resi_mut' in saved_metadata.columns
-    assert 'pdbtm_region' in saved_metadata.columns
+    assert 'ss_domains' in saved_metadata.columns
     assert len(saved_metadata) > 200
