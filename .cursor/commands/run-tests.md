@@ -59,11 +59,15 @@ pytest tests/sequence/test_utils.py -v -x
 
 ### Step 5: Run Full Test Suite
 
-**ONLY AFTER** all tests from Step 3 are passing, run the complete test suite:
+**ONLY AFTER** all tests from Step 3 are passing, run the complete test suite.
+
+The full suite includes tests that fetch structures from RCSB (files.rcsb.org) and PDBTM (pdbtm.unitmp.org). **Request network permissions** when running the full suite so these tests do not fail with `ConnectionError` or `NameResolutionError`:
 
 ```bash
 pytest tests/ -v
 ```
+
+Run this command with **network access enabled** (e.g. `required_permissions: ["network"]` or `full_network` in Cursor) so that tests in `tests/pipeline/test_runner.py`, `tests/pipeline/test_examples.py`, `tests/databases/test_pdbtm.py`, and `tests/structure/test_structure_context.py` that use `pdb_id` to download from RCSB/PDBTM can succeed.
 
 If the full suite reveals failures in unrelated tests, investigate and fix them as needed.
 
