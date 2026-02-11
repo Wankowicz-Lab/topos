@@ -22,6 +22,7 @@ from typing import List, Optional, Dict, Any, Tuple
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
 import src.metrics.structure
+import src.metrics.bonds
 from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
 
@@ -671,6 +672,10 @@ class Runner:
         # Run metrics
         self.features = self.run_metrics(metrics=metrics, mutations=mutations)
 
+        # Run secondary structure metrics
+        secondary_structure_features = self.run_secondary_structure(ss_metrics=SS_METRICS)
+        self.features = pd.merge(self.features, secondary_structure_features, on=['chain', 'resi_struct', 'resn_struct'], how='left')
+
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
         """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
@@ -767,7 +772,7 @@ class Runner:
 
         # Average metrics per ss_domain (skipna=True so NAs are ignored)
         agg_dict = {c: 'mean' for c in cols_to_avg}
-        by_domain = merged.groupby('ss_domains', as_index=False).agg({**agg_dict})
+        by_domain = merged.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict})
 
         # Compute domain-level metrics
         lengths = ss_domain_lengths(merged)
@@ -776,6 +781,8 @@ class Runner:
         by_domain = by_domain.merge(log2_df, on='ss_domains', how='left')
 
         return by_domain
+    
+    
     def _compute_residue_neighbors(
         self, cutoff: float, extras_key: str = 'residue_neighbors'
     ) -> Dict[str, List[str]]:
