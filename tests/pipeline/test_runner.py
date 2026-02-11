@@ -430,7 +430,7 @@ def test_runner_run(tmp_path):
     # Check that output has same length as residue table.
     assert len(returned_features) == len(myrunner.context.residue_table)
 
-    # Stage-level smoke checks: verify integration outputs are present and populated.
+    # Verify integration outputs are present and populated.
     ss_cols = [c for c in returned_features.columns if c.startswith('ss_')]
     neighborhood_cols = [c for c in returned_features.columns if c.startswith('n_')]
     ligand_cols = [
