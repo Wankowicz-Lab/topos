@@ -22,8 +22,10 @@ from typing import List, Optional, Dict, Any, Tuple
 # import files containing metrics to register them in _REGISTRY
 import src.metrics.sequence
 import src.metrics.structure
+import src.metrics.bonds
 from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
+from src.metrics.graph_metrics import calculate_graph_metrics
 
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 from src.structure.utils import res_key, is_heavy
@@ -286,16 +288,16 @@ def calculate_protein_ligand_interactions(
     second_shell_cutoff of those (second shell). Adds one column per ligand, e.g.
     ligand_<chain>_<res_id>_<resn>_interactions.
 
-    contacting_residues_df must include partner_ligand_id in the canonical format
-    produced by format_ligand_id (e.g. "A:1:ATP") so rows match ligands.
+    contacting_residues_df must include partner_residue_key in the canonical format
+    produced by format_ligand_id (e.g. "B:1:ALA") so rows match ligands.
 
     Parameters
     ----------
     context : Context
         Pipeline context (structure, config, residue_table).
     contacting_residues_df : pd.DataFrame
-        DataFrame with columns chain, resi_struct, resn_struct, and partner_ligand_id.
-        partner_ligand_id must be in the canonical format from format_ligand_id for matching.
+        DataFrame with columns chain, resi_struct, resn_struct, and partner_residue_key.
+        partner_residue_key must be in the canonical format from format_ligand_id for matching.
     ligand_radius : float, optional
         Max distance (Å) from any ligand atom to a protein residue for binding site.
         Default is 4.5.
@@ -309,6 +311,11 @@ def calculate_protein_ligand_interactions(
         (values: "contact", "binding site", "second shell", or NaN). If no ligands
         found, returns residue_table unchanged.
     """
+    merge_cols = ["chain", "resi_struct", "resn_struct"]
+    out = context.residue_table.loc[
+        context.residue_table.resi_struct.notna(), merge_cols
+    ].drop_duplicates(subset=merge_cols).reset_index(drop=True)
+
     arr = context.array
     if isinstance(arr, struc.AtomArrayStack):
         arr = arr[0]
@@ -317,7 +324,7 @@ def calculate_protein_ligand_interactions(
         logger.warning(
             "No ligands found (hetero atoms absent or all filtered); skipping protein-ligand interaction analysis."
         )
-        return context.residue_table.copy()
+        return out
 
     # Protein atoms (amino acids only)
     protein = context.aa
@@ -338,15 +345,13 @@ def calculate_protein_ligand_interactions(
     # create protein cell list
     cell_size = max(ligand_radius, second_shell_cutoff) + 0.01
     protein_cell = struc.CellList(protein, cell_size=cell_size)
-    out = context.residue_table.copy()
-
     # iterate over ligands
     for (lig_chain, lig_res_id, lig_res_name) in ligands:
         # get ligand id
         ligand_id = format_ligand_id(lig_chain, lig_res_id, lig_res_name)
         
         # get contacting residues
-        ligand_contacting_df = contacting_residues_df[contacting_residues_df["partner_ligand_id"] == ligand_id]
+        ligand_contacting_df = contacting_residues_df[contacting_residues_df["partner_residue_key"] == ligand_id]
         
         # get contact keys
         contact_keys = set()
@@ -671,6 +676,53 @@ class Runner:
         # Run metrics
         self.features = self.run_metrics(metrics=metrics, mutations=mutations)
 
+        merge_cols = ['chain', 'resi_struct', 'resn_struct']
+
+        # Run secondary structure metrics
+        secondary_structure_features = self.run_secondary_structure(ss_metrics=SS_METRICS)
+        self.features = pd.merge(
+            self.features,
+            secondary_structure_features,
+            on=merge_cols,
+            how='left',
+            validate='many_to_one',
+        )
+
+        # Run neighborhood metrics
+        self.run_neighborhood(cutoff=5)
+
+        # Run ligand interactions
+        protein_ligand_interactions = calculate_protein_ligand_interactions(self.context, self.context.extras['bonds_df'])
+        self.features = pd.merge(
+            self.features,
+            protein_ligand_interactions,
+            on=merge_cols,
+            how='left',
+            validate='many_to_one',
+        )
+
+        # Run graph metrics
+        bond_types = ['all', 'vdw_contact', 'hbond']
+        for bond_type in bond_types:
+            if bond_type == 'all':
+                bonds_df = self.context.extras['bonds_df']
+            else:
+                bonds_df = self.context.extras['bonds_df'][self.context.extras['bonds_df']['bond_type'] == bond_type]
+            if len(bonds_df) == 0:
+                continue
+            bonds_df = bonds_df.loc[bonds_df.protein_protein, :]
+            graph_metrics = calculate_graph_metrics(bonds_df, self.context.residue_table)
+
+            graph_metric_columns = [c for c in graph_metrics.columns if c.startswith('graph_')]
+            graph_metrics.rename(columns={c: f'graph_{bond_type}_{c}' for c in graph_metric_columns}, inplace=True)
+            self.features = pd.merge(
+                self.features,
+                graph_metrics,
+                on=merge_cols,
+                how='left',
+                validate='many_to_one',
+            )
+
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
         """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
@@ -752,7 +804,7 @@ class Runner:
         Returns
         -------
         pd.DataFrame
-            One row per ss_domain with columns: ss_domains, ss_length, averaged metric
+            One row per residue with columns: chain, ss_domains, ss_domain_length, averaged metric
             columns (only those present), and log2_ratio_<group> for each aa group.
         """
         metrics_to_avg = ss_metrics if ss_metrics is not None else SS_METRICS
@@ -762,20 +814,27 @@ class Runner:
         rt_subset = self.context.residue_table[merge_cols + ['ss_domains']].drop_duplicates(merge_cols)
         merged = pd.merge(self.features, rt_subset, on=merge_cols, how='left')
         merged = merged.dropna(subset=['ss_domains'])
+        merged = merged.drop_duplicates(subset=merge_cols)
 
         cols_to_avg = [c for c in metrics_to_avg if c in merged.columns]
 
         # Average metrics per ss_domain (skipna=True so NAs are ignored)
         agg_dict = {c: 'mean' for c in cols_to_avg}
-        by_domain = merged.groupby('ss_domains', as_index=False).agg({**agg_dict})
+        by_domain = merged.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict})
+        by_domain = by_domain.rename(columns={c: f'ss_domain_{c}' for c in cols_to_avg})
 
         # Compute domain-level metrics
         lengths = ss_domain_lengths(merged)
-        by_domain = by_domain.merge(lengths, on='ss_domains', how='left')
+        by_domain = by_domain.merge(lengths, on=['chain', 'ss_domains'], how='left')
         log2_df = ss_domain_log2_aa_group_ratios(merged)
-        by_domain = by_domain.merge(log2_df, on='ss_domains', how='left')
+        by_domain = by_domain.merge(log2_df, on=['chain', 'ss_domains'], how='left')
 
-        return by_domain
+        # Merge back into rt_subset; exclude rows with NA ss_domains from output
+        rt_subset = rt_subset.dropna(subset=['ss_domains'])
+        output = rt_subset.merge(by_domain, on=['chain', 'ss_domains'], how='left')
+        return output
+    
+    
     def _compute_residue_neighbors(
         self, cutoff: float, extras_key: str = 'residue_neighbors'
     ) -> Dict[str, List[str]]:
@@ -872,7 +931,7 @@ class Runner:
         merge_cols = ["chain", "resi_struct", "resn_struct"]
         
         self.features = pd.merge(
-            self.features, neighborhood_df, on=merge_cols, how="left"
+            self.features, neighborhood_df, on=merge_cols, how="left", validate="many_to_one"
         )
 
 
@@ -913,9 +972,8 @@ class Runner:
         self.features.to_csv(merged_path, index=False)
 
         # Save metadata from residue table
-        metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info'] +
-                         (['resm'] if self.context.config.mutation_data_path is not None else []) +
-                         (['pdbtm_region', 'pdbtm_region_detailed'] if self.context.config.membrane_protein else []))
+        metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info', 'ss_domains', 'ss_group'] +
+                         (['resm'] if self.context.config.mutation_data_path is not None else []))
 
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{prefix}_metadata.csv"

@@ -214,8 +214,8 @@ def test_merge_mutation_scores(tmp_path):
     # Create a residue_table
     residue_table = pd.DataFrame({'chain': ['A', 'A', 'A', 'A', 'B'], 'resi': [1, 2, 3, 4, 1],
                                   'resn': ['LEU', 'THR', 'GLU', 'ASP', 'TYR'],
-                                  'pdbtm_region': ['TM1', 'TM1', 'TM1', 'TM1', 'TM1'],
-                                  'pdbtm_region_detailed': ['TM1_start', 'TM1_mid', 'TM1_mid', 'TM1_end', 'TM1_start']})
+                                  'ss_group': ['TM1', 'TM1', 'TM1', 'TM1', 'TM1'],
+                                  'ss_domains': ['TM1_start', 'TM1_mid', 'TM1_mid', 'TM1_end', 'TM1_start']})
 
     # Merge using the function
     with warnings.catch_warnings(record=True) as w:
@@ -230,6 +230,6 @@ def test_merge_mutation_scores(tmp_path):
 
         assert len(merged_df) == 8 # 1 row for each mutant, plus 1 for residue in chain B
         assert set(merged_df.columns) == {'resn_struct', 'resi_struct', 'resn_mut', 'resi_mut', 'resm', 'type',
-                                          'effect', 'chain', 'mut_info', 'struct_info', 'pdbtm_region', 'pdbtm_region_detailed', 'align_pos'}
+                                          'effect', 'chain', 'mut_info', 'struct_info', 'ss_group', 'ss_domains', 'align_pos'}
         assert merged_df['mut_info'].tolist() == [False, True, True, True, True, True, True, True]
         assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True]

@@ -45,10 +45,11 @@ def count_ala_neighbors(
 
     # One row per (chain, resi_struct, resn_struct) in features
     unique = features[struct_cols].drop_duplicates()
+    unique = unique.loc[unique.resi_struct.notna(), :]
     key_to_resn = dict(
         zip(
-            (res_key(c, r, n) for c, r, n in zip(features["chain"], features["resi_struct"], features["resn_struct"])),
-            features["resn_struct"],
+            (res_key(c, r, n) for c, r, n in zip(unique["chain"], unique["resi_struct"], unique["resn_struct"])),
+            unique["resn_struct"],
         )
     )
 

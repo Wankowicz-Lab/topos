@@ -51,13 +51,14 @@ def calculate_graph_metrics(
         Residues not in the largest connected component receive NaN for centrality
         metrics; graph_in_lcc is False for them.
     """
+    merge_cols = ['chain', 'resi_struct', 'resn_struct']
     result = residue_table.copy()
 
     # Remove residues without structural information
     result = result[result['struct_info']]
 
-    # Subset to relevant output columns
-    result = result[['chain', 'resi_struct', 'resn_struct']]
+    # Subset to one row per structural residue
+    result = result[merge_cols].drop_duplicates(subset=merge_cols).reset_index(drop=True)
 
     # Initialize metric columns with NaN
     metric_cols = [
