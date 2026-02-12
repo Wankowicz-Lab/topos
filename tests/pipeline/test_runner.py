@@ -805,7 +805,7 @@ def test_run_secondary_structure_columns_exist(tmp_path):
         on=['chain', 'resi_struct', 'resn_struct'],
     )
     merged['expected'] = merged.groupby(['chain', 'ss_domains'])['metric_a'].transform('mean')
-    assert set(merged['ss_domain_metric_a'].tolist()) == set(merged['expected'].tolist())
+    np.testing.assert_array_equal(merged['ss_domain_metric_a'].values, merged['expected'].values)
 
 
 def test_run_secondary_structure_na_in_metric(tmp_path):
@@ -928,7 +928,7 @@ def test_calculate_neighborhood_features_aggregates_multiple_metrics():
     # TODO: replace this with multiple metrics once we have multiple neighborhood metrics in codebase
     from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
     if len(NEIGHBORHOOD_METRIC_FUNCTIONS) > 1:
-        raise ValueError("Test not implemented")
+        assert False, "Test not implemented"
 
 def test_run_neighborhood_requires_run_first(tmp_path):
     """run_neighborhood must be called after run(); it raises if self.features is missing."""

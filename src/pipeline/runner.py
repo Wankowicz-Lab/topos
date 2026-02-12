@@ -288,16 +288,16 @@ def calculate_protein_ligand_interactions(
     second_shell_cutoff of those (second shell). Adds one column per ligand, e.g.
     ligand_<chain>_<res_id>_<resn>_interactions.
 
-    contacting_residues_df must include partner_ligand_id in the canonical format
-    produced by format_ligand_id (e.g. "A:1:ATP") so rows match ligands.
+    contacting_residues_df must include partner_residue_key in the canonical format
+    produced by format_ligand_id (e.g. "B:1:ALA") so rows match ligands.
 
     Parameters
     ----------
     context : Context
         Pipeline context (structure, config, residue_table).
     contacting_residues_df : pd.DataFrame
-        DataFrame with columns chain, resi_struct, resn_struct, and partner_ligand_id.
-        partner_ligand_id must be in the canonical format from format_ligand_id for matching.
+        DataFrame with columns chain, resi_struct, resn_struct, and partner_residue_key.
+        partner_residue_key must be in the canonical format from format_ligand_id for matching.
     ligand_radius : float, optional
         Max distance (Å) from any ligand atom to a protein residue for binding site.
         Default is 4.5.
@@ -710,6 +710,7 @@ class Runner:
                 bonds_df = self.context.extras['bonds_df'][self.context.extras['bonds_df']['bond_type'] == bond_type]
             if len(bonds_df) == 0:
                 continue
+            bonds_df = bonds_df.loc[bonds_df.protein_protein, :]
             graph_metrics = calculate_graph_metrics(bonds_df, self.context.residue_table)
 
             graph_metric_columns = [c for c in graph_metrics.columns if c.startswith('graph_')]
@@ -803,7 +804,7 @@ class Runner:
         Returns
         -------
         pd.DataFrame
-            One row per ss_domain with columns: chain, ss_domains, ss_domain_length, averaged metric
+            One row per residue with columns: chain, ss_domains, ss_domain_length, averaged metric
             columns (only those present), and log2_ratio_<group> for each aa group.
         """
         metrics_to_avg = ss_metrics if ss_metrics is not None else SS_METRICS
@@ -813,6 +814,7 @@ class Runner:
         rt_subset = self.context.residue_table[merge_cols + ['ss_domains']].drop_duplicates(merge_cols)
         merged = pd.merge(self.features, rt_subset, on=merge_cols, how='left')
         merged = merged.dropna(subset=['ss_domains'])
+        merged = merged.drop_duplicates(subset=merge_cols)
 
         cols_to_avg = [c for c in metrics_to_avg if c in merged.columns]
 

@@ -55,7 +55,7 @@ def ss_domain_log2_aa_group_ratios(merged: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Columns: chain, ss_domains, ss_domain_log2_ratio_<g> for each g in AA_GROUPS.
+        Columns: chain, ss_domains, ss_domain_log2_aa_group_ratio_<g> for each g in AA_GROUPS.
     """
     res_key = ['chain', 'resi_struct']
     residues = merged[res_key + ['ss_domains', 'resn_struct']].copy()
