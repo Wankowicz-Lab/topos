@@ -41,11 +41,8 @@ def test_runner_initialization_from_config(tmp_path):
     assert base_runner.context.config.mutation_data_path is None
     assert base_runner.context.config.name == 'test_protein'
 
-    with pytest.raises(ValueError, match="Either pdb_id or config_path must be provided."):
+    with pytest.raises(ValueError, match="Either pdb_id, pdb_path, or config_path must be provided."):
         _ = runner.Runner()
-
-    with pytest.raises(ValueError, match="Either name or config_path must be provided."):
-        _ = runner.Runner(pdb_id='test')
 
 
 def test_runner_initialization_altloc_policy(tmp_path):
@@ -294,21 +291,21 @@ def test_runner__merge_config(tmp_path):
     assert merged_config.mutation_data_path is None
     assert merged_config.aaindex_path == aaindex_file_path
 
-    # Test missing pdb_id
+    # Test missing pdb_id and pdb_path
     empty_config = Config(name='test')
-    with pytest.raises(ValueError, match="'pdb_id' must be provided"):
+    with pytest.raises(ValueError, match="Either 'pdb_id' or 'pdb_path' must be provided"):
         myrunner._merge_config(base=empty_config, overrides={})
-    with pytest.raises(ValueError, match="'pdb_id' must be provided"):
+    with pytest.raises(ValueError, match="Either 'pdb_id' or 'pdb_path' must be provided"):
         myrunner._merge_config(base=empty_config,
                                overrides={'membrane_protein': True})
 
-    # Test missing name
+    # Test that name is auto-derived from pdb_id when not explicitly provided
     empty_config = Config(pdb_id='1abc')
-    with pytest.raises(ValueError, match="'name' must be provided"):
-        myrunner._merge_config(base=empty_config, overrides={})
-    with pytest.raises(ValueError, match="'name' must be provided"):
-        myrunner._merge_config(base=empty_config,
-                               overrides={'membrane_protein': True})
+    merged = myrunner._merge_config(base=empty_config, overrides={})
+    assert merged.name == '1abc'
+    merged2 = myrunner._merge_config(base=empty_config,
+                                     overrides={'membrane_protein': True})
+    assert merged2.name == '1abc'
 
 
 

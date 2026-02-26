@@ -1,8 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import tomli
@@ -445,12 +446,12 @@ class Runner:
     def __post_init__(self):
         logger.info("Initializing pipeline")
 
-        # Ensure that either pdb_id or config_path is provided
-        if self.pdb_id is None and self.config_path is None:
-            raise ValueError("Either pdb_id or config_path must be provided.")
+        # Ensure that either pdb_id, pdb_path, or config_path is provided
+        if self.pdb_id is None and self.pdb_path is None and self.config_path is None:
+            raise ValueError("Either pdb_id, pdb_path, or config_path must be provided.")
 
         # Ensure that either name or config_path is provided
-        if self.name is None and self.config_path is None:
+        if self.name is None and self.config_path is None and self.pdb_id is None and self.pdb_path is None:
             raise ValueError("Either name or config_path must be provided.")
 
         # Create override dictionary from input parameters
@@ -496,9 +497,13 @@ class Runner:
             altloc_policy=config.altloc_policy
         )
 
+        # Track hydrogen presence before any removal
+        self._had_hydrogens: bool = bool(np.any(arr.element == "H"))
+
         # Remove hydrogens if configured
         if config.remove_hydrogens:
-            logger.info("Removing hydrogen atoms")
+            if self._had_hydrogens:
+                logger.info("Removing hydrogen atoms from structure")
             arr = arr[arr.element != "H"]
 
         # create context object
@@ -614,9 +619,18 @@ class Runner:
         base_dict.update(filtered)
 
         if base_dict.get('name') is None:
-            raise ValueError("'name' must be provided either in config file or directly to Runner.")
-        if base_dict.get('pdb_id') is None:
-            raise ValueError("'pdb_id' must be provided either in config file or directly to Runner.")
+            if base_dict.get('pdb_id') is not None:
+                # Use pdb_id as a sensible default name when not provided
+                base_dict['name'] = base_dict['pdb_id']
+            elif base_dict.get('pdb_path') is not None:
+                # Fall back to the structure filename stem
+                base_dict['name'] = Path(base_dict['pdb_path']).stem
+            else:
+                raise ValueError(
+                    "'name' must be provided either in config file or directly to Runner."
+                )
+        if base_dict.get('pdb_id') is None and base_dict.get('pdb_path') is None:
+            raise ValueError("Either 'pdb_id' or 'pdb_path' must be provided (in config file or directly to Runner).")
 
         return Config(**base_dict)
 
@@ -672,7 +686,10 @@ class Runner:
         if not mutations:
             exclude_metrics = metrics_with_tag('sequence')
             metrics = [m for m in metrics if m not in exclude_metrics]
-        
+
+        # Track which metrics were run for log output
+        self._metrics_run: List[str] = list(metrics)
+
         # Run metrics
         self.features = self.run_metrics(metrics=metrics, mutations=mutations)
 
@@ -960,11 +977,12 @@ class Runner:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate prefix
+        # Generate prefix using pdb_id if available, otherwise fall back to name
+        identifier = self.context.config.pdb_id or self.context.config.name
         if output_prefix is not None:
-            prefix = output_prefix + "_" + self.context.config.pdb_id
+            prefix = output_prefix + "_" + identifier
         else:
-            prefix = self.context.config.pdb_id
+            prefix = identifier
 
         # Save features
         logger.info("Saving results")
@@ -978,3 +996,124 @@ class Runner:
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{prefix}_metadata.csv"
         output_df.to_csv(metadata_path, index=False)
+
+        # Save run log
+        log_path = output_dir / f"{prefix}_run_log.txt"
+        self._save_run_log(log_path, merged_path, metadata_path)
+
+
+    def _save_run_log(self, log_path: Path, features_path: Path, metadata_path: Path) -> None:
+        """Write a human-readable run log summarising the pipeline execution.
+
+        Parameters
+        ----------
+        log_path : Path
+            Destination file for the run log.
+        features_path : Path
+            Path to the saved features CSV (recorded in the log).
+        metadata_path : Path
+            Path to the saved metadata CSV (recorded in the log).
+        """
+        cfg = self.context.config
+        lines: List[str] = []
+
+        def section(title: str) -> None:
+            lines.append("")
+            lines.append(title)
+            lines.append("-" * len(title))
+
+        lines.append("biogenesis Run Log")
+        lines.append("=" * 18)
+        lines.append(f"Run Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        if self.config_path is not None:
+            lines.append(f"Configuration File: {self.config_path}")
+
+        # --- Structure ---
+        section("Structure Information")
+        if cfg.pdb_id:
+            lines.append(f"  PDB ID:  {cfg.pdb_id}")
+        if cfg.pdb_path:
+            lines.append(f"  PDB Path: {cfg.pdb_path}")
+        source = "local file" if cfg.pdb_path else "RCSB (downloaded)"
+        lines.append(f"  Source: {source}")
+
+        chains = sorted(self.context.residue_table['chain'].unique().tolist())
+        lines.append(f"  Chains in structure: {', '.join(chains)}")
+
+        if cfg.structural_feature_chains:
+            lines.append(f"  Chains used for structural features: {', '.join(cfg.structural_feature_chains)}")
+        else:
+            lines.append(f"  Chains used for structural features: all ({', '.join(chains)})")
+
+        n_residues = self.context.residue_table['resi_struct'].nunique()
+        lines.append(f"  Unique residue positions: {n_residues}")
+
+        # --- Hydrogens ---
+        section("Hydrogen Handling")
+        lines.append(f"  Hydrogens present in loaded structure: {'Yes' if self._had_hydrogens else 'No'}")
+        lines.append(f"  remove_hydrogens setting: {cfg.remove_hydrogens}")
+        if self._had_hydrogens and cfg.remove_hydrogens:
+            lines.append("  Action: Hydrogens were removed before analysis")
+        elif self._had_hydrogens and not cfg.remove_hydrogens:
+            lines.append("  Action: Hydrogens were retained for analysis")
+        else:
+            lines.append("  Action: No hydrogens present; no removal needed")
+
+        # --- Alternate locations ---
+        section("Alternate Locations")
+        rt = self.context.residue_table
+        has_altlocs = ('altloc' in rt.columns) and rt['altloc'].ne('').any()
+        lines.append(f"  Alternate locations (altlocs) present: {'Yes' if has_altlocs else 'No'}")
+        lines.append(f"  altloc_policy: {cfg.altloc_policy}")
+        if has_altlocs:
+            if cfg.altloc_policy == "highest":
+                lines.append("  Action: Kept only the highest-occupancy conformer per residue")
+            else:
+                lines.append("  Action: All conformers retained (one row per conformer in output)")
+
+        # --- Membrane protein ---
+        section("Membrane Protein Settings")
+        lines.append(f"  membrane_protein: {cfg.membrane_protein}")
+        if cfg.membrane_protein:
+            lines.append(f"  membrane_thickness: {cfg.membrane_thickness} Å (half-thickness)")
+            lines.append("  PDBTM annotation: fetched to orient structure in membrane reference frame")
+            lines.append("  Additional metrics: distance_from_membrane_edge, membrane-aware secondary structure")
+
+        # --- Mutation / DMS data ---
+        section("Mutation / DMS Data")
+        if cfg.mutation_data_path is not None:
+            lines.append(f"  Path: {cfg.mutation_data_path}")
+            lines.append(f"  Chain aligned to: {cfg.mutation_data_chain}")
+            lines.append(f"  Alignment identity cutoff: {cfg.alignment_cutoff}")
+            mut_data = self.context.extras.get('mutation_data')
+            if mut_data is not None:
+                n_mut_rows = len(mut_data)
+                n_positions = mut_data['resi'].nunique() if 'resi' in mut_data.columns else "N/A"
+                lines.append(f"  Total mutation rows loaded: {n_mut_rows}")
+                lines.append(f"  Unique positions: {n_positions}")
+            lines.append("  Sequence metrics: enabled (blosum, aaindex, kidera, effect scores)")
+        else:
+            lines.append("  No mutation/DMS data provided")
+            lines.append("  Sequence metrics: disabled (structure-only mode)")
+
+        # --- Metrics ---
+        section("Metrics Computed")
+        metrics_run = getattr(self, '_metrics_run', [])
+        for m in metrics_run:
+            lines.append(f"  - {m}")
+        lines.append("  - secondary structure domain aggregation")
+        lines.append("  - neighborhood metrics (5 Å cutoff)")
+        lines.append("  - protein-ligand interactions")
+        lines.append("  - graph metrics (all bonds, vdw, hbond)")
+
+        # --- Output ---
+        section("Output Files")
+        lines.append(f"  Features CSV:  {features_path}")
+        lines.append(f"  Metadata CSV:  {metadata_path}")
+        lines.append(f"  Run Log:       {log_path}")
+        if hasattr(self, 'features'):
+            lines.append(f"  Feature rows:  {len(self.features)}")
+            lines.append(f"  Feature columns: {len(self.features.columns)}")
+
+        lines.append("")
+        log_path.write_text("\n".join(lines))
