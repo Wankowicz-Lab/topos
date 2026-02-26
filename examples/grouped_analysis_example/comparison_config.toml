@@ -1,0 +1,66 @@
+# Grouped Analysis Example Config
+# ================================
+# This example uses the 1HCK output CSV (from examples/1HCK_structure_only_example/)
+# duplicated into two "groups" to demonstrate the Comparator API without requiring
+# multiple real structures.
+#
+# REAL USE CASE: Replace the path and label/group entries with features CSVs from
+# multiple structures that share the same sequence (e.g., apo vs holo, different
+# ligand-bound states, crystal vs cryo-EM, mutant vs wild-type backbone).
+#
+# Run this example AFTER running examples/1HCK_structure_only_example/run_example.py
+# to generate the 1HCK_features.csv file.
+
+name = "CDK2_conformational_comparison"
+output_dir = "output/"
+
+# Each [[structures]] block defines one structure to compare.
+# path   : relative (to this TOML) or absolute path to *_features.csv
+# label  : unique human-readable name for this structure
+# group  : group assignment for statistical comparison (all structures in
+#          the same group are treated as replicates of that condition)
+
+[[structures]]
+path = "../1HCK_structure_only_example/output/1HCK_features.csv"
+label = "1HCK_replicate_1"
+group = "apo"
+
+[[structures]]
+path = "../1HCK_structure_only_example/output/1HCK_features.csv"
+label = "1HCK_replicate_2"
+group = "bound"
+
+# -------------------------------------------------------------------
+# Comparison settings
+# -------------------------------------------------------------------
+[comparison]
+# mode: "group"       — compare reference_group vs all other groups
+#        "all_vs_all" — pairwise comparison between every label pair
+mode = "group"
+
+# reference_group: which group to use as the baseline/reference.
+# If omitted, the first group (alphabetically) is used as reference.
+reference_group = "apo"
+
+# residue_key: column used to identify residues (default: resi_struct)
+residue_key = "resi_struct"
+
+# chain: restrict comparison to a single chain. Omit (or set to "") to use all chains.
+# chain = "A"
+
+# -------------------------------------------------------------------
+# Metrics settings
+# -------------------------------------------------------------------
+[metrics]
+# include_categories: which categories of metrics to compare.
+# Options: "structural", "bonds", "graph", "sequence", "ligand", "all"
+# "sequence" metrics (blosum90, AAIndex, kidera) require DMS mutation data
+# and will be absent from structure-only CSVs — they are silently skipped.
+include_categories = ["structural", "graph", "bonds"]
+
+# exclude_columns: specific column names to always exclude from comparison.
+exclude_columns = []
+
+# custom_columns: if provided, OVERRIDES include_categories entirely.
+# Useful for targeted comparisons. Example:
+# custom_columns = ["sasa", "packing_contact_density", "graph_all_graph_betweenness_centrality"]
