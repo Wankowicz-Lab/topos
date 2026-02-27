@@ -469,27 +469,3 @@ and emits Python warnings if:
 These warnings are expected for real-world datasets where the DMS experiment uses a
 slightly different construct than the PDB entry.  They are captured in the run log.
 
----
-
-## Development and Testing
-
-Install with test dependencies:
-
-```bash
-pip install -e ".[test]"
-```
-
-Run the full test suite:
-
-```bash
-pytest tests/ -v
-```
-
-Run tests with coverage:
-
-```bash
-pytest tests/ -v --cov=src --cov-report=term --cov-report=xml
-```
-
-The CI/CD pipeline (GitHub Actions) tests against Python 3.11, 3.12, and 3.13.
-Coverage is reported to Coveralls.
