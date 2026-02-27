@@ -34,7 +34,7 @@ group = "bound"
 # Comparison settings
 # -------------------------------------------------------------------
 [comparison]
-# mode: "group"       — compare reference_group vs all other groups
+# mode: "group"       — compare reference_group vs all other groups (for example mutant v. wildtype)
 #        "all_vs_all" — pairwise comparison between every label pair
 mode = "group"
 
