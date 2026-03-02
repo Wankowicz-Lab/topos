@@ -12,6 +12,32 @@ cd biogenesis
 pip install -e .
 ```
 
+### DSSP requirement for secondary structure
+
+The pipeline uses `mkdssp` when available for secondary-structure annotation, and falls back to `pydssp` if `mkdssp` is not on `PATH`.
+
+Install `mkdssp`:
+
+- macOS (Homebrew):
+```bash
+brew install brewsci/bio/dssp
+```
+- Ubuntu/Debian:
+```bash
+sudo apt-get update
+sudo apt-get install -y dssp
+```
+- Conda:
+```bash
+conda install -c conda-forge dssp
+```
+
+Verify installation:
+```bash
+which mkdssp
+mkdssp --version
+```
+
 ## Quick Start
 Given PDBs and/or mutation information for a given protein, users can use the scripts within here to calculate sequence and/or structural metrics for downstream use. This pipeline produces an output CSV file for each protein containing the chain, residue number, and residue name, along with calculated metrics. If mutation information is provided, these metrics are calculated for each mutation. If PDBs include alternative conformers, metrics can be averaged across the multiple conformers, or each metric can be provided individually for each altloc.  
 

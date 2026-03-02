@@ -18,7 +18,8 @@ dependencies = [
   "lxml",
   "tomli-w",
   "tomli",
-  "pydantic"
+  "pydantic",
+  "pydssp"
 ]
 
 [project.optional-dependencies]

@@ -187,6 +187,32 @@ def test_runner_initialization_overrides_mutation_data(tmp_path):
         )
 
 
+def test_runner_sets_pydssp_backend_when_mkdssp_missing(tmp_path, monkeypatch):
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    mock_ss_df = pd.DataFrame({
+        "chain": ["A"] * len(residues),
+        "resi": [1, 2, 3, 4, 5],
+        "sse": ["c"] * len(residues),
+        "ss_group": ["c_1"] * len(residues),
+    })
+
+    monkeypatch.setattr(runner.shutil, "which", lambda _x: None)
+    monkeypatch.setattr(runner, "get_secondary_structure_annotations", lambda _ctx: mock_ss_df)
+
+    with pytest.warns(UserWarning, match="mkdssp was not found"):
+        myrunner = runner.Runner(
+            pdb_id='test',
+            pdb_path=mmcif_path,
+            name='test_backend',
+            membrane_protein=False
+        )
+
+    assert myrunner.context.extras["ss_backend"] == "pydssp"
+
+
 def test_runner_initialization_mutation_data_incorrect_columns(tmp_path):
     """Test that an appropriate error is raised when column names are incorrect."""
     # Create a mock mutation dataset

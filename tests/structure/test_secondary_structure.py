@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure, make_contiguous_group_labels
 from src.pipeline.context import Context, Config
@@ -17,6 +18,61 @@ def test_get_secondary_structure_annotations():
     assert 'ss_group' in ss_df.columns.tolist()
     assert len(ss_df) == len(aa_list)
     assert all(ss in {'a', 'b', 'c'} for ss in ss_df['sse'].tolist())
+
+
+def test_get_secondary_structure_annotations_uses_mkdssp_backend(monkeypatch):
+    aa_list = random.choices(AA_LIST, k=6)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr, config=Config())
+    context.extras["ss_backend"] = "mkdssp"
+
+    mock_ss_df = pd.DataFrame({
+        "chain": ["A"] * 6,
+        "resi": [1, 2, 3, 4, 5, 6],
+        "sse": ["a", "a", "b", "b", "c", "c"],
+    })
+    mock_dssp_df = pd.DataFrame({
+        "chain": ["A"] * 6,
+        "resi": [1, 2, 3, 4, 5, 6],
+        "dssp_acc": [10, 20, 30, 40, 50, 60],
+    })
+
+    import src.structure.secondary_structure as ss_module
+    monkeypatch.setattr(ss_module, "_annotate_with_mkdssp", lambda _ctx: (mock_ss_df, mock_dssp_df))
+
+    ss_df = get_secondary_structure_annotations(context)
+    assert "ss_group" in ss_df.columns
+    assert "dssp_output" in context.extras
+
+
+def test_get_secondary_structure_annotations_uses_pydssp_backend(monkeypatch):
+    aa_list = random.choices(AA_LIST, k=6)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr, config=Config())
+    context.extras["ss_backend"] = "pydssp"
+    context.extras["dssp_output"] = pd.DataFrame({"dummy": [1]})
+
+    mock_ss_df = pd.DataFrame({
+        "chain": ["A"] * 6,
+        "resi": [1, 2, 3, 4, 5, 6],
+        "sse": ["c"] * 6,
+    })
+
+    import src.structure.secondary_structure as ss_module
+    monkeypatch.setattr(ss_module, "_annotate_with_pydssp", lambda _ctx: mock_ss_df)
+
+    ss_df = get_secondary_structure_annotations(context)
+    assert "ss_group" in ss_df.columns
+    assert "dssp_output" not in context.extras
+
+
+def test_get_secondary_structure_annotations_unknown_backend():
+    aa_list = random.choices(AA_LIST, k=4)
+    arr = _make_chain(aa_list=aa_list, chain_id='A')
+    context = Context(array=arr, config=Config())
+    context.extras["ss_backend"] = "not_a_backend"
+    with pytest.raises(ValueError, match="Unknown secondary-structure backend"):
+        get_secondary_structure_annotations(context)
 
 
 def test_make_contiguous_group_labels():

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
+import shutil
 import numpy as np
 import pandas as pd
 import tomli
@@ -520,6 +521,17 @@ class Runner:
                     )
 
         # Set up df with secondary structure info
+        mkdssp_path = shutil.which("mkdssp")
+        if mkdssp_path is None:
+            warnings.warn(
+                "mkdssp was not found in PATH; falling back to pydssp secondary structure assignment.",
+                UserWarning,
+            )
+            self.context.extras["ss_backend"] = "pydssp"
+        else:
+            self.context.extras["ss_backend"] = "mkdssp"
+            self.context.extras["mkdssp_path"] = mkdssp_path
+
         ss_df = get_secondary_structure_annotations(self.context)
 
         if self.context.config.membrane_protein:
@@ -671,6 +683,9 @@ class Runner:
         mutations = self.context.config.mutation_data_path is not None
         if not mutations:
             exclude_metrics = metrics_with_tag('sequence')
+            metrics = [m for m in metrics if m not in exclude_metrics]
+        if self.context.extras.get("ss_backend") != "mkdssp":
+            exclude_metrics = metrics_with_tag("dssp")
             metrics = [m for m in metrics if m not in exclude_metrics]
         
         # Run metrics

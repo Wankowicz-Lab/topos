@@ -296,4 +296,26 @@ def test_calculate_center_of_mass_distance():
     # Expected distances: ALA=16.0, GLY=1.0, SER=14.0
     expected_distances = np.array([16.0, 1.0, 14.0])
     np.testing.assert_allclose(distances.values, expected_distances, rtol=1e-10)
+
+
+def test_calculate_dssp_metrics_backend_behavior():
+    aa_list = ['ALA', 'GLY', 'SER']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+    context = Context(array=arr)
+
+    # pydssp backend should not allow DSSP metric execution
+    context.extras['ss_backend'] = 'pydssp'
+    with pytest.raises(ValueError, match="dssp_metrics can only run"):
+        metrics.calculate_dssp_metrics(context)
+
+    # mkdssp backend should merge values from extras
+    context.extras['ss_backend'] = 'mkdssp'
+    context.extras['dssp_output'] = pd.DataFrame({
+        'chain': ['A', 'A', 'A'],
+        'resi': [1, 2, 3],
+        'dssp_acc': [11, 22, 33],
+        'dssp_phi': [-60.0, -70.0, -80.0],
+    })
+    out = metrics.calculate_dssp_metrics(context)
+    assert out['dssp_acc'].tolist() == [11, 22, 33]
     
