@@ -417,9 +417,6 @@ def calculate_dssp_metrics(context: Context) -> pd.DataFrame:
 
     merge_cols = ["chain", "resi_struct"]
     dssp_subset = dssp_df.rename(columns={"resi": "resi_struct"})
-    keep_cols = merge_cols + [col for col in DSSP_METRIC_COLUMNS if col in dssp_subset.columns]
-    out = metadata_df.merge(dssp_subset[keep_cols], on=merge_cols, how="left")
-    for col in DSSP_METRIC_COLUMNS:
-        if col not in out.columns:
-            out[col] = np.nan
+    out = metadata_df.merge(dssp_subset[merge_cols + DSSP_METRIC_COLUMNS], on=merge_cols, how="left")
+    
     return out

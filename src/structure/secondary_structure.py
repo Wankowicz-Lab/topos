@@ -91,43 +91,49 @@ def _annotate_with_mkdssp(context: Context) -> tuple[pd.DataFrame, pd.DataFrame]
     dssp_tmp.close()
     dssp_path = Path(dssp_tmp.name)
     rows: list[dict[str, Any]] = []
-    cmd = ["mkdssp", str(pdb_path), str(dssp_path)]
-    subprocess.run(cmd, check=True, capture_output=True, text=True)
+    try:
+        cmd = ["mkdssp", str(pdb_path), str(dssp_path)]
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-    in_table = False
-    for line in dssp_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if line.startswith("  #"):
-            in_table = True
-            continue
-        if not in_table or len(line) < 115:
-            continue
+        in_table = False
+        for line in dssp_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("  #"):
+                in_table = True
+                continue
+            if not in_table or len(line) < 115:
+                continue
 
-        aa = line[13].strip()
-        if aa == "!" or not aa:
-            continue
-        if len(aa) == 1 and aa.islower():
-            aa = "C"
+            aa = line[13].strip()
+            if aa == "!" or not aa:
+                continue
+            if len(aa) == 1 and aa.islower():
+                aa = "C"
 
-        rows.append({
-            "chain": line[11].strip(),
-            "resi": _parse_int(line[5:10]),
-            "resn_dssp": aa,
-            "dssp_sse8": line[16].strip() or "C",
-            "dssp_acc": _parse_int(line[34:38]),
-            "dssp_nh_o_1_relidx": _parse_int(line[38:45]),
-            "dssp_nh_o_1_energy": _parse_float(line[46:50]),
-            "dssp_o_nh_1_relidx": _parse_int(line[50:56]),
-            "dssp_o_nh_1_energy": _parse_float(line[57:61]),
-            "dssp_nh_o_2_relidx": _parse_int(line[61:67]),
-            "dssp_nh_o_2_energy": _parse_float(line[68:72]),
-            "dssp_o_nh_2_relidx": _parse_int(line[72:78]),
-            "dssp_o_nh_2_energy": _parse_float(line[79:83]),
-            "dssp_tco": _parse_float(line[85:91]),
-            "dssp_kappa": _parse_float(line[91:97]),
-            "dssp_alpha": _parse_float(line[97:103]),
-            "dssp_phi": _parse_float(line[103:109]),
-            "dssp_psi": _parse_float(line[109:115]),
-        })
+            rows.append({
+                "chain": line[11].strip(),
+                "resi": _parse_int(line[5:10]),
+                "resn_dssp": aa,
+                "dssp_sse8": line[16].strip() or "C",
+                "dssp_acc": _parse_int(line[34:38]),
+                "dssp_nh_o_1_relidx": _parse_int(line[38:45]),
+                "dssp_nh_o_1_energy": _parse_float(line[46:50]),
+                "dssp_o_nh_1_relidx": _parse_int(line[50:56]),
+                "dssp_o_nh_1_energy": _parse_float(line[57:61]),
+                "dssp_nh_o_2_relidx": _parse_int(line[61:67]),
+                "dssp_nh_o_2_energy": _parse_float(line[68:72]),
+                "dssp_o_nh_2_relidx": _parse_int(line[72:78]),
+                "dssp_o_nh_2_energy": _parse_float(line[79:83]),
+                "dssp_tco": _parse_float(line[85:91]),
+                "dssp_kappa": _parse_float(line[91:97]),
+                "dssp_alpha": _parse_float(line[97:103]),
+                "dssp_phi": _parse_float(line[103:109]),
+                "dssp_psi": _parse_float(line[109:115]),
+            })
+    finally:
+        if dssp_path.exists():
+            dssp_path.unlink()
+        if pdb_path.exists():
+            pdb_path.unlink()
 
     dssp_df = pd.DataFrame(rows)
     dssp_df["sse"] = dssp_df["dssp_sse8"].map(_to_internal_sse)
