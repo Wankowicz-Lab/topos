@@ -1169,3 +1169,4 @@ def test_calculate_protein_ligand_interactions(tmp_path):
     out_skip = runner.calculate_protein_ligand_interactions(myrunner.context, contacting_df)
     assert out_skip.shape[0] == myrunner.context.residue_table.shape[0]
     assert 'ligand_B_1_ALA_interactions' not in out_skip.columns
+
