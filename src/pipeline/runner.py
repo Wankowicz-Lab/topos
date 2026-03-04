@@ -528,6 +528,7 @@ class Runner:
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
+                self.context.aa = self.context.array[struc.filter_amino_acids(self.context.array)]
                 self.context.residue_table = define_membrane_secondary_structure(self.context.residue_table, ss_df)
             except RuntimeError as e:
                 raise RuntimeError(f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. Rerun with membrane_protein=False to calculate soluble secondary structure.")
