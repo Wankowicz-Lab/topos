@@ -956,11 +956,11 @@ def test_calculate_neighborhood_features_neighbor_averages_deterministic():
             self.extras = {'residue_neighbors': neighbor_map}
 
     features = pd.DataFrame({
-        'chain': ['A', 'A', 'A', 'A'],
-        'resi_struct': [1, 2, 3, 4],
-        'resn_struct': ['ALA', 'VAL', 'GLY', 'SER'],
-        'sasa': [1.0, np.nan, 3.0, 10.0],
-        'kyte_doolittle': [2.0, 4.0, 6.0, 8.0],
+        'chain': ['A', 'A', 'A', 'A', 'A'],
+        'resi_struct': [1, 2, 2, 3, 4],
+        'resn_struct': ['ALA', 'VAL', 'VAL', 'GLY', 'SER'],
+        'sasa': [1.0, 5.0, 7.0, 3.0, 10.0],
+        'kyte_doolittle': [2.0, 4.0, 10.0, 6.0, 8.0],
     })
     neighbor_map = {
         'A:1:ALA': ['A:2:VAL', 'A:3:GLY', 'A:999:UNK'],
@@ -976,15 +976,38 @@ def test_calculate_neighborhood_features_neighbor_averages_deterministic():
     )
     result = result.set_index(['chain', 'resi_struct', 'resn_struct'])
 
-    # A:1 neighbors are A:2 (NaN sasa, 4.0 kd) and A:3 (3.0 sasa, 6.0 kd), plus one missing key ignored.
-    assert result.loc[('A', 1, 'ALA'), 'neighborhood_sasa'] == 3.0
-    assert result.loc[('A', 1, 'ALA'), 'neighborhood_kyte_doolittle'] == 5.0
+    # A:2 has two mutation-level rows and is first averaged to sasa=6.0, kd=7.0.
+    # A:1 neighbors are A:2 and A:3 (plus one missing key ignored).
+    assert result.loc[('A', 1, 'ALA'), 'neighborhood_sasa'] == 4.5
+    assert result.loc[('A', 1, 'ALA'), 'neighborhood_kyte_doolittle'] == 6.5
     # A:2 neighbor is A:1
     assert result.loc[('A', 2, 'VAL'), 'neighborhood_sasa'] == 1.0
     # A:3 has no neighbors
     assert pd.isna(result.loc[('A', 3, 'GLY'), 'neighborhood_sasa'])
-    # A:4 neighbor is A:2 with NaN sasa
-    assert pd.isna(result.loc[('A', 4, 'SER'), 'neighborhood_sasa'])
+    # A:4 neighbor is A:2 and should use the residue-level mean of duplicate A:2 rows.
+    assert result.loc[('A', 4, 'SER'), 'neighborhood_sasa'] == 6.0
+
+
+def test_run_secondary_structure_averages_mutation_rows_per_residue(tmp_path):
+    """Secondary-structure averaging should first collapse mutation-level duplicate rows per residue."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+
+    residue_table, features = _make_synthetic_ss_fixture()
+    # Duplicate residue 1 with a second mutation-level value.
+    dup_row = features.loc[features['resi_struct'] == 1].copy()
+    dup_row['metric_a'] = 9.0
+    features = pd.concat([features, dup_row], ignore_index=True)
+
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+    alpha = out[out['ss_domains'] == 'alpha-helix_1']
+
+    # Residue-level means: res1=(1+9)/2=5, res2=2, domain mean=(5+2)/2=3.5.
+    assert np.isclose(alpha['ss_domain_metric_a'].iloc[0], 3.5)
 
 def test_run_neighborhood_requires_run_first(tmp_path):
     """run_neighborhood must be called after run(); it raises if self.features is missing."""

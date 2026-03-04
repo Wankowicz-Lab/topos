@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 # Shared averaging metric list for both ss-domain and neighborhood integrations.
 SS_METRICS: List[str] = METRICS_TO_AVERAGE
-RESIDUE_NEIGHBORS_KEY = "residue_neighbors"
 # Hetero residue sets for find_ligands
 PROTEIN_MODS = {
     "MSE", "SEP", "TPO", "PTR", "HYP", "CSO", "MHO", "KCX", "CSD", "CME", "CSX",
@@ -795,19 +794,25 @@ class Runner:
         rt_subset = self.context.residue_table[merge_cols + ['ss_domains']].drop_duplicates(merge_cols)
         merged = pd.merge(self.features, rt_subset, on=merge_cols, how='left')
         merged = merged.dropna(subset=['ss_domains'])
-        merged = merged.drop_duplicates(subset=merge_cols)
 
         cols_to_avg = [c for c in metrics_to_avg if c in merged.columns]
 
-        # Average metrics per ss_domain (skipna=True so NAs are ignored)
+        # Collapse mutation-level rows into residue-level rows by averaging selected metrics per residue.
+        residue_level_cols = merge_cols + ['ss_domains'] + cols_to_avg
+        residue_level = merged[residue_level_cols].groupby(
+            merge_cols + ['ss_domains'],
+            as_index=False,
+        ).agg({c: 'mean' for c in cols_to_avg}) if cols_to_avg else merged[merge_cols + ['ss_domains']].drop_duplicates()
+
+        # Average residue-level metrics per ss_domain (skipna=True so NAs are ignored).
         agg_dict = {c: 'mean' for c in cols_to_avg}
-        by_domain = merged.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict})
+        by_domain = residue_level.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict}) if cols_to_avg else residue_level[['chain', 'ss_domains']].drop_duplicates()
         by_domain = by_domain.rename(columns={c: f'ss_domain_{c}' for c in cols_to_avg})
 
         # Compute domain-level metrics
-        lengths = ss_domain_lengths(merged)
+        lengths = ss_domain_lengths(residue_level)
         by_domain = by_domain.merge(lengths, on=['chain', 'ss_domains'], how='left')
-        log2_df = ss_domain_log2_aa_group_ratios(merged)
+        log2_df = ss_domain_log2_aa_group_ratios(residue_level)
         by_domain = by_domain.merge(log2_df, on=['chain', 'ss_domains'], how='left')
 
         # Merge back into rt_subset; exclude rows with NA ss_domains from output
@@ -843,7 +848,7 @@ class Runner:
 
         if arr.array_length() == 0:
             mapping = {k: [] for k in full_keys.tolist()}
-            self.context.extras[RESIDUE_NEIGHBORS_KEY] = mapping
+            self.context.extras["residue_neighbors"] = mapping
             return mapping
 
         residue_ids = np.array(
@@ -883,7 +888,7 @@ class Runner:
             if k not in mapping:
                 mapping[k] = []
 
-        self.context.extras[RESIDUE_NEIGHBORS_KEY] = mapping
+        self.context.extras["residue_neighbors"] = mapping
         return mapping
 
 

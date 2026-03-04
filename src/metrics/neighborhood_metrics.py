@@ -13,8 +13,6 @@ from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
 from src.pipeline.context import Context
 from src.structure.utils import res_key
 
-RESIDUE_NEIGHBORS_KEY = "residue_neighbors"
-
 
 def count_ala_neighbors(
     context: Context,
@@ -38,22 +36,14 @@ def count_ala_neighbors(
     pd.DataFrame
         Columns: chain, resi_struct, resn_struct, n_ala_neighbors.
     """
-    neighbor_map = context.extras[RESIDUE_NEIGHBORS_KEY]
+    neighbor_map = context.extras["residue_neighbors"]
 
     struct_cols = ["chain", "resi_struct", "resn_struct"]
-    missing_struct = [c for c in struct_cols if c not in features.columns]
-    if missing_struct:
-        raise ValueError(
-            f"Missing required structural columns for neighborhood metrics: {missing_struct}"
-        )
 
-    # One row per (chain, resi_struct, resn_struct) in features
+    # One row per (chain, resi_struct, resn_struct) in features.
     unique = features[struct_cols].drop_duplicates()
     unique = unique.loc[unique.resi_struct.notna(), :]
-    if unique.empty:
-        raise ValueError(
-            "No structure-level rows found after filtering; upstream feature merge likely failed."
-        )
+    
     key_to_resn = dict(
         zip(
             (res_key(c, r, n) for c, r, n in zip(unique["chain"], unique["resi_struct"], unique["resn_struct"])),
@@ -93,39 +83,37 @@ def average_neighbor_metrics(
     pd.DataFrame
         Columns: chain, resi_struct, resn_struct, and neighborhood_<metric> columns.
     """
-    neighbor_map = context.extras[RESIDUE_NEIGHBORS_KEY]
+    neighbor_map = context.extras["residue_neighbors"]
     struct_cols = ["chain", "resi_struct", "resn_struct"]
-    missing_struct = [c for c in struct_cols if c not in features.columns]
-    if missing_struct:
-        raise ValueError(
-            f"Missing required structural columns for neighborhood metrics: {missing_struct}"
-        )
 
     present_metrics = [c for c in METRICS_TO_AVERAGE if c in features.columns]
-    if not present_metrics:
-        raise ValueError(
-            "No configured averaging metrics found in features; run expected upstream metrics first."
-        )
     
-    # Collapse to one row per residue identity before neighbor traversal.
-    # This preserves many_to_one merging on (chain, resi_struct, resn_struct).
-    unique = features[struct_cols + present_metrics].drop_duplicates(subset=struct_cols)
-    unique = unique.loc[unique.resi_struct.notna(), :].copy()
-    if unique.empty:
-        raise ValueError(
-            "No structure-level rows found after filtering; upstream feature merge likely failed."
-        )
+    # Collapse mutation-level rows to one residue-level row by averaging each metric per residue.
+    residue_level = features.loc[
+        features["resi_struct"].notna(),
+        struct_cols + present_metrics,
+    ].copy()
+    residue_level = residue_level.groupby(struct_cols, as_index=False).agg(
+        {metric: "mean" for metric in present_metrics}
+    )
 
     # Build key -> row-index lookup once so each residue can resolve neighbor rows quickly.
     key_series = pd.Series(
-        [res_key(c, r, n) for c, r, n in zip(unique["chain"], unique["resi_struct"], unique["resn_struct"])],
-        index=unique.index,
+        [
+            res_key(c, r, n)
+            for c, r, n in zip(
+                residue_level["chain"],
+                residue_level["resi_struct"],
+                residue_level["resn_struct"],
+            )
+        ],
+        index=residue_level.index,
         dtype=object,
     )
     key_to_idx = {k: idx for idx, k in key_series.items()}
 
     rows = []
-    for _, row in unique.iterrows():
+    for _, row in residue_level.iterrows():
         residue_key = res_key(row["chain"], row["resi_struct"], row["resn_struct"])
         neighbor_keys = neighbor_map.get(residue_key, [])
         # Ignore neighbors outside filtered/output features (e.g., structural_feature_chains).
@@ -142,7 +130,7 @@ def average_neighbor_metrics(
                 out_row[col_name] = float("nan")
             else:
                 # Pandas mean(skipna=True) matches ss-domain averaging behavior.
-                out_row[col_name] = unique.loc[neighbor_indices, metric].mean(skipna=True)
+                out_row[col_name] = residue_level.loc[neighbor_indices, metric].mean(skipna=True)
         rows.append(out_row)
 
     return pd.DataFrame(rows)
