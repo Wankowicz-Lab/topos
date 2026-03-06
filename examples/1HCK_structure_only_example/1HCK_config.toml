@@ -1,17 +1,13 @@
 # Structure data
-# pdb_path and pdb_id are passed directly in run_example.py via Runner() arguments.
-# You may also set them here:
-#   pdb_id = "1HCK"               # downloads structure from RCSB
-#   pdb_path = "/abs/path/1HCK.pdb"  # loads a local file
-membrane_protein = false
+pdb_id = "1HCK"               # downloads structure from RCSB
+pdb_path = "/abs/path/1HCK.pdb"  # loads a local file
 
 # Structure parameters
 remove_hydrogens = true
+membrane_protein = false
 altloc_policy = "highest"   # "highest" keeps highest-occupancy conformer; "all" keeps all
 
-# Sequence parameters (paths to reference data files bundled with biogenesis)
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path = "data/kidera_factors.csv"
+# Sequence parameters - no sequence data
 
 # Pipeline output
 output_dir = ""
