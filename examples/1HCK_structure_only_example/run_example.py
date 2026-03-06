@@ -43,10 +43,10 @@ OUTPUT_DIR  = _REPO_ROOT / "examples" / "1HCK_structure_only_example" / "output"
 # ---------------------------------------------------------------------------
 print("\n=== biogenesis: Structure-Only Example (1HCK) ===\n")
 
-# Initialise the Runner.
-#   - pdb_path: local PDB file (absolute path passed here overrides any config value)
-#   - config_path: TOML file with structural settings (remove_hydrogens, altloc_policy, etc.)
-#   - name: identifier used for output file names (e.g. "1HCK_features.csv")
+# Initialise Runner from the config file.
+# The config specifies:
+#   pdb_id = "1HCK"                 — structure downloaded from RCSB
+#   membrane_protein = false         — will not run PDBTM orientation + membrane metrics
 #
 # Because no mutation_data_path is set in the config, only structural metrics
 # will be computed — sequence-level metrics are skipped automatically.
