@@ -9,6 +9,7 @@ import pandas as pd
 import tomli
 import warnings
 import logging
+import json
 
 from biotite.database import rcsb
 import biotite.structure as struc
@@ -1003,117 +1004,18 @@ class Runner:
 
 
     def _save_run_log(self, log_path: Path, features_path: Path, metadata_path: Path) -> None:
-        """Write a human-readable run log summarising the pipeline execution.
-
-        Parameters
-        ----------
-        log_path : Path
-            Destination file for the run log.
-        features_path : Path
-            Path to the saved features CSV (recorded in the log).
-        metadata_path : Path
-            Path to the saved metadata CSV (recorded in the log).
-        """
-        cfg = self.context.config
-        lines: List[str] = []
-
-        def section(title: str) -> None:
-            lines.append("")
-            lines.append(title)
-            lines.append("-" * len(title))
-
-        lines.append("biogenesis Run Log")
-        lines.append("=" * 18)
-        lines.append(f"Run Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        if self.config_path is not None:
-            lines.append(f"Configuration File: {self.config_path}")
-
-        # --- Structure ---
-        section("Structure Information")
-        if cfg.pdb_id:
-            lines.append(f"  PDB ID:  {cfg.pdb_id}")
-        if cfg.pdb_path:
-            lines.append(f"  PDB Path: {cfg.pdb_path}")
-        source = "local file" if cfg.pdb_path else "RCSB (downloaded)"
-        lines.append(f"  Source: {source}")
-
-        chains = sorted(self.context.residue_table['chain'].unique().tolist())
-        lines.append(f"  Chains in structure: {', '.join(chains)}")
-
-        if cfg.structural_feature_chains:
-            lines.append(f"  Chains used for structural features: {', '.join(cfg.structural_feature_chains)}")
-        else:
-            lines.append(f"  Chains used for structural features: all ({', '.join(chains)})")
-
-        n_residues = self.context.residue_table['resi_struct'].nunique()
-        lines.append(f"  Unique residue positions: {n_residues}")
-
-        # --- Hydrogens ---
-        section("Hydrogen Handling")
-        lines.append(f"  Hydrogens present in loaded structure: {'Yes' if self._had_hydrogens else 'No'}")
-        lines.append(f"  remove_hydrogens setting: {cfg.remove_hydrogens}")
-        if self._had_hydrogens and cfg.remove_hydrogens:
-            lines.append("  Action: Hydrogens were removed before analysis")
-        elif self._had_hydrogens and not cfg.remove_hydrogens:
-            lines.append("  Action: Hydrogens were retained for analysis")
-        else:
-            lines.append("  Action: No hydrogens present; no removal needed")
-
-        # --- Alternate locations ---
-        section("Alternate Locations")
-        rt = self.context.residue_table
-        has_altlocs = ('altloc' in rt.columns) and rt['altloc'].ne('').any()
-        lines.append(f"  Alternate locations (altlocs) present: {'Yes' if has_altlocs else 'No'}")
-        lines.append(f"  altloc_policy: {cfg.altloc_policy}")
-        if has_altlocs:
-            if cfg.altloc_policy == "highest":
-                lines.append("  Action: Kept only the highest-occupancy conformer per residue")
-            else:
-                lines.append("  Action: All conformers retained (one row per conformer in output)")
-
-        # --- Membrane protein ---
-        section("Membrane Protein Settings")
-        lines.append(f"  membrane_protein: {cfg.membrane_protein}")
-        if cfg.membrane_protein:
-            lines.append(f"  membrane_thickness: {cfg.membrane_thickness} Å (half-thickness)")
-            lines.append("  PDBTM annotation: fetched to orient structure in membrane reference frame")
-            lines.append("  Additional metrics: distance_from_membrane_edge, membrane-aware secondary structure")
-
-        # --- Mutation / DMS data ---
-        section("Mutation / DMS Data")
-        if cfg.mutation_data_path is not None:
-            lines.append(f"  Path: {cfg.mutation_data_path}")
-            lines.append(f"  Chain aligned to: {cfg.mutation_data_chain}")
-            lines.append(f"  Alignment identity cutoff: {cfg.alignment_cutoff}")
-            mut_data = self.context.extras.get('mutation_data')
-            if mut_data is not None:
-                n_mut_rows = len(mut_data)
-                n_positions = mut_data['resi'].nunique() if 'resi' in mut_data.columns else "N/A"
-                lines.append(f"  Total mutation rows loaded: {n_mut_rows}")
-                lines.append(f"  Unique positions: {n_positions}")
-            lines.append("  Sequence metrics: enabled (blosum, aaindex, kidera, effect scores)")
-        else:
-            lines.append("  No mutation/DMS data provided")
-            lines.append("  Sequence metrics: disabled (structure-only mode)")
-
-        # --- Metrics ---
-        section("Metrics Computed")
-        metrics_run = getattr(self, '_metrics_run', [])
-        for m in metrics_run:
-            lines.append(f"  - {m}")
-        lines.append("  - secondary structure domain aggregation")
-        lines.append("  - neighborhood metrics (5 Å cutoff)")
-        lines.append("  - protein-ligand interactions")
-        lines.append("  - graph metrics (all bonds, vdw, hbond)")
-
-        # --- Output ---
-        section("Output Files")
-        lines.append(f"  Features CSV:  {features_path}")
-        lines.append(f"  Metadata CSV:  {metadata_path}")
-        lines.append(f"  Run Log:       {log_path}")
-        if hasattr(self, 'features'):
-            lines.append(f"  Feature rows:  {len(self.features)}")
-            lines.append(f"  Feature columns: {len(self.features.columns)}")
-
-        lines.append("")
-        log_path.write_text("\n".join(lines))
+        log = {
+            "run_date": datetime.now().isoformat(),
+            "config": self.context.config.model_dump(mode="json"),
+            "chains": sorted(self.context.residue_table['chain'].unique().tolist()),
+            "n_residues": int(self.context.residue_table['resi_struct'].nunique()),
+            "had_hydrogens": self._had_hydrogens,
+            "metrics_run": getattr(self, '_metrics_run', []),
+            "feature_rows": len(self.features) if hasattr(self, 'features') else 0,
+            "feature_columns": len(self.features.columns) if hasattr(self, 'features') else 0,
+            "output_files": {
+                "features": str(features_path),
+                "metadata": str(metadata_path),
+            },
+        }
+        log_path.with_suffix(".json").write_text(json.dumps(log, indent=2, default=str))
