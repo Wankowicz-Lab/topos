@@ -349,7 +349,7 @@ def build_sites_biotite(
     acceptors: List[AcceptorSite] = []
 
     for resname, chain_id, resi, idxs, base_arr in _split_by_residue(arr):
-        is_protein = bool(prot_mask[idxs].any())
+        is_protein = bool(prot_mask[idxs].all())
         if not _residue_ok(resname, is_protein, include_water, include_ligands):
             continue
 
