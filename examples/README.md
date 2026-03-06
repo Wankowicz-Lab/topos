@@ -9,48 +9,7 @@ conda activate biogenesis-py311
 
 ---
 
-## Example 1 — Structure only: 1HCK
-
-**Directory**: `examples/1HCK_structure_only_example/`
-
-**Protein**: CDK2/cyclin kinase complex (PDB: 1HCK)
-
-**Input**: Local PDB file (`examples/1HCK.pdb`)
-
-**What it shows**:
-- Loading a local PDB file using `pdb_path`
-- Running all structural metrics (SASA, packing, hydrogen bonds, etc.)
-- No mutation data — sequence-level metrics are skipped automatically
-- The run log records that no hydrogens were present in the file
-
-```bash
-python examples/1HCK_structure_only_example/run_example.py
-```
-
-**Outputs** (written to `examples/1HCK_structure_only_example/output/`):
-
-| File | Description |
-|------|-------------|
-| `1HCK_features.csv` | 294 residues × 68 structural metrics |
-| `1HCK_metadata.csv` | Residue-level structural annotation |
-| `1HCK_run_log.txt` | Human-readable summary of the run |
-
-**Config**: `1HCK_config.toml`
-
-```toml
-# Structure data (pdb_path and name passed in run_example.py)
-membrane_protein = false
-remove_hydrogens = true
-altloc_policy = "highest"
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path  = "data/kidera_factors.csv"
-output_dir   = ""
-output_prefix = ""
-```
-
----
-
-## Example 2 — DMS data + membrane protein: B2AR / 4LDE
+## Example 1 — DMS data + membrane protein: B2AR / 4LDE
 
 **Directory**: `examples/B2AR_DMS_example/`
 
@@ -95,6 +54,46 @@ kidera_path  = "data/kidera_factors.csv"
 output_dir   = "examples/B2AR_DMS_example/output"
 ```
 
+---
+
+## Example 2 — Structure only: 1HCK
+
+**Directory**: `examples/1HCK_structure_only_example/`
+
+**Protein**: CDK2/cyclin kinase complex (PDB: 1HCK)
+
+**Input**: Local PDB file (`examples/1HCK.pdb`)
+
+**What it shows**:
+- Loading a local PDB file using `pdb_path`
+- Running all structural metrics (SASA, packing, hydrogen bonds, etc.)
+- No mutation data — sequence-level metrics are skipped automatically
+- The run log records that no hydrogens were present in the file
+
+```bash
+python examples/1HCK_structure_only_example/run_example.py
+```
+
+**Outputs** (written to `examples/1HCK_structure_only_example/output/`):
+
+| File | Description |
+|------|-------------|
+| `1HCK_features.csv` | 294 residues × 68 structural metrics |
+| `1HCK_metadata.csv` | Residue-level structural annotation |
+| `1HCK_run_log.txt` | Human-readable summary of the run |
+
+**Config**: `1HCK_config.toml`
+
+```toml
+# Structure data (pdb_path and name passed in run_example.py)
+membrane_protein = false
+remove_hydrogens = true
+altloc_policy = "highest"
+aaindex_path = "data/aaindex_parsed_small.csv"
+kidera_path  = "data/kidera_factors.csv"
+output_dir   = ""
+output_prefix = ""
+```
 ---
 
 ## DMS data format
