@@ -227,8 +227,8 @@ def _donor_acceptor_templates(resname: str, names_set: set[str]):
             acceptors.append("O")
         return donors, acceptors
 
-    # mainchain N/O
-    if "N" in names_set:
+    # mainchain N/O — proline N has no H, skip as donor
+    if "N" in names_set and resname3 != "PRO":
         base = "CA" if "CA" in names_set else ("C" if "C" in names_set else None)
         donors.append(("N", base, "H*"))
     if "O" in names_set:
@@ -261,6 +261,19 @@ def _donor_acceptor_templates(resname: str, names_set: set[str]):
         for a in ("ND1", "NE2"):
             if a in names_set:
                 acceptors.append(a)
+
+    # Trp — NE1 is a donor
+    if resname3 == "TRP" and "NE1" in names_set:
+        donors.append(("NE1", "CD1" if "CD1" in names_set else None, "H*"))
+
+    # Cys — SG is a weak donor and acceptor
+    if resname3 == "CYS" and "SG" in names_set:
+        donors.append(("SG", "CB" if "CB" in names_set else None, "H*"))
+        acceptors.append("SG")
+
+    # Met — SD is a weak acceptor
+    if resname3 == "MET" and "SD" in names_set:
+        acceptors.append("SD")
 
     # Asp / Glu
     if resname3 == "ASP":
@@ -349,7 +362,7 @@ def build_sites_biotite(
     acceptors: List[AcceptorSite] = []
 
     for resname, chain_id, resi, idxs, base_arr in _split_by_residue(arr):
-        is_protein = bool(prot_mask[idxs].all())
+        is_protein = bool(prot_mask[idxs].any())
         if not _residue_ok(resname, is_protein, include_water, include_ligands):
             continue
 
@@ -455,6 +468,11 @@ def detect_hbonds(
             if not altloc_compatible(d.altloc, a.altloc):
                 continue
             if d.res_key == a.res_key and d.atom_name == a.atom_name and d.altloc == a.altloc:
+                continue
+            # Skip i±1 and i±2 same-chain backbone-backbone bonds (helix geometry artifacts)
+            if (d.is_backbone and a.is_backbone
+                    and d.chain == a.chain
+                    and abs(int(d.resi) - int(a.resi)) <= 2):
                 continue
 
             DA = float(np.linalg.norm(d.coord_donor - a.coord))
