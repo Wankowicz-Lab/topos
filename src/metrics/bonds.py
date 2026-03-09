@@ -183,11 +183,6 @@ def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Dat
             base_atoms = get_residue_atoms(array, base_chain, base_resi, SALT_BRIDGE_ATOMS[base_resn])
             if len(base_atoms) == 0:
                 continue
-
-            # Exclude adjacent residues if part of the same chain
-            if acid_chain == base_chain:
-                if abs(acid_resi - base_resi) == 1:
-                    continue
             
             # Calculate distance between acid and base atoms
             diff = acid_atoms[:, None, :] - base_atoms[None, :, :]
