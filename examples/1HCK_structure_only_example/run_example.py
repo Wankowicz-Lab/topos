@@ -41,7 +41,6 @@ OUTPUT_DIR  = _REPO_ROOT / "examples" / "1HCK_structure_only_example" / "output"
 # ---------------------------------------------------------------------------
 # Run pipeline
 # ---------------------------------------------------------------------------
-print("\n=== biogenesis: Structure-Only Example (1HCK) ===\n")
 
 # Initialise Runner from the config file.
 # The config specifies:
@@ -56,27 +55,9 @@ runner = Runner(
     name="1HCK",
 )
 
-print("\nStructure loaded.")
-print(f"  PDB file:          {PDB_PATH}")
-print(f"  Chains:            {sorted(runner.context.residue_table['chain'].unique().tolist())}")
-print(f"  Residues:          {runner.context.residue_table['resi_struct'].nunique()}")
-print(f"  Hydrogens in file: {runner._had_hydrogens}")
-print(f"  remove_hydrogens:  {runner.context.config.remove_hydrogens}")
-print(f"  altloc_policy:     {runner.context.config.altloc_policy}")
-print(f"  Membrane protein:  {runner.context.config.membrane_protein}")
-print()
-
 # Run all metrics.  Sequence-level metrics are skipped automatically when
 # no mutation data is provided.
 runner.run()
 
-print(f"\nFeatures computed: {len(runner.features)} rows x {len(runner.features.columns)} columns")
-
 # Save features CSV, metadata CSV, and run log to OUTPUT_DIR
 runner.save_results(output_dir=OUTPUT_DIR)
-
-print(f"\nOutput written to: {OUTPUT_DIR}")
-for f in sorted(OUTPUT_DIR.iterdir()):
-    print(f"  {f.name}")
-
-print("\nDone.")
