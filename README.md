@@ -62,7 +62,6 @@ runner = Runner(
 )
 
 runner.run()                  # compute all structural metrics
-runner.save_results('output') # writes 3 files: _features.csv, _metadata.csv, _run_log.txt
 ```
 
 ### With deep mutational scanning (DMS) data
@@ -73,7 +72,6 @@ from src.pipeline.runner import Runner
 runner = Runner(config_path='examples/B2AR_DMS_example/B2AR_config.toml')
 
 runner.run()
-runner.save_results('output')
 ```
 
 Run the ready-made example scripts from the repository root:
@@ -150,7 +148,6 @@ One row per residue (structure-only mode) or per mutation (DMS mode).
 Contains all computed metrics. See [Output column reference](#output-column-reference).
 
 ### Metadata CSV (`{prefix}_metadata.csv`)
-
 Residue-level structural annotation table:
 
 | Column | Description |
@@ -167,8 +164,6 @@ Residue-level structural annotation table:
 | `resm` | Mutant residue (only present when DMS data provided) |
 
 ### Run log (`{prefix}_run_log.txt`)
-
-A human-readable summary of the run, written automatically by `save_results()`.
 It records:
 
 - **Run date and time**
@@ -180,37 +175,6 @@ It records:
 - **Mutation/DMS data**: file path, chain, alignment cutoff, number of mutations loaded, number of positions covered, whether sequence metrics were enabled
 - **Metrics computed**: full list of metrics that ran
 - **Output file paths** and row/column counts
-
-Example run log snippet:
-
-```
-biogenesis Run Log
-==================
-Run Date: 2026-02-25 12:00:00
-Configuration File: examples/B2AR_DMS_example/B2AR_config.toml
-
-Structure Information
----------------------
-  PDB ID:  4LDE
-  Source: RCSB (downloaded)
-  Chains in structure: A, B
-  Chains used for structural features: all (A, B)
-  Unique residue positions: 574
-
-Hydrogen Handling
------------------
-  Hydrogens present in loaded structure: No
-  remove_hydrogens setting: True
-  Action: No hydrogens present; no removal needed
-
-Membrane Protein Settings
--------------------------
-  membrane_protein: True
-  membrane_thickness: 15.0 Å (half-thickness)
-  PDBTM annotation: fetched to orient structure in membrane reference frame
-```
-
----
 
 ## Config reference
 
@@ -253,35 +217,7 @@ Membrane Protein Settings
 | `output_dir` | `str` | — | Directory for output files. Created if it does not exist |
 | `output_prefix` | `str` | `""` | Optional prefix prepended to output file names |
 
-### Minimal config templates
 
-**Structure only:**
-```toml
-pdb_id = "1HCK"
-membrane_protein = false
-remove_hydrogens = true
-altloc_policy = "highest"
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path  = "data/kidera_factors.csv"
-output_dir   = "output"
-```
-
-**With DMS data:**
-```toml
-pdb_id = "4LDE"
-membrane_protein = true
-membrane_thickness = 15
-
-mutation_data_path  = "path/to/mutations.csv"
-mutation_data_chain = "A"
-alignment_cutoff    = 0.95
-
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path  = "data/kidera_factors.csv"
-output_dir   = "output"
-```
-
----
 
 ## Output column reference
 
@@ -396,78 +332,3 @@ Computed on three bond-type graphs: `all` (all bonds), `vdw_contact`, `hbond`.
 | `graph_{type}_graph_in_lcc` | `True` if residue is in the largest connected component |
 
 ---
-
-## Examples
-
-Two ready-to-run examples are provided:
-
-### Example 1 — Structure only (`examples/1HCK_structure_only_example/`)
-
-1HCK is a CDK2/cyclin kinase complex. This example loads a local PDB file, computes
-all structural metrics, and writes the output to the example directory.
-
-```bash
-python examples/1HCK_structure_only_example/run_example.py
-```
-
-Outputs (in `examples/1HCK_structure_only_example/output/`):
-- `1HCK_features.csv`  — 294 residues × 68 columns
-- `1HCK_metadata.csv`
-- `1HCK_run_log.txt`
-
-Config: `examples/1HCK_structure_only_example/1HCK_config.toml`
-
-### Example 2 — DMS data + membrane protein (`examples/B2AR_DMS_example/`)
-
-4LDE is the beta-2 adrenergic receptor (B2AR), a GPCR membrane protein.
-This example downloads the structure from RCSB, fetches PDBTM orientation,
-and combines it with deep mutational scanning data.
-
-```bash
-python examples/B2AR_DMS_example/run_example.py
-```
-
-Outputs (in `examples/B2AR_DMS_example/output/`):
-- `4LDE_features.csv`  — 9,328 mutation rows × 124 columns
-- `4LDE_metadata.csv`
-- `4LDE_run_log.txt`
-
-Config: `examples/B2AR_DMS_example/B2AR_config.toml`
-
----
-
-## Logging
-
-The pipeline uses Python's standard `logging` module.  By default, only WARNING-level
-messages are shown.  To see informational messages about each step:
-
-```python
-import logging
-import sys
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s - %(message)s",
-    stream=sys.stdout,
-)
-
-from src.pipeline.runner import Runner
-# ... rest of your code
-```
-
-### Alignment warnings
-
-When mutation data is provided, the pipeline aligns the DMS sequence to the PDB chain
-and emits Python warnings if:
-
-- **Sequence identity below `alignment_cutoff`** (default 0.95): the sequences differ
-  significantly; check that `mutation_data_chain` is correct
-- **Mismatches**: individual residue differences between DMS and PDB sequences (common
-  at crystal construct boundaries or engineered mutations)
-- **Indels**: insertions or deletions between the DMS and PDB sequences
-- **Terminal gaps**: residues at the ends of the sequence that are present in one
-  source but not the other (common for expression tags, truncations, or ICL3 loops)
-
-These warnings are expected for real-world datasets where the DMS experiment uses a
-slightly different construct than the PDB entry.  They are captured in the run log.
-
