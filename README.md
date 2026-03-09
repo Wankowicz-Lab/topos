@@ -112,11 +112,13 @@ This is captured in the run log.
 `altloc_policy`. With `"highest"` (default), only the highest-occupancy conformer
 is kept; with `"all"`, all conformers are retained (one row per conformer).
 
-### 2. Config file (required)
+### 2. Config file (optional)
 
 A [TOML](https://toml.io) file that controls every aspect of the pipeline.
 See the [Config reference](#config-reference) section below and the
 example configs in `examples/`.
+
+If no config file is provided, the pipeline will use default settings.
 
 ### 3. Mutation / DMS data (optional)
 
