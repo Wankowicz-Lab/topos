@@ -120,7 +120,7 @@ If no config file is provided, the pipeline will use default settings.
 
 ### 3. Mutation / DMS data (optional)
 
-A CSV file with one row per mutation. Required columns (names configurable):
+A CSV file with one row per mutation. Default required columns (names configurable within config file):
 
 | Column | Default name | Description |
 |--------|-------------|-------------|
