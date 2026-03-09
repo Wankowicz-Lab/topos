@@ -460,79 +460,125 @@ def calculate_disulfide_bond_count(context: Context, cutoff: float = 2.5) -> pd.
 
 
 
-def identify_pi_stacking(array: struc.AtomArray, distance_cutoff: float = 5.5, 
-                          angle_cutoff: float = 30.0) -> pd.DataFrame:
+def identify_pi_stacking(
+    array: struc.AtomArray,
+    distance_cutoff: float = 5.5,
+    parallel_angle_cutoff: float = 20.0,
+    perpendicular_angle_cutoff: float = 70.0,
+    max_parallel_displacement: float = 2.5,
+) -> pd.DataFrame:
     """Identify pi-stacking interactions in a protein structure.
 
     Parameters
     ----------
-    array: struc.AtomArray
+    array : struc.AtomArray
         Biotite AtomArray containing protein structure data.
-    distance_cutoff: float
-        Cutoff distance for pi-stacking interactions.
-    angle_cutoff: float
-        Cutoff angle for pi-stacking interactions.
+    distance_cutoff : float
+        Maximum centroid-centroid distance (Angstroms) to consider.
+    parallel_angle_cutoff : float
+        Maximum interplanar angle (degrees) to classify as parallel
+        (sandwich or displaced). Pairs below this are parallel.
+    perpendicular_angle_cutoff : float
+        Minimum interplanar angle (degrees) to classify as T-shaped.
+        Pairs above this are T-shaped. Angles between
+        parallel_angle_cutoff and perpendicular_angle_cutoff are
+        rejected as ambiguous.
+    max_parallel_displacement : float
+        Maximum horizontal displacement (Angstroms) for parallel
+        stacking. Pairs with displacement above this are rejected
+        even if the angle is parallel.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with pi-stacking interactions with columns:
-        chain, resi_struct, resn_struct, partner_chain, partner_resi, partner_resn, bond_type, extras
-        (extras contains 'geometry' key)
+        DataFrame with columns: chain, resi_struct, resn_struct,
+        residue_key, partner_chain, partner_resi, partner_resn,
+        partner_residue_key, bond_type, extras.
+        extras contains 'geometry', 'distance', 'angle', and
+        'displacement' keys.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
-    
-    results = []
-    
+
+    # Collect aromatic ring data
     aromatic_data = []
-    # Iterate over aromatic residues to get ring center and normal vector
     for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames)):
         if rn in AROMATIC_RESIDUES:
             center = get_ring_center(array, ch, ri, rn)
             normal = get_ring_normal(array, ch, ri, rn)
             if center is not None and normal is not None:
                 aromatic_data.append((i, ch, ri, rn, center, normal))
-    
+
     cutoff2 = distance_cutoff * distance_cutoff
-    angle_rad = np.radians(angle_cutoff)
-    
-    # Iterate over aromatic residues to identify pi-stacking interactions
+    results = []
+
     for i, (idx1, ch1, ri1, rn1, center1, normal1) in enumerate(aromatic_data):
-        for idx2, ch2, ri2, rn2, center2, normal2 in aromatic_data[i+1:]:
-            d2 = np.sum((center1 - center2)**2)
+        for idx2, ch2, ri2, rn2, center2, normal2 in aromatic_data[i + 1:]:
+            # Quick centroid distance filter
+            connecting_vec = center2 - center1
+            d2 = np.dot(connecting_vec, connecting_vec)
             if d2 > cutoff2:
                 continue
-            
-            # Calculate angle between ring planes
+
+            dist = np.sqrt(d2)
+
+            # Interplanar angle (folded to 0-90 via abs)
             dot = abs(np.dot(normal1, normal2))
-            angle = np.arccos(np.clip(dot, 0, 1))
-            
-            # Check if angle is parallel or perpendicular
-            is_parallel = angle < angle_rad
-            is_perpendicular = abs(angle - np.pi/2) < angle_rad
-            
-            # If angle is parallel or perpendicular, add to results
-            if is_parallel or is_perpendicular:
-                geometry = 'parallel' if is_parallel else 't-shaped'
-                results.append({
-                    'chain': ch1, 'resi_struct': int(ri1), 'resn_struct': rn1, 'residue_key': res_key(ch1, ri1, rn1),
-                    'partner_chain': ch2, 'partner_resi': int(ri2), 'partner_resn': rn2, 'partner_residue_key': res_key(ch2, ri2, rn2),
-                    'bond_type': 'pi_stacking',
-                    'extras': {'geometry': geometry}
-                })
-                results.append({
-                    'chain': ch2, 'resi_struct': int(ri2), 'resn_struct': rn2, 'residue_key': res_key(ch2, ri2, rn2),
-                    'partner_chain': ch1, 'partner_resi': int(ri1), 'partner_resn': rn1, 'partner_residue_key': res_key(ch1, ri1, rn1),
-                    'bond_type': 'pi_stacking',
-                    'extras': {'geometry': geometry}
-                })
-    
-    # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
-    
+            angle_rad = np.arccos(np.clip(dot, 0.0, 1.0))
+            angle_deg = np.degrees(angle_rad)
+
+            # Projection along normal1 (vertical component)
+            parallel_comp = abs(np.dot(connecting_vec, normal1))
+            # Horizontal displacement in the ring plane
+            displacement = np.sqrt(max(d2 - parallel_comp ** 2, 0.0))
+
+            if angle_deg < parallel_angle_cutoff:
+                # Parallel — enforce displacement limit
+                if displacement > max_parallel_displacement:
+                    continue
+                geometry = 'sandwich' if displacement < 1.0 else 'parallel_displaced'
+
+            elif angle_deg > perpendicular_angle_cutoff:
+                # T-shaped — validate centroid-to-plane distance
+                # Use the "top" ring's normal to get plane distance
+                plane_dist = abs(np.dot(connecting_vec, normal2))
+                if plane_dist > distance_cutoff:
+                    continue
+                geometry = 't_shaped'
+
+            else:
+                # Ambiguous interplanar angle — skip
+                continue
+
+            extras = {
+                'geometry': geometry,
+            }
+
+            results.append({
+                'chain': ch1, 'resi_struct': int(ri1), 'resn_struct': rn1,
+                'residue_key': res_key(ch1, ri1, rn1),
+                'partner_chain': ch2, 'partner_resi': int(ri2), 'partner_resn': rn2,
+                'partner_residue_key': res_key(ch2, ri2, rn2),
+                'bond_type': 'pi_stacking',
+                'extras': extras,
+            })
+            results.append({
+                'chain': ch2, 'resi_struct': int(ri2), 'resn_struct': rn2,
+                'residue_key': res_key(ch2, ri2, rn2),
+                'partner_chain': ch1, 'partner_resi': int(ri1), 'partner_resn': rn1,
+                'partner_residue_key': res_key(ch1, ri1, rn1),
+                'bond_type': 'pi_stacking',
+                'extras': extras,
+            })
+
+    standard_columns = [
+        'chain', 'resi_struct', 'resn_struct', 'residue_key',
+        'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key',
+        'bond_type', 'extras',
+    ]
+
     if results:
         return pd.DataFrame(results)
     else:
