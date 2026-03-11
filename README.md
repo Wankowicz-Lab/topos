@@ -47,6 +47,32 @@ conda activate biogenesis-py311
 pip install -e .
 ```
 
+### DSSP requirement for secondary structure
+
+The pipeline uses `mkdssp` when available for secondary-structure annotation, and falls back to `pydssp` if `mkdssp` is not on `PATH`.
+
+Install `mkdssp`:
+
+- macOS (Homebrew):
+```bash
+brew install brewsci/bio/dssp
+```
+- Ubuntu/Debian:
+```bash
+sudo apt-get update
+sudo apt-get install -y dssp
+```
+- Conda:
+```bash
+conda install -c conda-forge dssp
+```
+
+Verify installation:
+```bash
+which mkdssp
+mkdssp --version
+```
+
 ---
 
 ## Quick Start

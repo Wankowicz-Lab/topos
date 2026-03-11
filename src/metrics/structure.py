@@ -381,3 +381,42 @@ def calculate_center_of_mass_distance(context: Context) -> pd.DataFrame:
     metadata_df['distance_to_center_of_mass'] = distances
     
     return metadata_df
+
+
+DSSP_METRIC_COLUMNS = [
+    "dssp_acc",
+    "dssp_nh_o_1_relidx",
+    "dssp_nh_o_1_energy",
+    "dssp_o_nh_1_relidx",
+    "dssp_o_nh_1_energy",
+    "dssp_nh_o_2_relidx",
+    "dssp_nh_o_2_energy",
+    "dssp_o_nh_2_relidx",
+    "dssp_o_nh_2_energy",
+    "dssp_tco",
+    "dssp_kappa",
+    "dssp_alpha",
+    "dssp_phi",
+    "dssp_psi",
+]
+
+
+@register_metric(name="dssp_metrics", provides=DSSP_METRIC_COLUMNS, tags={"structure", "dssp"})
+def calculate_dssp_metrics(context: Context) -> pd.DataFrame:
+    """Return residue-level DSSP metrics parsed during secondary-structure annotation."""
+    if context.extras["ss_backend"] != "mkdssp":
+        raise ValueError("dssp_metrics can only run when mkdssp secondary structure is enabled.")
+
+    array = context.aa
+    if context.config.structural_feature_chains is not None:
+        chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
+        array = array[chain_mask]
+
+    metadata_df = get_metadata_cols(array)
+    dssp_df = context.extras["dssp_output"]
+
+    merge_cols = ["chain", "resi_struct"]
+    dssp_subset = dssp_df.rename(columns={"resi": "resi_struct"})
+    out = metadata_df.merge(dssp_subset[merge_cols + DSSP_METRIC_COLUMNS], on=merge_cols, how="left")
+    
+    return out
