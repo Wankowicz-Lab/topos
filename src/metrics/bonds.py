@@ -582,7 +582,7 @@ def identify_pi_stacking(
 
 
 @register_metric(name='pi_stacking_count', provides=['pi_stacking_count'], tags={'bonds'})
-def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5, angle_cutoff: float = 30.0) -> pd.DataFrame:
+def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5) -> pd.DataFrame:
     """Calculate the number of pi-stacking interactions in a protein structure.
 
     Parameters
@@ -591,8 +591,6 @@ def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5, 
         Context object containing residue metadata, structural information, and mutation information.
     distance_cutoff: float
         Cutoff distance for pi-stacking interactions.
-    angle_cutoff: float
-        Cutoff angle for pi-stacking interactions.
 
     Returns
     -------
@@ -600,7 +598,7 @@ def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5, 
         DataFrame with the number of pi-stacking interactions.
     """
     array = context.array
-    pi_stacking = identify_pi_stacking(array, distance_cutoff, angle_cutoff)
+    pi_stacking = identify_pi_stacking(array, distance_cutoff)
     pi_stacking = classify_bond_types(pi_stacking, array)
     metadata = get_metadata_cols(array)
     metadata['pi_stacking_count'] = 0
