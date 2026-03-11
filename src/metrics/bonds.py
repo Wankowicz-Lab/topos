@@ -542,9 +542,6 @@ def identify_pi_stacking(
             elif angle_deg > perpendicular_angle_cutoff:
                 # T-shaped — validate centroid-to-plane distance
                 # Use the "top" ring's normal to get plane distance
-                plane_dist = abs(np.dot(connecting_vec, normal2))
-                if plane_dist > distance_cutoff:
-                    continue
                 geometry = 't_shaped'
 
             else:
