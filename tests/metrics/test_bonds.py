@@ -260,7 +260,7 @@ def test_identify_pi_stacking():
     phe2 = _make_residue('PHE', res_id=2, chain_id='A', coords=phe2_coords)
     arr = struc.concatenate([phe1, phe2])
     
-    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5, angle_cutoff=30.0)
+    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5)
     
     assert len(result) == 2
     
@@ -309,7 +309,7 @@ def test_calculate_pi_stacking_count():
     arr = struc.concatenate([phe1, phe2])
     context = Context(array=arr)
     
-    result = bonds.calculate_pi_stacking_count(context, distance_cutoff=5.5, angle_cutoff=30.0)
+    result = bonds.calculate_pi_stacking_count(context, distance_cutoff=5.5)
     
     assert isinstance(result, pd.DataFrame)
     assert 'pi_stacking_count' in result.columns
