@@ -30,11 +30,13 @@ function.
 
 ## Developers
 
-Install development dependencies:
+Use the environment setup in [Installation](#installation). For development tooling, install test extras once:
 
 ```bash
 pip install -e ".[test]"
 ```
+
+The code below allows you to run formatting checks locally, this will flag errors prior automatic CI/CD
 
 Run Ruff (configured in `pyproject.toml`):
 
@@ -42,7 +44,7 @@ Run Ruff (configured in `pyproject.toml`):
 ruff check src tests
 ```
 
-Apply safe autofixes:
+Apply safe Ruff autofixes:
 
 ```bash
 ruff check src tests --fix

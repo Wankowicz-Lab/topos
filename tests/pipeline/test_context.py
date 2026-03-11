@@ -1,4 +1,6 @@
 """Tests for pipeline context module."""
+from pathlib import Path
+
 import pytest
 import tomli
 
@@ -23,7 +25,10 @@ def test_config(tmp_path):
     # Verify that fields loaded from the TOML file are correctly set on the Config object
     assert isinstance(config_from_file, Config)
     for key, value in loaded_config_data.items():
-        assert getattr(config_from_file, key) == value
+        if key.endswith("_path") and value is not None:
+            assert getattr(config_from_file, key) == Path(value)
+        else:
+            assert getattr(config_from_file, key) == value
 
     with pytest.raises(ValueError, match="Mutation data file not found at nonexistent.csv"):
         bad_config_args = config_args.copy()
@@ -51,8 +56,8 @@ def test_context(tmp_path):
     assert context.residue_table is not None
     assert len(context.residue_table) == 3
     assert context.config is not None
-    assert context.config.aaindex_path == 'data/aaindex_parsed_small.csv'
-    assert context.config.kidera_path == 'data/kidera_factors.csv'
+    assert context.config.aaindex_path == Path("data/aaindex_parsed_small.csv")
+    assert context.config.kidera_path == Path("data/kidera_factors.csv")
     assert context.extras['kidera'] is not None
 
     # Test loading AA index data
