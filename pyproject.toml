@@ -34,5 +34,52 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+  "venv",
+  "results",
+  "src/grouped_analysis",
+  "debug.py",
+  "plots.py",
+  "working_*.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+  "E501",  # Preserve existing long scientific/doc lines during initial rollout.
+  "E712",  # Existing dataframe boolean comparisons to clean up later.
+  "UP006", # Defer broad annotation modernization to a follow-up pass.
+  "UP007",
+  "UP035",
+  "UP037",
+  "UP045",
+  "B007",  # Existing loop-variable patterns to clean up incrementally.
+  "B023",
+  "B028",
+  "B904",
+  "B905",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+modules = [
+  "src.pipeline.runner",
+  "src.pipeline.context",
+  "src.pipeline.sequence_alignment",
+  "src.metrics.registry",
+]
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+exclude = "(^src/grouped_analysis/|^venv/|^results/)"
+explicit_package_bases = true
+
 
 

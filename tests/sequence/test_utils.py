@@ -1,8 +1,9 @@
 """Tests for sequence utility functions."""
-import pytest
 import warnings
 
-from src.sequence.utils import convert_amino_acid, AA_3_TO_1, AA_1_TO_3
+import pytest
+
+from src.sequence.utils import AA_1_TO_3, AA_3_TO_1, convert_amino_acid
 
 
 def test_convert_amino_acid_3_to_1():

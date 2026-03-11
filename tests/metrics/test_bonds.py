@@ -1,4 +1,5 @@
 """Tests for bonds metrics module."""
+import biotite.structure as struc
 import pandas as pd
 import pytest
 
@@ -6,10 +7,6 @@ from src.metrics import bonds
 from src.pipeline.context import Context
 from src.structure.utils import res_key
 from tests.test_utils import _make_atoms, _make_chain, _make_residue
-
-import biotite.structure as struc
-
-
 
 
 def test_identify_salt_bridges():
@@ -170,7 +167,7 @@ def test_calculate_ionic_bond_count():
     arr = struc.concatenate([asp, lys])
     context = Context(array=arr)
     
-    result = bonds.calculate_ionic_bond_count(context, cutoff=4.0)
+    _ = bonds.calculate_ionic_bond_count(context, cutoff=4.0)
     
 def test_identify_disulfide_bonds():
     """Test disulfide bond identification with CYS residues."""

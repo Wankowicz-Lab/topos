@@ -1,24 +1,27 @@
 """Tests for the pipeline runner module."""
 
+import random
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
 import pytest
-import random
 import tomli_w
 
-import biotite.structure as struc
-from tests.test_utils import _make_residue_table, _write_mmcif_file, _make_aaindex_data, _make_config_file
+# import files containing metrics to register them in _REGISTRY
+from src.metrics.registry import _REGISTRY
 from src.pipeline import runner
+from src.pipeline.context import Config
 from src.structure.structure_context import load_structure
 from src.structure.utils import res_key
-
-# import files containing metrics to register them in _REGISTRY
-import src.metrics.sequence
-import src.metrics.structure
-from src.metrics.registry import _REGISTRY
-from tests.test_utils import _make_residue, _make_atoms
-
-from src.pipeline.context import Config
+from tests.test_utils import (
+    _make_aaindex_data,
+    _make_atoms,
+    _make_config_file,
+    _make_residue,
+    _make_residue_table,
+    _write_mmcif_file,
+)
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)
@@ -87,7 +90,7 @@ def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
     pdb_id = 'FAKE'
     
     with pytest.raises(RuntimeError, match="Failed to fetch PDBTM annotation"):
-        membrane_runner = runner.Runner(
+        runner.Runner(
             pdb_id=pdb_id,
             name='test_membrane_protein',
             pdb_path=mmcif_path,
@@ -393,7 +396,7 @@ def test_runner_run_metric(tmp_path):
     # run each metric individually to ensure 'provides' columns are present
     for metric in metrics:
         meta, func = _REGISTRY[metric]
-        provides, requires = meta.provides, meta.requires
+        provides = meta.provides
         returned_features = myrunner.run_metrics(metrics=[metric], mutations=True)
 
         returned_cols = returned_features.columns.tolist()
@@ -902,9 +905,9 @@ def test_compute_residue_neighbors_cutoff_effect():
     mapping_large = myrunner._compute_residue_neighbors(cutoff=20.0)
     
     # Check that large cutoff has at least as many neighbors per residue
-    for res_key in mapping_small.keys():
-        assert res_key in mapping_large
-        assert len(mapping_large[res_key]) >= len(mapping_small[res_key])
+    for residue_key in mapping_small.keys():
+        assert residue_key in mapping_large
+        assert len(mapping_large[residue_key]) >= len(mapping_small[residue_key])
 
 
 def test_calculate_neighborhood_features_basic():
@@ -1055,11 +1058,11 @@ def test_run_neighborhood_fills_extras_and_merges(tmp_path):
     # Extras filled with residue_key -> [residue_key, ...]; no self-neighbors
     mapping = myrunner.context.extras['residue_neighbors']
     assert isinstance(mapping, dict)
-    for res_key, neighbors in mapping.items():
-        assert isinstance(res_key, str)
-        assert ":" in res_key
+    for residue_key, neighbors in mapping.items():
+        assert isinstance(residue_key, str)
+        assert ":" in residue_key
         assert isinstance(neighbors, list)
-        assert res_key not in neighbors, "neighbors must not include self"
+        assert residue_key not in neighbors, "neighbors must not include self"
 
     # n_ala_neighbors from count_ala_neighbors is merged into self.features
     assert 'n_ala_neighbors' in myrunner.features.columns

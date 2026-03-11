@@ -1,8 +1,7 @@
-import numpy as np
-import pytest
-from src.structure import utils
-from tests.test_utils import _make_chain, _make_residue, AA_LIST
 import biotite.structure as struc
+
+from src.structure import utils
+from tests.test_utils import _make_chain, _make_residue
 
 
 def test_is_heavy():

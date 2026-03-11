@@ -5,17 +5,19 @@ This module provides the Context and Config classes for managing protein
 structure data, configuration, and cached computations in the analysis pipeline.
 """
 from __future__ import annotations
+
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Any, Literal, List
+from typing import Any, Dict, List, Literal, Optional
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import biotite.structure as struc
 from pydantic import BaseModel
 
 # Import structure-loading helpers
-from src.structure.structure_context import residue_table, ensure_altloc_annotation
+from src.structure.structure_context import ensure_altloc_annotation, residue_table
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +96,8 @@ class Config(BaseModel):
     mutation_score_col_name: str = "effect"
 
     # sequence features
-    aaindex_path: Path = 'data/aaindex_parsed_small.csv'
-    kidera_path: Path = 'data/kidera_factors.csv'
+    aaindex_path: Path = Path("data/aaindex_parsed_small.csv")
+    kidera_path: Path = Path("data/kidera_factors.csv")
 
     # pipeline parameters
     output_dir: Optional[Path] = None
@@ -142,20 +144,14 @@ class Context:
         Configuration settings for the analysis.
     """
     array: struc.AtomArray | struc.AtomArrayStack
-    aa: Optional[struc.AtomArray] = None
-    residue_table: Optional[pd.DataFrame] = None
+    aa: struc.AtomArray = field(init=False)
+    residue_table: pd.DataFrame = field(init=False)
     kdtree: Any = None
-    neighbor_cache: Optional[Dict[float, list[np.ndarray]]] = None
-    extras: Optional[Dict[str, Any]] = None
-    config: Optional[Config] = None
+    neighbor_cache: Dict[float, list[np.ndarray]] = field(default_factory=dict)
+    extras: Dict[str, Any] = field(default_factory=dict)
+    config: Config = field(default_factory=Config)
 
     def __post_init__(self):
-        self.neighbor_cache = {}
-        self.extras = {} if self.extras is None else self.extras
-        
-        if self.config is None:
-            self.config = Config()
-
         if isinstance(self.array, struc.AtomArray):
             self.array = ensure_altloc_annotation(self.array)
             aa = self.array[struc.filter_amino_acids(self.array)]

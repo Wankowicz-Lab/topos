@@ -4,15 +4,14 @@ Test utilities for biogenesis tests.
 Provides helper functions for creating test data including residue tables,
 atom arrays, and synthetic structure files.
 """
+import random
 from pathlib import Path
 from string import ascii_uppercase
 
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import random
 import tomli_w
-
-import biotite.structure as struc
 
 # Seed RNGs for reproducible test data generation
 np.random.seed(42)
@@ -22,7 +21,7 @@ AA_LIST = ['ALA', 'ARG', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS',
            'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'SER', 'THR', 'VAL', 'TRP', 'TYR']
 
 
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 
 def _random_AA_seq(length: int = 1, seed: Optional[int] = None) -> Union[str, List[str]]:

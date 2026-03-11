@@ -4,13 +4,13 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, List
 
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
+from biotite.structure.io.pdb import PDBFile
 
 from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
-import biotite.structure as struc
-from biotite.structure.io.pdb import PDBFile
 
 
 def get_secondary_structure_annotations(context: Context) -> pd.DataFrame:

@@ -1,13 +1,13 @@
 """Tests for sequence metrics module."""
+import random
+
 import numpy as np
 import pandas as pd
 import pytest
-import random
 
 from src.metrics import sequence as metrics
 from src.sequence.utils import convert_amino_acid
-
-from tests.test_utils import _make_residue_table, _make_aaindex_data, AA_LIST
+from tests.test_utils import AA_LIST, _make_aaindex_data, _make_residue_table
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)

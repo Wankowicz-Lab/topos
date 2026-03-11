@@ -6,14 +6,16 @@ including SASA, hydropathy, membrane distance, secondary structure,
 hydrogen bonds, and packing metrics.
 """
 from __future__ import annotations
+
 import logging
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import biotite.structure as struc
-from src.pipeline.context import Context
+
 from src.metrics.registry import register_metric
-from src.databases import pdbtm
-from src.structure.utils import res_key, is_heavy, get_metadata_cols, is_backbone_atom
+from src.pipeline.context import Context
+from src.structure.utils import get_metadata_cols, is_backbone_atom, is_heavy, res_key
 
 logger = logging.getLogger(__name__)
 

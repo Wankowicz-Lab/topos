@@ -5,13 +5,15 @@ This module provides helper functions for loading and processing protein structu
 including structure file loading, residue table creation, and alternate location handling.
 """
 from __future__ import annotations
+
 import logging
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Optional, Literal, Union
+from typing import Literal, Optional, Union
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import biotite.structure as struc
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile, get_structure

@@ -1,13 +1,19 @@
-from scipy.spatial import cKDTree
 import logging
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import biotite.structure as struc
+from scipy.spatial import cKDTree
 
 from src.metrics.registry import register_metric
-from src.structure.utils import get_metadata_cols, is_heavy, res_key
-from src.structure.utils import build_sites_biotite, detect_hbonds
 from src.pipeline.context import Context
+from src.structure.utils import (
+    build_sites_biotite,
+    detect_hbonds,
+    get_metadata_cols,
+    is_heavy,
+    res_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -520,8 +526,6 @@ def identify_pi_stacking(
             d2 = np.dot(connecting_vec, connecting_vec)
             if d2 > cutoff2:
                 continue
-
-            dist = np.sqrt(d2)
 
             # Interplanar angle (folded to 0-90 via abs)
             dot = abs(np.dot(normal1, normal2))
