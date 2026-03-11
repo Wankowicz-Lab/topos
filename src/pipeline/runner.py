@@ -1,14 +1,16 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tempfile import NamedTemporaryFile
 
 from pathlib import Path
-import shutil
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import tomli
+import shutil
 import warnings
 import logging
+import json
 
 from biotite.database import rcsb
 import biotite.structure as struc
@@ -446,12 +448,12 @@ class Runner:
     def __post_init__(self):
         logger.info("Initializing pipeline")
 
-        # Ensure that either pdb_id or config_path is provided
-        if self.pdb_id is None and self.config_path is None:
-            raise ValueError("Either pdb_id or config_path must be provided.")
+        # Ensure that either pdb_id, pdb_path, or config_path is provided
+        if self.pdb_id is None and self.pdb_path is None and self.config_path is None:
+            raise ValueError("Either pdb_id, pdb_path, or config_path must be provided.")
 
         # Ensure that either name or config_path is provided
-        if self.name is None and self.config_path is None:
+        if self.name is None and self.config_path is None and self.pdb_id is None and self.pdb_path is None:
             raise ValueError("Either name or config_path must be provided.")
 
         # Create override dictionary from input parameters
@@ -497,9 +499,13 @@ class Runner:
             altloc_policy=config.altloc_policy
         )
 
+        # Track hydrogen presence before any removal
+        self._had_hydrogens: bool = bool(np.any(arr.element == "H"))
+
         # Remove hydrogens if configured
         if config.remove_hydrogens:
-            logger.info("Removing hydrogen atoms")
+            if self._had_hydrogens:
+                logger.info("Removing hydrogen atoms from structure")
             arr = arr[arr.element != "H"]
 
         # create context object
@@ -540,6 +546,7 @@ class Runner:
                 pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
                 self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
                 self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
+                self.context.aa = self.context.array[struc.filter_amino_acids(self.context.array)]
                 self.context.residue_table = define_membrane_secondary_structure(self.context.residue_table, ss_df)
             except RuntimeError as e:
                 raise RuntimeError(f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. Rerun with membrane_protein=False to calculate soluble secondary structure.")
@@ -626,9 +633,18 @@ class Runner:
         base_dict.update(filtered)
 
         if base_dict.get('name') is None:
-            raise ValueError("'name' must be provided either in config file or directly to Runner.")
-        if base_dict.get('pdb_id') is None:
-            raise ValueError("'pdb_id' must be provided either in config file or directly to Runner.")
+            if base_dict.get('pdb_id') is not None:
+                # Use pdb_id as a sensible default name when not provided
+                base_dict['name'] = base_dict['pdb_id']
+            elif base_dict.get('pdb_path') is not None:
+                # Fall back to the structure filename stem
+                base_dict['name'] = Path(base_dict['pdb_path']).stem
+            else:
+                raise ValueError(
+                    "'name' must be provided either in config file or directly to Runner."
+                )
+        if base_dict.get('pdb_id') is None and base_dict.get('pdb_path') is None:
+            raise ValueError("Either 'pdb_id' or 'pdb_path' must be provided (in config file or directly to Runner).")
 
         return Config(**base_dict)
 
@@ -688,6 +704,9 @@ class Runner:
             exclude_metrics = metrics_with_tag("dssp")
             metrics = [m for m in metrics if m not in exclude_metrics]
         
+        # Track which metrics were run for log output
+        self._metrics_run: List[str] = list(metrics)
+
         # Run metrics
         self.features = self.run_metrics(metrics=metrics, mutations=mutations)
 
@@ -975,11 +994,12 @@ class Runner:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate prefix
+        # Generate prefix using pdb_id if available, otherwise fall back to name
+        identifier = self.context.config.pdb_id or self.context.config.name
         if output_prefix is not None:
-            prefix = output_prefix + "_" + self.context.config.pdb_id
+            prefix = output_prefix + "_" + identifier
         else:
-            prefix = self.context.config.pdb_id
+            prefix = identifier
 
         # Save features
         logger.info("Saving results")
@@ -993,3 +1013,25 @@ class Runner:
         output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
         metadata_path = output_dir / f"{prefix}_metadata.csv"
         output_df.to_csv(metadata_path, index=False)
+
+        # Save run log
+        log_path = output_dir / f"{prefix}_run_log.txt"
+        self._save_run_log(log_path, merged_path, metadata_path)
+
+
+    def _save_run_log(self, log_path: Path, features_path: Path, metadata_path: Path) -> None:
+        log = {
+            "run_date": datetime.now().isoformat(),
+            "config": self.context.config.model_dump(mode="json"),
+            "chains": sorted(self.context.residue_table['chain'].unique().tolist()),
+            "n_residues": int(self.context.residue_table['resi_struct'].nunique()),
+            "had_hydrogens": self._had_hydrogens,
+            "metrics_run": getattr(self, '_metrics_run', []),
+            "feature_rows": len(self.features) if hasattr(self, 'features') else 0,
+            "feature_columns": len(self.features.columns) if hasattr(self, 'features') else 0,
+            "output_files": {
+                "features": str(features_path),
+                "metadata": str(metadata_path),
+            },
+        }
+        log_path.with_suffix(".json").write_text(json.dumps(log, indent=2, default=str))
