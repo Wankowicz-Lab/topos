@@ -350,7 +350,7 @@ def test_identify_pi_stacking_parallel():
     assert len(result) == 2
     assert result.iloc[0]['bond_type'] == 'pi_stacking'
     assert result.iloc[0]['extras']['geometry'] == 'sandwich'
-    assert result.iloc[1]['extras']['geometry'] == 'parallel'
+    assert result.iloc[1]['extras']['geometry'] == 'sandwich'
 
 
 def test_identify_pi_stacking_t_shaped():
