@@ -345,7 +345,7 @@ def test_identify_pi_stacking_parallel():
     tyr2 = _make_residue('TYR', res_id=2, chain_id='A', coords=tyr2_coords)
     arr = struc.concatenate([tyr1, tyr2])
 
-    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5, angle_cutoff=30.0)
+    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5)
 
     assert len(result) == 2
     assert result.iloc[0]['bond_type'] == 'pi_stacking'
@@ -373,7 +373,7 @@ def test_identify_pi_stacking_t_shaped():
     tyr2 = _make_residue('TYR', res_id=2, chain_id='A', coords=tyr2_coords)
     arr = struc.concatenate([tyr1, tyr2])
 
-    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5, angle_cutoff=30.0)
+    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5)
 
     assert len(result) == 2
     assert result.iloc[0]['bond_type'] == 'pi_stacking'
