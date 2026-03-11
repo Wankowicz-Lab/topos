@@ -40,7 +40,7 @@ VDW_RADII = {
 }
 
 def get_residue_atoms(array: struc.AtomArray, chain: str, resi: int, atom_names: list) -> np.ndarray:
-    """Get coordinates of specific atoms in a residue."""
+    """Get coordinates of specific atoms in a residue."""f
     mask = (array.chain_id == chain) & (array.res_id == resi) & np.isin(array.atom_name, atom_names)
     return array.coord[mask]
 
@@ -494,8 +494,7 @@ def identify_pi_stacking(
         DataFrame with columns: chain, resi_struct, resn_struct,
         residue_key, partner_chain, partner_resi, partner_resn,
         partner_residue_key, bond_type, extras.
-        extras contains 'geometry', 'distance', 'angle', and
-        'displacement' keys.
+        extras contains 'geometry'.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
