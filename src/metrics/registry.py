@@ -5,13 +5,15 @@ This module provides the registration system for metric functions,
 allowing metrics to be discovered and executed by the pipeline.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Set, Any, Protocol
-import pandas as pd
 
 # Forward reference to avoid circular import
 # Context will be imported from pipeline.context
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Iterable, List, Protocol
+
+import pandas as pd
+
 if TYPE_CHECKING:
     from src.pipeline.context import Context
 
@@ -34,8 +36,8 @@ class MetricMeta:
     """
     name: str
     provides: List[str]
-    tags: Set[str] = frozenset()
-    requires: Set[str] = frozenset()
+    tags: FrozenSet[str] = frozenset()
+    requires: FrozenSet[str] = frozenset()
 
 
 class MetricFunc(Protocol):
@@ -78,8 +80,12 @@ def register_metric(
         If a metric with the same name is already registered with a
         different function.
     """
-    meta = MetricMeta(name=name, provides=list(provides),
-                      tags=set(tags), requires=set(requires))
+    meta = MetricMeta(
+        name=name,
+        provides=list(provides),
+        tags=frozenset(tags),
+        requires=frozenset(requires),
+    )
     def _wrap(fn: MetricFunc):
         if name in _REGISTRY:
             existing_meta, existing_fn = _REGISTRY[name]

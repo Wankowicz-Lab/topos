@@ -5,13 +5,14 @@ This module provides functions for loading mutation scores, performing sequence
 alignment, and merging mutation data with structural context.
 """
 
-import warnings
 import logging
+import warnings
 from pathlib import Path
 from typing import Union
 
-from Bio.Align import PairwiseAligner
 import pandas as pd
+from Bio.Align import PairwiseAligner
+
 from src.sequence.utils import convert_amino_acid
 
 logger = logging.getLogger(__name__)

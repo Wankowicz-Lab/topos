@@ -34,6 +34,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
+      - name: Run Ruff
+        if: matrix.python-version == '3.11'
+        run: |
+          ruff check src tests
+
       - name: Run tests
         run: |
           pytest tests/ -v --cov --cov-report=term --cov-report=xml

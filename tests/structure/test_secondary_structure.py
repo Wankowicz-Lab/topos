@@ -2,10 +2,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure, make_contiguous_group_labels
-from src.pipeline.context import Context, Config
+from src.pipeline.context import Config, Context
+from src.structure.secondary_structure import (
+    define_membrane_secondary_structure,
+    define_soluble_secondary_structure,
+    get_secondary_structure_annotations,
+    make_contiguous_group_labels,
+)
+from tests.test_utils import AA_LIST, _make_chain, _make_residue_table
 
-from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
 np.random.seed(42)
 import random
 

@@ -24,9 +24,60 @@ function.
 - [Output column reference](#output-column-reference)
 - [Examples](#examples)
 - [Logging](#logging)
-- [Development and Testing](#development-and-testing)
+- [Developers](#developers)
 
 ---
+
+## Developers
+
+Install development dependencies:
+
+```bash
+pip install -e ".[test]"
+```
+
+Run Ruff (configured in `pyproject.toml`):
+
+```bash
+ruff check src tests
+```
+
+Apply safe autofixes:
+
+```bash
+ruff check src tests --fix
+```
+
+Run mypy (current high-value scope):
+
+```bash
+mypy
+```
+
+Current lint/type scope:
+- Ruff checks `src/` and `tests/`.
+- Mypy checks:
+  - `src/pipeline/runner.py`
+  - `src/pipeline/context.py`
+  - `src/pipeline/sequence_alignment.py`
+  - `src/metrics/registry.py`
+- Excluded for now: `src/grouped_analysis/**`, `venv/**`, `results/**`, scratch files such as `working_*.py`, `debug.py`, and `plots.py`.
+
+Run checks on changed Python files only:
+
+```bash
+CHANGED_PY="$(git diff --name-only -- '*.py')"
+if [ -n "$CHANGED_PY" ]; then
+  ruff check $CHANGED_PY
+fi
+```
+
+```bash
+CHANGED_SCOPE="$(git diff --name-only -- src/pipeline/runner.py src/pipeline/context.py src/pipeline/sequence_alignment.py src/metrics/registry.py)"
+if [ -n "$CHANGED_SCOPE" ]; then
+  mypy
+fi
+```
 
 ## Installation
 

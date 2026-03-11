@@ -1,7 +1,6 @@
 import pandas as pd
 import pytest
 
-
 from src.pipeline.batch_processing import batch_process, expand_batch_arguments
 
 

@@ -1,9 +1,9 @@
-from pathlib import Path
-import pandas as pd
 import itertools
 import logging
+from pathlib import Path
+from typing import Any, Dict, List
 
-from typing import List, Dict, Any
+import pandas as pd
 
 from src.pipeline.runner import Runner
 

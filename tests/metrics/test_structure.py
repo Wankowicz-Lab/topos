@@ -1,16 +1,14 @@
 """Tests for structure metrics module."""
+import random
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import random
 import pytest
-from pathlib import Path
-import tempfile
 
 from src.metrics import structure as metrics
 from src.pipeline.context import Config, Context
-from tests.test_utils import _make_chain, AA_LIST, _make_residue_table
-
-import biotite.structure as struc
+from tests.test_utils import AA_LIST, _make_chain
 
 # Seed RNGs for deterministic tests
 np.random.seed(42)

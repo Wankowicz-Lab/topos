@@ -6,13 +6,14 @@ This module provides utilities for analyzing protein structures, including
 hydrogen bond detection, residue metadata extraction, and packing calculations.
 """
 from __future__ import annotations
+
 import math
 from collections import defaultdict, namedtuple
 from typing import Any, Dict, List, Tuple
 
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
-import biotite.structure as struc
 
 
 def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:

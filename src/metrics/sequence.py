@@ -1,15 +1,14 @@
-import pandas as pd
-import numpy as np
 import logging
+from typing import List, Optional
 
 import blosum as bl
-
-from src.sequence.utils import convert_amino_acid
-from src.pipeline.context import Context
-from src.metrics.registry import register_metric
+import numpy as np
+import pandas as pd
 from Bio.Align import substitution_matrices
 
-from typing import List, Optional
+from src.metrics.registry import register_metric
+from src.pipeline.context import Context
+from src.sequence.utils import convert_amino_acid
 
 logger = logging.getLogger(__name__)
 

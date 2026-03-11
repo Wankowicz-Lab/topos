@@ -1,11 +1,17 @@
-import pandas as pd
 import os
-import pytest
 import warnings
 
-from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores, alignment_to_index_map, merge_sequence_dfs, evaluate_sequence_alignment
-
+import pandas as pd
+import pytest
 from Bio.Align import PairwiseAligner
+
+from src.pipeline.sequence_alignment import (
+    alignment_to_index_map,
+    evaluate_sequence_alignment,
+    load_mutation_scores,
+    merge_mutation_scores,
+    merge_sequence_dfs,
+)
 
 
 def test_load_mutation_scores(tmp_path):

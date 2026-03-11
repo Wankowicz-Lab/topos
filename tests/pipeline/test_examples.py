@@ -1,6 +1,7 @@
-from src.pipeline.runner import Runner
 import pandas as pd
-import pytest
+
+from src.pipeline.runner import Runner
+
 
 def test_b2ar_example(tmp_path):
     b2ar_dir = 'examples/B2AR_DMS_example'

@@ -1,39 +1,36 @@
-from dataclasses import dataclass, field
-
-from tempfile import NamedTemporaryFile
-
-from pathlib import Path
+import json
+import logging
+import shutil
+import warnings
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import biotite.structure as struc
 import numpy as np
 import pandas as pd
 import tomli
-import shutil
-import warnings
-import logging
-import json
 
-from biotite.database import rcsb
-import biotite.structure as struc
-
-from src.structure.structure_context import load_structure
-from src.pipeline.context import Context, Config
-from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
+# Import metric modules for registration side effects.
+import src.metrics.bonds  # noqa: F401
+import src.metrics.sequence  # noqa: F401
+import src.metrics.structure  # noqa: F401
 from src.databases import pdbtm
-
-from typing import List, Optional, Dict, Any, Tuple
-
-# import files containing metrics to register them in _REGISTRY
-import src.metrics.sequence
-import src.metrics.structure
-import src.metrics.bonds
+from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
+from src.metrics.graph_metrics import calculate_graph_metrics
+from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
 from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
-from src.metrics.graph_metrics import calculate_graph_metrics
-from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
-
-from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
-from src.structure.utils import res_key, is_heavy
-from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
+from src.pipeline.context import Config, Context
+from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
+from src.structure.secondary_structure import (
+    define_membrane_secondary_structure,
+    define_soluble_secondary_structure,
+    get_secondary_structure_annotations,
+)
+from src.structure.structure_context import load_structure
+from src.structure.utils import is_heavy, res_key
 
 logger = logging.getLogger(__name__)
 
@@ -629,7 +626,7 @@ class Runner:
         return Config(**base_dict)
 
 
-    def run_metrics(self, metrics: List[str], mutations: bool = False) -> None:
+    def run_metrics(self, metrics: List[str], mutations: bool = False) -> pd.DataFrame:
         """Compute specified metrics and return as a merged DataFrame.
 
         Parameters
@@ -662,7 +659,7 @@ class Runner:
         return features
     
     
-    def run(self, metrics: List[str] = None) -> None:
+    def run(self, metrics: Optional[List[str]] = None) -> None:
         """Compute features for the pipeline.
 
         Parameters
@@ -881,7 +878,7 @@ class Runner:
         arr = array[mask]
 
         if arr.array_length() == 0:
-            mapping = {k: [] for k in full_keys.tolist()}
+            mapping: Dict[str, List[str]] = {k: [] for k in full_keys.tolist()}
             self.context.extras["residue_neighbors"] = mapping
             return mapping
 
@@ -895,7 +892,7 @@ class Runner:
         coords = arr.coord.astype(float)
         cutoff2 = cutoff * cutoff
 
-        mapping: Dict[str, List[str]] = {}
+        mapping = {}
         for res_uid in unique_res:
             # Get indices of all atoms in the residue
             idxs = np.where(residue_ids == res_uid)[0]
@@ -952,7 +949,7 @@ class Runner:
         )
 
 
-    def save_results(self, output_dir: Path = None, output_prefix: str = None) -> None:
+    def save_results(self, output_dir: Optional[Path] = None, output_prefix: Optional[str] = None) -> None:
         """Save results to CSV files.
 
         Parameters

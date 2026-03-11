@@ -5,6 +5,7 @@ import pytest
 from src.databases import pdbtm
 from tests.test_utils import _make_residue_table
 
+
 def test_describe_pdbtm_region():
     inputs = ['H', '1', '2', 'U', 'not_defined']
     expected = ['membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown', 'not_defined']

@@ -1,8 +1,10 @@
 """Tests for structure loading utilities."""
+
 import numpy as np
-from pathlib import Path
-from src.structure.structure_context import residue_table, load_structure
+
+from src.structure.structure_context import load_structure, residue_table
 from tests.test_utils import _make_chain, _write_mmcif_file
+
 
 def test_residue_table_altloc():
     """Test that residue_table properly captures altloc information."""

@@ -1,10 +1,10 @@
-import numpy as np
-import requests
-import pandas as pd
 import logging
+from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+import requests
 from lxml import etree
-from typing import Tuple, Dict, List
-from itertools import groupby
 
 logger = logging.getLogger(__name__)
 

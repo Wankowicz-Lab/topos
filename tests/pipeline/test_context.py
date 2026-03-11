@@ -2,9 +2,9 @@
 import pytest
 import tomli
 
-
 from src.pipeline.context import Config, Context
-from tests.test_utils import _make_config_file, _make_chain, _make_aaindex_data
+from tests.test_utils import _make_aaindex_data, _make_chain, _make_config_file
+
 
 def test_config(tmp_path):
     config_args = {'pdb_id': "1abc", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
