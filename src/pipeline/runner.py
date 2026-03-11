@@ -997,6 +997,17 @@ class Runner:
         metadata_path = output_dir / f"{prefix}_metadata.csv"
         output_df.to_csv(metadata_path, index=False)
 
+        # Save bonds (one row per unique pair)
+        if 'bonds_df' in self.context.extras and len(self.context.extras['bonds_df']) > 0:
+            bonds = self.context.extras['bonds_df'].copy()
+            bonds['category'] = bonds['extras'].apply(lambda x: x.get('category', '') if isinstance(x, dict) else '')
+            bonds['geometry'] = bonds['extras'].apply(lambda x: x.get('geometry', '') if isinstance(x, dict) else '')
+            bonds['role']     = bonds['extras'].apply(lambda x: x.get('role', '')     if isinstance(x, dict) else '')
+            bonds = bonds.drop(columns=['extras'])
+            bonds = bonds[bonds['residue_key'] <= bonds['partner_residue_key']].reset_index(drop=True)
+            bonds_path = output_dir / f"{prefix}_bonds.csv"
+            bonds.to_csv(bonds_path, index=False)
+            logger.info(f"Saved {len(bonds)} bond rows to {bonds_path}")
         # Save run log
         log_path = output_dir / f"{prefix}_run_log.txt"
         self._save_run_log(log_path, merged_path, metadata_path)

@@ -261,7 +261,7 @@ def test_identify_pi_stacking():
     phe2 = _make_residue('PHE', res_id=2, chain_id='A', coords=phe2_coords)
     arr = struc.concatenate([phe1, phe2])
     
-    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5, angle_cutoff=30.0)
+    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5)
     
     assert len(result) == 2
     
@@ -310,7 +310,7 @@ def test_calculate_pi_stacking_count():
     arr = struc.concatenate([phe1, phe2])
     context = Context(array=arr)
     
-    result = bonds.calculate_pi_stacking_count(context, distance_cutoff=5.5, angle_cutoff=30.0)
+    result = bonds.calculate_pi_stacking_count(context, distance_cutoff=5.5)
     
     assert isinstance(result, pd.DataFrame)
     assert 'pi_stacking_count' in result.columns
@@ -326,6 +326,60 @@ def test_calculate_pi_stacking_count():
     # Check extras column contains geometry
     for _, row in pi_stacking_rows.iterrows():
         assert 'geometry' in row['extras']
+
+def test_identify_pi_stacking_parallel():
+    """Two TYR rings stacked face-to-face (parallel) should be detected with geometry='parallel'."""
+    # TYR atoms: N, CA, C, O, CB, CG, CD1, CD2, CE1, CE2, CZ, OH  (12 atoms)
+    # Ring atoms (indices 5-10): CG, CD1, CD2, CE1, CE2, CZ
+    # Ring 1: regular hexagon in the z=0 plane, centroid at (0,0,0)
+    ring1 = [[0.0,  1.4, 0.0], [-1.21, 0.7, 0.0], [1.21, 0.7, 0.0],
+             [-1.21, -0.7, 0.0], [1.21, -0.7, 0.0], [0.0, -1.4, 0.0]]
+    tyr1_coords = ([[-5, 0, 0], [-4, 0, 0], [-3, 0, 0], [-2.5, 0, 0], [-1.5, 0, 0]]  # backbone + CB
+                   + ring1 + [[0.0, -2.8, 0.0]])  # OH
+
+    # Ring 2: same hexagon shifted 3.5 Å along z (parallel stack), centroid at (0,0,3.5)
+    ring2 = [[x, y, 3.5] for x, y, _ in ring1]
+    tyr2_coords = ([[-5, 0, 3.5], [-4, 0, 3.5], [-3, 0, 3.5], [-2.5, 0, 3.5], [-1.5, 0, 3.5]]
+                   + ring2 + [[0.0, -2.8, 3.5]])
+
+    tyr1 = _make_residue('TYR', res_id=1, chain_id='A', coords=tyr1_coords)
+    tyr2 = _make_residue('TYR', res_id=2, chain_id='A', coords=tyr2_coords)
+    arr = struc.concatenate([tyr1, tyr2])
+
+    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5)
+
+    assert len(result) == 2
+    assert result.iloc[0]['bond_type'] == 'pi_stacking'
+    assert result.iloc[0]['extras']['geometry'] == 'sandwich'
+    assert result.iloc[1]['extras']['geometry'] == 'sandwich'
+
+
+def test_identify_pi_stacking_t_shaped():
+    """Two TYR rings perpendicular to each other (T-shaped) should be detected with geometry='t-shaped'."""
+    # TYR atoms: N, CA, C, O, CB, CG, CD1, CD2, CE1, CE2, CZ, OH  (12 atoms)
+    # Ring 1: hexagon in xy-plane, centroid at (0,0,0), normal = (0,0,1)
+    ring1 = [[0.0,  1.4, 0.0], [-1.21, 0.7, 0.0], [1.21, 0.7, 0.0],
+             [-1.21, -0.7, 0.0], [1.21, -0.7, 0.0], [0.0, -1.4, 0.0]]
+    tyr1_coords = ([[-5, 0, 0], [-4, 0, 0], [-3, 0, 0], [-2.5, 0, 0], [-1.5, 0, 0]]
+                   + ring1 + [[0.0, -2.8, 0.0]])
+
+    # Ring 2: hexagon in yz-plane, centroid at (4,0,0), normal = (1,0,0)
+    # Angle between normals = 90° → T-shaped; center distance = 4 Å < 5.5 Å
+    ring2 = [[4.0, 1.4, 0.0], [4.0, 0.7, -1.21], [4.0, 0.7, 1.21],
+             [4.0, -0.7, -1.21], [4.0, -0.7, 1.21], [4.0, -1.4, 0.0]]
+    tyr2_coords = ([[10, 0, 0], [9, 0, 0], [8, 0, 0], [7.5, 0, 0], [6, 0, 0]]
+                   + ring2 + [[4.0, -2.8, 0.0]])
+
+    tyr1 = _make_residue('TYR', res_id=1, chain_id='A', coords=tyr1_coords)
+    tyr2 = _make_residue('TYR', res_id=2, chain_id='A', coords=tyr2_coords)
+    arr = struc.concatenate([tyr1, tyr2])
+
+    result = bonds.identify_pi_stacking(arr, distance_cutoff=5.5)
+
+    assert len(result) == 2
+    assert result.iloc[0]['bond_type'] == 'pi_stacking'
+    assert result.iloc[0]['extras']['geometry'] == 't_shaped'
+    assert result.iloc[1]['extras']['geometry'] == 't_shaped'
 
 
 def test_identify_cation_pi():

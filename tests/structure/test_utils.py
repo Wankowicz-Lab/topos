@@ -258,6 +258,53 @@ def test_build_sites_biotite_with_altloc():
             assert a.altloc == 'A'
 
 
+def test_detect_hbonds_i4_backbone_detected():
+    """i+4 same-chain backbone-backbone bonds (alpha-helix) must be detected."""
+    # GLY has 4 atoms: N, CA, C, O
+    # Residue 1: O at origin — the acceptor
+    res1 = _make_residue("GLY", res_id=1, chain_id="A",
+                         coords=[[-4.0, 0, 0], [-2.5, 0, 0], [-1.5, 0, 0], [0.0, 0, 0]])
+    # Residues 2–4: placed far away so they don't interfere
+    res2 = _make_residue("GLY", res_id=2, chain_id="A",
+                         coords=[[0, 50, 0], [1.5, 50, 0], [2.5, 50, 0], [3.0, 50, 0]])
+    res3 = _make_residue("GLY", res_id=3, chain_id="A",
+                         coords=[[0, 100, 0], [1.5, 100, 0], [2.5, 100, 0], [3.0, 100, 0]])
+    res4 = _make_residue("GLY", res_id=4, chain_id="A",
+                         coords=[[0, 150, 0], [1.5, 150, 0], [2.5, 150, 0], [3.0, 150, 0]])
+    # Residue 5: N at 2.8 Å from residue 1 O, CA collinear so base-atom angle = 180°
+    res5 = _make_residue("GLY", res_id=5, chain_id="A",
+                         coords=[[2.8, 0, 0], [4.3, 0, 0], [5.3, 0, 0], [5.8, 0.5, 0]])
+    arr = struc.concatenate([res1, res2, res3, res4, res5])
+    donors, acceptors = utils.build_sites_biotite(arr)
+    hbonds = utils.detect_hbonds(donors, acceptors)
+
+    bb = [h for h in hbonds if h['category'] == 'backbone-backbone']
+    assert len(bb) == 1, f"Expected 1 i+4 backbone bond, got {len(bb)}: {bb}"
+    assert bb[0]['donor_resi'] == 5
+    assert bb[0]['acceptor_resi'] == 1
+    assert bb[0]['DA_dist'] < 3.5
+
+
+def test_detect_hbonds_i2_backbone_excluded():
+    """i+1 and i+2 same-chain backbone-backbone bonds must be filtered out."""
+    # GLY has 4 atoms: N, CA, C, O
+    # Residue 1: O at origin — the acceptor
+    res1 = _make_residue("GLY", res_id=1, chain_id="A",
+                         coords=[[-4.0, 0, 0], [-2.5, 0, 0], [-1.5, 0, 0], [0.0, 0, 0]])
+    # Residue 2: placed far away
+    res2 = _make_residue("GLY", res_id=2, chain_id="A",
+                         coords=[[0, 50, 0], [1.5, 50, 0], [2.5, 50, 0], [3.0, 50, 0]])
+    # Residue 3: i+2 — good geometry but must be excluded
+    res3 = _make_residue("GLY", res_id=3, chain_id="A",
+                         coords=[[2.8, 0, 0], [4.3, 0, 0], [5.3, 0, 0], [5.8, 0.5, 0]])
+    arr = struc.concatenate([res1, res2, res3])
+    donors, acceptors = utils.build_sites_biotite(arr)
+    hbonds = utils.detect_hbonds(donors, acceptors)
+
+    bb = [h for h in hbonds if h['category'] == 'backbone-backbone']
+    assert len(bb) == 0, f"Expected 0 backbone bonds for i+2 spacing, got {len(bb)}: {bb}"
+
+
 def test_detect_hbonds_with_altloc():
     """Test that detect_hbonds properly includes altloc in results."""
     aa_list = ['SER', 'GLY']
