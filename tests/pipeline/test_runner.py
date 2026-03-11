@@ -844,13 +844,11 @@ def test_compute_residue_neighbors_basic():
         pdb_path=None,
         membrane_protein=False
     )
-    extras_key = 'test_neighbors'
-    
     # Compute neighbors with a reasonable cutoff
-    mapping = myrunner._compute_residue_neighbors(cutoff=10.0, extras_key=extras_key)
+    mapping = myrunner._compute_residue_neighbors(cutoff=10.0)
     
     # Check that result is stored in extras
-    assert myrunner.context.extras[extras_key] == mapping
+    assert myrunner.context.extras['residue_neighbors'] == mapping
     
     # Check structure: Dict[str, List[str]]
     assert isinstance(mapping, dict)
@@ -872,10 +870,10 @@ def test_compute_residue_neighbors_cutoff_effect():
     )
     
     # Small cutoff - fewer neighbors
-    mapping_small = myrunner._compute_residue_neighbors(cutoff=5.0, extras_key='small')
+    mapping_small = myrunner._compute_residue_neighbors(cutoff=5.0)
     
     # Large cutoff - more neighbors
-    mapping_large = myrunner._compute_residue_neighbors(cutoff=20.0, extras_key='large')
+    mapping_large = myrunner._compute_residue_neighbors(cutoff=20.0)
     
     # Check that large cutoff has at least as many neighbors per residue
     for res_key in mapping_small.keys():
@@ -894,11 +892,12 @@ def test_calculate_neighborhood_features_basic():
     myrunner.features = myrunner.run_metrics(metrics=['sasa'])
     
     # Set up neighbor mapping in extras
-    myrunner._compute_residue_neighbors(cutoff=10.0, extras_key='residue_neighbors')
+    myrunner._compute_residue_neighbors(cutoff=10.0)
     
     # Call calculate_neighborhood_features
     result = runner.calculate_neighborhood_features(
-        myrunner.context, myrunner.features, extras_key='residue_neighbors'
+        myrunner.context,
+        myrunner.features,
     )
     
     # Check that result has merge columns
@@ -907,6 +906,7 @@ def test_calculate_neighborhood_features_basic():
     
     # Check that neighborhood metric columns are present
     assert 'n_ala_neighbors' in result.columns
+    assert 'neighborhood_sasa' in result.columns
     
     # Check that result has one row per unique (chain, resi_struct, resn_struct) from features
     expected_rows = myrunner.features[merge_cols].drop_duplicates()
@@ -922,10 +922,89 @@ def test_calculate_neighborhood_features_basic():
 
 def test_calculate_neighborhood_features_aggregates_multiple_metrics():
     """Test that calculate_neighborhood_features aggregates multiple metric outputs."""
-    # TODO: replace this with multiple metrics once we have multiple neighborhood metrics in codebase
-    from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
-    if len(NEIGHBORHOOD_METRIC_FUNCTIONS) > 1:
-        assert False, "Test not implemented"
+    myrunner = runner.Runner(
+        pdb_id='8smv',
+        name='test_neighbors_multi',
+        pdb_path=None,
+        membrane_protein=False
+    )
+    myrunner.features = myrunner.run_metrics(metrics=['sasa', 'kyte_doolittle'])
+    myrunner._compute_residue_neighbors(cutoff=10.0)
+
+    result = runner.calculate_neighborhood_features(
+        myrunner.context,
+        myrunner.features,
+    )
+
+    merge_cols = ['chain', 'resi_struct', 'resn_struct']
+    assert all(c in result.columns for c in merge_cols)
+    assert 'n_ala_neighbors' in result.columns
+    assert 'neighborhood_sasa' in result.columns
+    assert 'neighborhood_kyte_doolittle' in result.columns
+
+    expected_rows = myrunner.features[merge_cols].drop_duplicates()
+    assert len(result) == len(expected_rows)
+
+
+def test_calculate_neighborhood_features_neighbor_averages_deterministic():
+    """Neighborhood averages use only mapped neighbors and ignore NaN values."""
+    class DummyContext:
+        def __init__(self, neighbor_map):
+            self.extras = {'residue_neighbors': neighbor_map}
+
+    features = pd.DataFrame({
+        'chain': ['A', 'A', 'A', 'A', 'A'],
+        'resi_struct': [1, 2, 2, 3, 4],
+        'resn_struct': ['ALA', 'VAL', 'VAL', 'GLY', 'SER'],
+        'sasa': [1.0, 5.0, 7.0, 3.0, 10.0],
+        'kyte_doolittle': [2.0, 4.0, 10.0, 6.0, 8.0],
+    })
+    neighbor_map = {
+        'A:1:ALA': ['A:2:VAL', 'A:3:GLY', 'A:999:UNK'],
+        'A:2:VAL': ['A:1:ALA'],
+        'A:3:GLY': [],
+        'A:4:SER': ['A:2:VAL'],
+    }
+    context = DummyContext(neighbor_map)
+
+    result = runner.calculate_neighborhood_features(
+        context,
+        features,
+    )
+    result = result.set_index(['chain', 'resi_struct', 'resn_struct'])
+
+    # A:2 has two mutation-level rows and is first averaged to sasa=6.0, kd=7.0.
+    # A:1 neighbors are A:2 and A:3 (plus one missing key ignored).
+    assert result.loc[('A', 1, 'ALA'), 'neighborhood_sasa'] == 4.5
+    assert result.loc[('A', 1, 'ALA'), 'neighborhood_kyte_doolittle'] == 6.5
+    # A:2 neighbor is A:1
+    assert result.loc[('A', 2, 'VAL'), 'neighborhood_sasa'] == 1.0
+    # A:3 has no neighbors
+    assert pd.isna(result.loc[('A', 3, 'GLY'), 'neighborhood_sasa'])
+    # A:4 neighbor is A:2 and should use the residue-level mean of duplicate A:2 rows.
+    assert result.loc[('A', 4, 'SER'), 'neighborhood_sasa'] == 6.0
+
+
+def test_run_secondary_structure_averages_mutation_rows_per_residue(tmp_path):
+    """Secondary-structure averaging should first collapse mutation-level duplicate rows per residue."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, mutation_data_chain='A', mutation_data_path="")
+    myrunner = runner.Runner(config_path=config_path)
+
+    residue_table, features = _make_synthetic_ss_fixture()
+    # Duplicate residue 1 with a second mutation-level value.
+    dup_row = features.loc[features['resi_struct'] == 1].copy()
+    dup_row['metric_a'] = 9.0
+    features = pd.concat([features, dup_row], ignore_index=True)
+
+    myrunner.context.residue_table = residue_table
+    myrunner.features = features
+
+    out = myrunner.run_secondary_structure(ss_metrics=['metric_a'])
+    alpha = out[out['ss_domains'] == 'alpha-helix_1']
+
+    # Residue-level means: res1=(1+9)/2=5, res2=2, domain mean=(5+2)/2=3.5.
+    assert np.isclose(alpha['ss_domain_metric_a'].iloc[0], 3.5)
 
 def test_run_neighborhood_requires_run_first(tmp_path):
     """run_neighborhood must be called after run(); it raises if self.features is missing."""
@@ -945,12 +1024,10 @@ def test_run_neighborhood_fills_extras_and_merges(tmp_path):
     myrunner = runner.Runner(config_path=config_path)
     myrunner.features = myrunner.run_metrics(metrics=['sasa', 'kyte_doolittle'])
 
-    extras_key = 'residue_neighbors'
-
-    myrunner.run_neighborhood(cutoff=10.0, extras_key=extras_key)
+    myrunner.run_neighborhood(cutoff=10.0)
 
     # Extras filled with residue_key -> [residue_key, ...]; no self-neighbors
-    mapping = myrunner.context.extras[extras_key]
+    mapping = myrunner.context.extras['residue_neighbors']
     assert isinstance(mapping, dict)
     for res_key, neighbors in mapping.items():
         assert isinstance(res_key, str)
@@ -960,6 +1037,8 @@ def test_run_neighborhood_fills_extras_and_merges(tmp_path):
 
     # n_ala_neighbors from count_ala_neighbors is merged into self.features
     assert 'n_ala_neighbors' in myrunner.features.columns
+    assert 'neighborhood_sasa' in myrunner.features.columns
+    assert 'neighborhood_kyte_doolittle' in myrunner.features.columns
     assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
 
 

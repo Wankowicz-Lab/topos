@@ -28,6 +28,7 @@ import src.metrics.bonds
 from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
 from src.metrics.graph_metrics import calculate_graph_metrics
+from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
 
 from src.structure.secondary_structure import get_secondary_structure_annotations, define_membrane_secondary_structure, define_soluble_secondary_structure
 from src.structure.utils import res_key, is_heavy
@@ -35,29 +36,8 @@ from src.metrics.neighborhood_metrics import NEIGHBORHOOD_METRIC_FUNCTIONS
 
 logger = logging.getLogger(__name__)
 
-# Metric column names eligible to be averaged per ss_domain (only those present in features are used)
-SS_METRICS: List[str] = [
-    "pos_effect",
-    "effect_variance",
-    "effect_variance_rank",
-    "effect",
-    "effect_ranking",
-    "sasa",
-    "sasa_backbone",
-    "sasa_sidechain",
-    "sasa_polar",
-    "sasa_nonpolar",
-    "kyte_doolittle",
-    "distance_from_membrane_edge",
-    "bb_hbond_count",
-    "sc_hbond_count",
-    "total_hbond_count",
-    "packing_n_atoms",
-    "packing_n_neighbor_residues",
-    "packing_contact_density",
-    "blosum90",
-    "phat_score",
-]
+# Shared averaging metric list for both ss-domain and neighborhood integrations.
+SS_METRICS: List[str] = METRICS_TO_AVERAGE
 # Hetero residue sets for find_ligands
 PROTEIN_MODS = {
     "MSE", "SEP", "TPO", "PTR", "HYP", "CSO", "MHO", "KCX", "CSD", "CME", "CSX",
@@ -200,21 +180,21 @@ def find_ligands(
 
 
 def calculate_neighborhood_features(
-    context: Context, features: pd.DataFrame, extras_key: str = "residue_neighbors"
+    context: Context,
+    features: pd.DataFrame,
 ) -> pd.DataFrame:
     """Run neighborhood metric functions and aggregate into one DataFrame.
 
-    Loops over NEIGHBORHOOD_METRIC_FUNCTIONS, calls each with (context, features, extras_key),
-    and merges returned DataFrames on chain, resi_struct, resn_struct.
+    Loops over NEIGHBORHOOD_METRIC_FUNCTIONS, calls each with
+    (context, features), and merges returned DataFrames on chain, resi_struct,
+    resn_struct.
 
     Parameters
     ----------
     context : Context
-        Context with extras[extras_key] neighbor mapping.
+        Context with extras['residue_neighbors'] neighbor mapping.
     features : pd.DataFrame
         Merged features from Runner.run().
-    extras_key : str, optional
-        Key in context.extras for the neighbor mapping.
 
     Returns
     -------
@@ -226,7 +206,7 @@ def calculate_neighborhood_features(
 
     base = features[merge_cols].drop_duplicates().reset_index(drop=True)
     for func in NEIGHBORHOOD_METRIC_FUNCTIONS:
-        df = func(context, features, extras_key=extras_key)
+        df = func(context, features)
         base = pd.merge(base, df, on=merge_cols, how="left")
     return base
 
@@ -707,7 +687,7 @@ class Runner:
             validate='many_to_one',
         )
 
-        # Run neighborhood metrics
+        # Run neighborhood metrics using the configured shared averaging list.
         self.run_neighborhood(cutoff=5)
 
         # Run ligand interactions
@@ -833,19 +813,25 @@ class Runner:
         rt_subset = self.context.residue_table[merge_cols + ['ss_domains']].drop_duplicates(merge_cols)
         merged = pd.merge(self.features, rt_subset, on=merge_cols, how='left')
         merged = merged.dropna(subset=['ss_domains'])
-        merged = merged.drop_duplicates(subset=merge_cols)
 
         cols_to_avg = [c for c in metrics_to_avg if c in merged.columns]
 
-        # Average metrics per ss_domain (skipna=True so NAs are ignored)
+        # Collapse mutation-level rows into residue-level rows by averaging selected metrics per residue.
+        residue_level_cols = merge_cols + ['ss_domains'] + cols_to_avg
+        residue_level = merged[residue_level_cols].groupby(
+            merge_cols + ['ss_domains'],
+            as_index=False,
+        ).agg({c: 'mean' for c in cols_to_avg}) if cols_to_avg else merged[merge_cols + ['ss_domains']].drop_duplicates()
+
+        # Average residue-level metrics per ss_domain (skipna=True so NAs are ignored).
         agg_dict = {c: 'mean' for c in cols_to_avg}
-        by_domain = merged.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict})
+        by_domain = residue_level.groupby(['chain', 'ss_domains'], as_index=False).agg({**agg_dict}) if cols_to_avg else residue_level[['chain', 'ss_domains']].drop_duplicates()
         by_domain = by_domain.rename(columns={c: f'ss_domain_{c}' for c in cols_to_avg})
 
         # Compute domain-level metrics
-        lengths = ss_domain_lengths(merged)
+        lengths = ss_domain_lengths(residue_level)
         by_domain = by_domain.merge(lengths, on=['chain', 'ss_domains'], how='left')
-        log2_df = ss_domain_log2_aa_group_ratios(merged)
+        log2_df = ss_domain_log2_aa_group_ratios(residue_level)
         by_domain = by_domain.merge(log2_df, on=['chain', 'ss_domains'], how='left')
 
         # Merge back into rt_subset; exclude rows with NA ss_domains from output
@@ -855,12 +841,12 @@ class Runner:
     
     
     def _compute_residue_neighbors(
-        self, cutoff: float, extras_key: str = 'residue_neighbors'
+        self, cutoff: float
     ) -> Dict[str, List[str]]:
         """Compute residue_key -> [residue_key, ...] for residues within cutoff (Angstroms).
 
         Uses heavy amino-acid atoms only; two residues are neighbors if any pair of
-        heavy atoms is within cutoff. Result is stored in context.extras[extras_key].
+        heavy atoms is within cutoff. Result is stored in context.extras['residue_neighbors'].
         """
         # Generate full list of residue keys
         array = self.context.aa
@@ -881,7 +867,7 @@ class Runner:
 
         if arr.array_length() == 0:
             mapping = {k: [] for k in full_keys.tolist()}
-            self.context.extras[extras_key] = mapping
+            self.context.extras["residue_neighbors"] = mapping
             return mapping
 
         residue_ids = np.array(
@@ -921,12 +907,13 @@ class Runner:
             if k not in mapping:
                 mapping[k] = []
 
-        self.context.extras[extras_key] = mapping
+        self.context.extras["residue_neighbors"] = mapping
         return mapping
 
 
     def run_neighborhood(
-        self, cutoff: float, extras_key: str = "residue_neighbors"
+        self,
+        cutoff: float,
     ) -> None:
         """Compute neighborhood metrics and merge into self.features.
 
@@ -938,15 +925,11 @@ class Runner:
         ----------
         cutoff : float
             Distance cutoff in Angstroms for neighbor definition (heavy atoms).
-        extras_key : str, optional
-            Key in context.extras for the neighbor mapping. Default 'residue_neighbors'.
         """
         if not hasattr(self, "features"):
             raise ValueError("No features to extend. Please call run() first.")
-        self._compute_residue_neighbors(cutoff=cutoff, extras_key=extras_key)
-        neighborhood_df = calculate_neighborhood_features(
-            self.context, self.features, extras_key=extras_key
-        )
+        self._compute_residue_neighbors(cutoff=cutoff)
+        neighborhood_df = calculate_neighborhood_features(self.context, self.features)
         merge_cols = ["chain", "resi_struct", "resn_struct"]
         
         self.features = pd.merge(
