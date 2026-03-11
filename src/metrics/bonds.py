@@ -859,3 +859,59 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
         context.extras['bonds_df'] = pd.concat([context.extras['bonds_df'], hbonds_df], ignore_index=True)
 
     return metadata_df
+
+
+@register_metric(
+    name='total_bond_count',
+    provides=['total_bond_count', 'total_within_chain_bonds', 'total_between_chain_bonds'],
+    tags={'bonds'},
+)
+def calculate_total_bond_count(context: Context) -> pd.DataFrame:
+    """Aggregate row-level bond participation counts per residue.
+
+    Aggregates counts from ``context.extras['bonds_df']`` after filtering to
+    protein-protein interactions. Produces total counts, plus within-chain and
+    between-chain splits based on ``chain`` vs ``partner_chain``.
+    """
+    if 'bonds_df' not in context.extras:
+        raise ValueError(
+            "context.extras['bonds_df'] is missing. Run one or more bond metrics "
+            "before computing total_bond_count."
+        )
+
+    # Get metadata columns
+    metadata = get_metadata_cols(context.array)
+    metadata['total_bond_count'] = 0
+    metadata['total_within_chain_bonds'] = 0
+    metadata['total_between_chain_bonds'] = 0
+
+    bonds_df = context.extras['bonds_df']
+    protein_bonds = bonds_df[bonds_df['protein_protein']]
+
+    # Group by chain and residue to get total counts, within-chain counts, and between-chain counts
+    total_counts = protein_bonds.groupby(['chain', 'resi_struct']).size()
+    within_counts = protein_bonds[
+        protein_bonds['chain'] == protein_bonds['partner_chain']
+    ].groupby(['chain', 'resi_struct']).size()
+    between_counts = protein_bonds[
+        protein_bonds['chain'] != protein_bonds['partner_chain']
+    ].groupby(['chain', 'resi_struct']).size()
+
+    # Add counts to metadata
+    for (chain, resi), count in total_counts.items():
+        metadata.loc[
+            (metadata['chain'] == chain) & (metadata['resi_struct'] == resi),
+            'total_bond_count',
+        ] = count
+    for (chain, resi), count in within_counts.items():
+        metadata.loc[
+            (metadata['chain'] == chain) & (metadata['resi_struct'] == resi),
+            'total_within_chain_bonds',
+        ] = count
+    for (chain, resi), count in between_counts.items():
+        metadata.loc[
+            (metadata['chain'] == chain) & (metadata['resi_struct'] == resi),
+            'total_between_chain_bonds',
+        ] = count
+
+    return metadata

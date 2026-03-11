@@ -1,5 +1,6 @@
 """Tests for bonds metrics module."""
 import pandas as pd
+import pytest
 
 from src.metrics import bonds
 from src.pipeline.context import Context
@@ -564,4 +565,86 @@ def test_bonds_df_consolidation():
     if len(bonds_df) > 0:
         bond_types = bonds_df['bond_type'].unique()
         assert 'salt_bridge' in bond_types or 'disulfide' in bond_types
+
+
+def test_calculate_total_bond_count_from_bonds_df():
+    """Aggregate metric computes total/within/between directly from bonds_df rows."""
+    arr = struc.concatenate([
+        _make_residue('ALA', res_id=1, chain_id='A'),
+        _make_residue('GLY', res_id=2, chain_id='A'),
+        _make_residue('CYS', res_id=3, chain_id='A'),
+        _make_residue('CYS', res_id=4, chain_id='B'),
+    ])
+    context = Context(array=arr)
+
+    # Row-level table is enough for aggregate tests; no synthetic geometry required.
+    context.extras['bonds_df'] = pd.DataFrame([
+        # Within-chain bond (counted)
+        {
+            'chain': 'A', 'resi_struct': 1, 'resn_struct': 'ALA',
+            'partner_chain': 'A', 'partner_resi': 2, 'partner_resn': 'GLY',
+            'bond_type': 'salt_bridge', 'extras': {}, 'protein_protein': True,
+        },
+        {
+            'chain': 'A', 'resi_struct': 2, 'resn_struct': 'GLY',
+            'partner_chain': 'A', 'partner_resi': 1, 'partner_resn': 'ALA',
+            'bond_type': 'salt_bridge', 'extras': {}, 'protein_protein': True,
+        },
+        # Between-chain bond (counted)
+        {
+            'chain': 'A', 'resi_struct': 3, 'resn_struct': 'CYS',
+            'partner_chain': 'B', 'partner_resi': 4, 'partner_resn': 'CYS',
+            'bond_type': 'disulfide', 'extras': {}, 'protein_protein': True,
+        },
+        {
+            'chain': 'B', 'resi_struct': 4, 'resn_struct': 'CYS',
+            'partner_chain': 'A', 'partner_resi': 3, 'partner_resn': 'CYS',
+            'bond_type': 'disulfide', 'extras': {}, 'protein_protein': True,
+        },
+        # Protein-ligand row (excluded by protein_protein filter)
+        {
+            'chain': 'A', 'resi_struct': 1, 'resn_struct': 'ALA',
+            'partner_chain': 'L', 'partner_resi': 100, 'partner_resn': 'LIG',
+            'bond_type': 'vdw_contact', 'extras': {}, 'protein_protein': False,
+        },
+    ])
+
+    result = bonds.calculate_total_bond_count(context)
+
+    for col in ['total_bond_count', 'total_within_chain_bonds', 'total_between_chain_bonds']:
+        assert col in result.columns
+
+    ala1_row = result[(result['chain'] == 'A') & (result['resi_struct'] == 1)].iloc[0]
+    gly2_row = result[(result['chain'] == 'A') & (result['resi_struct'] == 2)].iloc[0]
+    cys3_row = result[(result['chain'] == 'A') & (result['resi_struct'] == 3)].iloc[0]
+    cys4_row = result[(result['chain'] == 'B') & (result['resi_struct'] == 4)].iloc[0]
+
+    assert ala1_row['total_bond_count'] == 1
+    assert ala1_row['total_within_chain_bonds'] == 1
+    assert ala1_row['total_between_chain_bonds'] == 0
+
+    assert gly2_row['total_bond_count'] == 1
+    assert gly2_row['total_within_chain_bonds'] == 1
+    assert gly2_row['total_between_chain_bonds'] == 0
+
+    assert cys3_row['total_bond_count'] == 1
+    assert cys3_row['total_within_chain_bonds'] == 0
+    assert cys3_row['total_between_chain_bonds'] == 1
+
+    assert cys4_row['total_bond_count'] == 1
+    assert cys4_row['total_within_chain_bonds'] == 0
+    assert cys4_row['total_between_chain_bonds'] == 1
+
+
+def test_calculate_total_bond_count_raises_when_bonds_df_missing():
+    """Aggregate metric requires context.extras['bonds_df'] to exist."""
+    arr = struc.concatenate([
+        _make_residue('ALA', res_id=1, chain_id='A'),
+        _make_residue('GLY', res_id=2, chain_id='A'),
+    ])
+    context = Context(array=arr)
+
+    assert 'bonds_df' not in context.extras
+    with pytest.raises(ValueError, match=r"context\.extras\['bonds_df'\] is missing"):
+        bonds.calculate_total_bond_count(context)
 
