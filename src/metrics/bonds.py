@@ -40,7 +40,7 @@ VDW_RADII = {
 }
 
 def get_residue_atoms(array: struc.AtomArray, chain: str, resi: int, atom_names: list) -> np.ndarray:
-    """Get coordinates of specific atoms in a residue."""f
+    """Get coordinates of specific atoms in a residue."""
     mask = (array.chain_id == chain) & (array.res_id == resi) & np.isin(array.atom_name, atom_names)
     return array.coord[mask]
 
