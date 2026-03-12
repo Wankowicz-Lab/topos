@@ -439,7 +439,7 @@ def test_runner_run_metric_no_mutations(tmp_path):
 
 
 def test_runner_run(tmp_path):
-    pdb_id = '8efo'
+    pdb_id = '4LDE'
 
     myrunner = runner.Runner(
         pdb_id=pdb_id,
