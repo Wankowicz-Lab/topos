@@ -1,0 +1,10 @@
+name: biogenesis-py311
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - dssp                   # provides mkdssp binary for secondary-structure annotation
+  - pip:
+    - -e .
