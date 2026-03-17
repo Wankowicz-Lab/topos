@@ -616,7 +616,7 @@ def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5) 
     return metadata
 
 
-def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFrame:
+def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0, angle_cutoff: float = 30.0) -> pd.DataFrame:
     """Identify cation-pi interactions in a protein structure.
 
     Parameters
@@ -625,6 +625,10 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
         Biotite AtomArray containing protein structure data.
     cutoff: float
         Cutoff distance for cation-pi interactions.
+    angle_cutoff: float
+        Maximum angle (degrees) between the ring normal and the
+        cation-centroid vector. Ensures the cation is above/below
+        the ring face rather than in-plane.
 
     Returns
     -------
@@ -634,7 +638,6 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
         (extras contains 'role' key)
     """
 
-    # Get residue starts and metadata
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
@@ -642,10 +645,8 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
     
     results = []
     
-    # Get cation atoms
     cation_atoms = {'LYS': ['NZ'], 'ARG': ['CZ']}
     
-    # Iterate over cationic residues to get cation coordinates
     cation_data = []
     for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames)):
         if rn in CATIONIC_RESIDUES:
@@ -653,44 +654,52 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
             if len(atoms) > 0:
                 cation_data.append((i, ch, ri, rn, atoms[0]))
     
-    # Iterate over aromatic residues to get ring center coordinates
     aromatic_data = []
     for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames)):
         if rn in AROMATIC_RESIDUES:
             center = get_ring_center(array, ch, ri, rn)
-            if center is not None:
-                aromatic_data.append((i, ch, ri, rn, center))
+            normal = get_ring_normal(array, ch, ri, rn)
+            if center is not None and normal is not None:
+                aromatic_data.append((i, ch, ri, rn, center, normal))
     
-    # Calculate cutoff distance
     cutoff2 = cutoff * cutoff
+    angle_cutoff_rad = np.radians(angle_cutoff)
     
-    # Iterate over cationic residues to identify cation-pi interactions
     for cat_idx, cat_ch, cat_ri, cat_rn, cat_coord in cation_data:
-        for aro_idx, aro_ch, aro_ri, aro_rn, aro_center in aromatic_data:
-            d2 = np.sum((cat_coord - aro_center)**2)
+        for aro_idx, aro_ch, aro_ri, aro_rn, aro_center, aro_normal in aromatic_data:
+            vec = cat_coord - aro_center
+            d2 = np.dot(vec, vec)
             
-            if d2 <= cutoff2:
-                results.append({
-                    'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': res_key(cat_ch, cat_ri, cat_rn),
-                    'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn, 'partner_residue_key': res_key(aro_ch, aro_ri, aro_rn),
-                    'bond_type': 'cation_pi',
-                    'extras': {'role': 'cation'}
-                })
-                results.append({
-                    'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn, 'residue_key': res_key(aro_ch, aro_ri, aro_rn),
-                    'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn, 'partner_residue_key': res_key(cat_ch, cat_ri, cat_rn),
-                    'bond_type': 'cation_pi',
-                    'extras': {'role': 'aromatic'}
-                })
+            if d2 > cutoff2:
+                continue
+
+            # Check that the cation is above/below the ring face
+            dist = np.sqrt(d2)
+            cos_angle = abs(np.dot(vec, aro_normal)) / dist
+            angle = np.arccos(np.clip(cos_angle, 0.0, 1.0))
+            
+            if angle > angle_cutoff_rad:
+                continue
+                
+            results.append({
+                'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': res_key(cat_ch, cat_ri, cat_rn),
+                'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn, 'partner_residue_key': res_key(aro_ch, aro_ri, aro_rn),
+                'bond_type': 'cation_pi',
+                'extras': {'role': 'cation'}
+            })
+            results.append({
+                'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn, 'residue_key': res_key(aro_ch, aro_ri, aro_rn),
+                'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn, 'partner_residue_key': res_key(cat_ch, cat_ri, cat_rn),
+                'bond_type': 'cation_pi',
+                'extras': {'role': 'aromatic'}
+            })
     
-    # Define standard columns
     standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
     else:
         return pd.DataFrame(columns=standard_columns)
-
 
 @register_metric(name='cation_pi_count', provides=['cation_pi_count'], tags={'bonds'})
 def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataFrame:
