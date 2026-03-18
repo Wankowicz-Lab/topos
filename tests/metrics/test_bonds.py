@@ -401,7 +401,7 @@ def test_identify_cation_pi():
     phe = _make_residue('PHE', res_id=2, chain_id='A', coords=phe_coords)
     arr = struc.concatenate([lys, phe])
     
-    result = bonds.identify_cation_pi(arr, cutoff=6.0, angle)
+    result = bonds.identify_cation_pi(arr, cutoff=6.0, angle_cutoff=30.0)
     
     assert len(result) == 2
     
