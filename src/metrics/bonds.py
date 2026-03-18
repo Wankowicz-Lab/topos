@@ -42,6 +42,8 @@ VDW_RADII = {
     'C': 1.70, 'N': 1.55, 'O': 1.52, 'S': 1.80, 'H': 1.20,
 }
 
+SOLVENT_RESIDUES = {'HOH', 'WAT', 'DOD', 'TIP', 'TIP3', 'SPC'}
+
 def get_residue_atoms(array: struc.AtomArray, chain: str, resi: int, atom_names: list) -> np.ndarray:
     """Get coordinates of specific atoms in a residue."""
     mask = (array.chain_id == chain) & (array.res_id == resi) & np.isin(array.atom_name, atom_names)
