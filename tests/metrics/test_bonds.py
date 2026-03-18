@@ -401,7 +401,7 @@ def test_identify_cation_pi():
     phe = _make_residue('PHE', res_id=2, chain_id='A', coords=phe_coords)
     arr = struc.concatenate([lys, phe])
     
-    result = bonds.identify_cation_pi(arr, cutoff=6.0)
+    result = bonds.identify_cation_pi(arr, cutoff=6.0, angle)
     
     assert len(result) == 2
     
@@ -452,7 +452,7 @@ def test_calculate_cation_pi_count():
     arr = struc.concatenate([lys, phe])
     context = Context(array=arr)
     
-    result = bonds.calculate_cation_pi_count(context, cutoff=6.0)
+    result = bonds.calculate_cation_pi_count(context, cutoff=6.0, angle_cutoff=30.0)
     
     assert isinstance(result, pd.DataFrame)
     assert 'cation_pi_count' in result.columns
