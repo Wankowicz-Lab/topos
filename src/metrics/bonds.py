@@ -868,6 +868,11 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
         DataFrame with 'bb_hbond_count', 'sc_hbond_count', 'total_hbond_count' along with residue metadata.
     """
     array = context.array
+    
+    # Non-sovlent atoms
+    solvent_mask = np.isin(array.res_name, list(SOLVENT_RESIDUES))
+    array = array[~solvent_mask]
+    
     if context.config.structural_feature_chains is not None:
         chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
         array = array[chain_mask]
