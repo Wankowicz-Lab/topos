@@ -452,7 +452,7 @@ def test_calculate_cation_pi_count():
     arr = struc.concatenate([lys, phe])
     context = Context(array=arr)
     
-    result = bonds.calculate_cation_pi_count(context, cutoff=6.0, angle_cutoff=30.0)
+    result = bonds.calculate_cation_pi_count(context, cutoff=6.0)
     
     assert isinstance(result, pd.DataFrame)
     assert 'cation_pi_count' in result.columns
