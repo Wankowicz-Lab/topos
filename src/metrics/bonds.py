@@ -32,6 +32,12 @@ SALT_BRIDGE_ATOMS = {
     'ARG': ['NH1', 'NH2', 'NE'],
 }
 
+IONIC_BOND_ATOMS = {
+    'HIS': ['ND1', 'NE2'],
+    'ASP': ['OD1', 'OD2'],
+    'GLU': ['OE1', 'OE2'],
+}
+
 AROMATIC_RING_ATOMS = {
     'PHE': ['CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'],
     'TYR': ['CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'],
@@ -273,55 +279,76 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
-    
+ 
     results = []
-    
+ 
+    # HIS residues as the conditionally-charged partner
+    his_indices = [i for i, rn in enumerate(resnames) if rn == 'HIS']
     acidic_indices = [i for i, rn in enumerate(resnames) if rn in ACIDIC_RESIDUES]
-    ionic_indices = [i for i, rn in enumerate(resnames) if rn in PROTONATION_STATE_RESIDUES]
-    
+ 
     cutoff2 = cutoff * cutoff
-    
-    # Iterate over ionic residues
-    for ionic_idx in ionic_indices:
-        ionic_chain, ionic_resi, ionic_resn = chains[ionic_idx], res_ids[ionic_idx], resnames[ionic_idx]
-        ionic_atoms = get_residue_atoms(array, ionic_chain, ionic_resi, SALT_BRIDGE_ATOMS[ionic_resn])
-        if len(ionic_atoms) == 0:
+ 
+    for his_idx in his_indices:
+        his_chain = chains[his_idx]
+        his_resi = res_ids[his_idx]
+        his_resn = resnames[his_idx]
+        his_atoms = get_residue_atoms(
+            array, his_chain, his_resi, IONIC_BOND_ATOMS['HIS']
+        )
+        if len(his_atoms) == 0:
             continue
-            
-        # Iterate over acidic residues
+ 
         for acidic_idx in acidic_indices:
-            acidic_chain, acidic_resi, acidic_resn = chains[acidic_idx], res_ids[acidic_idx], resnames[acidic_idx]
-            acidic_atoms = get_residue_atoms(array, acidic_chain, acidic_resi, SALT_BRIDGE_ATOMS[acidic_resn])
+            acidic_chain = chains[acidic_idx]
+            acidic_resi = res_ids[acidic_idx]
+            acidic_resn = resnames[acidic_idx]
+ 
+            # Exclude sequence-adjacent residues on the same chain
+            if his_chain == acidic_chain and abs(int(his_resi) - int(acidic_resi)) <= 1:
+                continue
+ 
+            acidic_atoms = get_residue_atoms(
+                array, acidic_chain, acidic_resi, IONIC_BOND_ATOMS[acidic_resn]
+            )
             if len(acidic_atoms) == 0:
                 continue
-            
-            # Exclude adjacent residues if part of the same chain
-            if ionic_chain == acidic_chain:
-                if abs(ionic_resi - acidic_resi) == 1:
-                    continue
-            
-            # Calculate distance between ionic and acidic atoms
-            diff = ionic_atoms[:, None, :] - acidic_atoms[None, :, :]
+ 
+            # Minimum distance between the two atom sets
+            diff = his_atoms[:, None, :] - acidic_atoms[None, :, :]
             d2 = np.einsum("ijk,ijk->ij", diff, diff)
-            
-            # If distance is less than cutoff, add to results (acidic first, then ionic, matching salt_bridge order)
+ 
             if d2.min() <= cutoff2:
                 results.append({
-                    'chain': acidic_chain, 'resi_struct': int(acidic_resi), 'resn_struct': acidic_resn, 'residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
-                    'partner_chain': ionic_chain, 'partner_resi': int(ionic_resi), 'partner_resn': ionic_resn, 'partner_residue_key': res_key(ionic_chain, ionic_resi, ionic_resn),
+                    'chain': acidic_chain,
+                    'resi_struct': int(acidic_resi),
+                    'resn_struct': acidic_resn,
+                    'residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
+                    'partner_chain': his_chain,
+                    'partner_resi': int(his_resi),
+                    'partner_resn': his_resn,
+                    'partner_residue_key': res_key(his_chain, his_resi, his_resn),
                     'bond_type': 'ionic',
-                    'extras': {}
+                    'extras': {},
                 })
                 results.append({
-                    'chain': ionic_chain, 'resi_struct': int(ionic_resi), 'resn_struct': ionic_resn, 'residue_key': res_key(ionic_chain, ionic_resi, ionic_resn),
-                    'partner_chain': acidic_chain, 'partner_resi': int(acidic_resi), 'partner_resn': acidic_resn, 'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
+                    'chain': his_chain,
+                    'resi_struct': int(his_resi),
+                    'resn_struct': his_resn,
+                    'residue_key': res_key(his_chain, his_resi, his_resn),
+                    'partner_chain': acidic_chain,
+                    'partner_resi': int(acidic_resi),
+                    'partner_resn': acidic_resn,
+                    'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
                     'bond_type': 'ionic',
-                    'extras': {}
+                    'extras': {},
                 })
-    
-    # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
-    
+ 
+    standard_columns = [
+        'chain', 'resi_struct', 'resn_struct', 'residue_key',
+        'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key',
+        'bond_type', 'extras',
+    ]
+ 
     if results:
         return pd.DataFrame(results)
     else:
