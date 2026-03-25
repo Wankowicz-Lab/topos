@@ -23,7 +23,7 @@ conda activate biogenesis-py311
 - Downloading a structure by PDB ID
 - Membrane protein handling: PDBTM annotation, membrane orientation, `distance_from_membrane_edge`
 - Aligning DMS data to a specific chain (`mutation_data_chain = "A"`)
-- Full metric set including sequence-level metrics (blosum, aaindex, kidera, effect scores); AAindex outputs use `{accession}_{category}_wt`, `_mut`, and `_diff` from `data/aaindex_parsed_small.csv` (see repository `README.md` for the required CSV columns)
+- Full metric set including sequence-level metrics (blosum, aaindex, kidera, effect scores)
 - Expected alignment warnings when the DMS construct differs from the deposited structure
 
 ```bash

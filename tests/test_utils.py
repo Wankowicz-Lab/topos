@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import tomli_w
 
-from src.metrics.sequence import AAINDEX_AA_COLUMNS
+from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 
 # Seed RNGs for reproducible test data generation
 np.random.seed(42)

@@ -6,9 +6,8 @@ import pandas as pd
 import pytest
 
 from src.metrics import sequence as metrics
+from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.sequence.utils import convert_amino_acid
-from src.metrics.sequence import AAINDEX_AA_COLUMNS
-
 from tests.test_utils import AA_LIST, _make_aaindex_data, _make_residue_table
 
 # Seed RNGs for deterministic tests
@@ -185,11 +184,13 @@ def test_calculate_aaindex_scores_no_muts():
     # calculate aaindex scores
     aaindex_df = metrics.calculate_aaindex_scores(context)
 
+    # check that aaindex scores are added
     output_cols = [f"{r['accession']}_{r['category']}_wt" for _, r in aaindex_data.iterrows()]
 
     for col in output_cols:
         assert col in aaindex_df.columns
 
+    # verify that values are correct for wildtype
     for _, r in aaindex_data.iterrows():
         base = f"{r['accession']}_{r['category']}"
         feature_values = r.loc[list(AAINDEX_AA_COLUMNS)]
@@ -214,6 +215,7 @@ def test_calculate_aaindex_scores_with_muts():
     # calculate aaindex scores
     aaindex_df = metrics.calculate_aaindex_scores(context)
 
+    # check that aaindex scores are added
     output_cols = []
     for _, r in aaindex_data.iterrows():
         base = f"{r['accession']}_{r['category']}"
@@ -222,6 +224,7 @@ def test_calculate_aaindex_scores_with_muts():
     for col in output_cols:
         assert col in aaindex_df.columns
 
+    # verify that values are correct for wildtype, mutant, and diff
     for _, r in aaindex_data.iterrows():
         base = f"{r['accession']}_{r['category']}"
         feature_values = r.loc[list(AAINDEX_AA_COLUMNS)]

@@ -78,6 +78,18 @@ def test_context(tmp_path):
     )
     assert context_with_aaindex.config.membrane_protein is True
 
+
+def test_context_rejects_invalid_aaindex_columns(tmp_path):
+    arr = _make_chain(aa_list=['ALA'], chain_id='A')
+    bad_path = tmp_path / "bad_aaindex.csv"
+    pd.DataFrame({'accession': ['X'], 'description': ['d'], 'category': ['c'], 'ALA': [0.0]}).to_csv(
+        bad_path, index=False
+    )
+    config = Config(aaindex_path=bad_path, membrane_protein=False)
+    with pytest.raises(ValueError, match="AAindex CSV columns must match"):
+        Context(array=arr, config=config)
+
+
 def test_context_with_altloc():
     """Test that Context properly handles arrays with altloc information."""
     aa_list = ['SER', 'THR', 'TYR']

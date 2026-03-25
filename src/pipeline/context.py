@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from src.metrics.aaindex_schema import validate_aaindex_columns
+
 # Import structure-loading helpers
 from src.structure.structure_context import ensure_altloc_annotation, residue_table
 
@@ -61,8 +63,7 @@ class Config(BaseModel):
     mutation_score_col_name : str
         Column name for mutation effect scores in mutation data (default: "effect").
     aaindex_path : Path
-        Path to AAindex CSV with columns ``accession``, ``description``, ``category``,
-        then ``ALA``…``VAL`` in order (default: 'data/aaindex_parsed_small.csv').
+        Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
     kidera_path: Path
         Path to Kidera factors data (default: 'data/kidera_factors.csv').
     structural_feature_chains : Optional[List[str]]
@@ -164,6 +165,7 @@ class Context:
         
         if self.config.aaindex_path is not None:
             aa_index = pd.read_csv(self.config.aaindex_path)
+            validate_aaindex_columns(aa_index)
             self.extras['aaindex'] = aa_index
 
         if self.config.kidera_path is not None:

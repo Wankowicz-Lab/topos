@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from Bio.Align import substitution_matrices
 
+from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.metrics.registry import register_metric
 from src.pipeline.context import Context
 from src.sequence.utils import convert_amino_acid
@@ -14,12 +15,6 @@ logger = logging.getLogger(__name__)
 
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi_mut', 'resn_mut', 'resm']
-
-# AAindex CSV layout: accession, description, category, then these 20 columns in order.
-AAINDEX_AA_COLUMNS = (
-    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
-    'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL',
-)
 
 @register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
                  requires={'resm'}, tags={'sequence'})
@@ -160,10 +155,6 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
     Calculate AAIndex scores for each mutation in the scores DataFrame.
 
-    Expects ``context.extras['aaindex']`` to be a DataFrame whose columns are
-    ``accession``, ``description``, ``category``, followed by the 20 residue columns
-    in ``AAINDEX_AA_COLUMNS`` order.
-
     Parameters
     ----------
     context : Context
@@ -175,8 +166,10 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
         DataFrame with ``{accession}_{category}_wt``, ``{accession}_{category}_mut``,
         and ``{accession}_{category}_diff`` for each index row, along with residue metadata.
     """
+    # extract params
     residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
 
+    # remove resm if not present
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table.loc[residue_table.mut_info, keep_cols].copy()
 
@@ -188,6 +181,7 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
 
         aaindex_scores[f'{base}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
 
+        # calculate for mutant only if mutation column exists
         if 'resm' in keep_cols:
             aaindex_scores[f'{base}_mut'] = aaindex_scores['resm'].map(feature_values)
             aaindex_scores[f'{base}_diff'] = (
