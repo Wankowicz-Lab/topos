@@ -8,6 +8,7 @@ These guidelines apply to all code in this repository.
 - Validate inputs robustly at user-facing or I/O boundaries and return clear errors.
 - Let failures surface naturally in internal code; avoid broad exception handling that hides issues.
 - Prefer direct access over defensive defaults when required data is expected (e.g., `data['key']` over `data.get(...)`).
+- Unless the user or plan mode explicitly calls for it, assume changes need not be backwards compatible; do not add compatibility shims, fallbacks, or dual code paths for older behavior.
 
 **Anti-patterns:**
 - `value = data.get('key', None)` when `data['key']` is required.
