@@ -1,7 +1,7 @@
 ---
 name: run-tests
 description: Runs and interprets pytest using a fast, incremental workflow (scoped tests first with fail-fast, then full suite). Covers install per project docs, CI parity, and network for remote-dependent tests. Use when running tests, fixing failures, or preparing a PR; use when the user mentions pytest, test suite, CI tests, or local verification.
-compatibility: Outbound network is often required for integration tests (HTTP, registries, external services). Use terminal network/full_network permissions in sandboxed agent runs when tests fail with connection or DNS errors.
+compatibility: Outbound network is often required for integration tests (HTTP, registries, external services). Use terminal network/full_network permissions in sandboxed agent runs when tests fail with connection or DNS errors. Prefer a **project-local `.venv`** for `pip`/`pytest` so installs do not write outside the workspace; if `pip install` hits permission errors on user site-packages, create `.venv` in the repo or use full permissions once.
 ---
 
 # Run tests (pytest)
@@ -15,6 +15,8 @@ pip install -e ".[test]"
 ```
 
 - **Optional system or native dependencies** (compilers, CLIs, databases): only what the README or CI workflow documents—install when tests or docs indicate they are required.
+
+- **Virtual environment (agent/sandbox)**: If `.venv/` exists at the repo root, **activate it** before `pip`/`pytest` (e.g. `. .venv/bin/activate` on Unix). That avoids permission failures when the sandbox blocks writes to user-level `site-packages`. If there is no venv and `pip install -e ".[test]"` fails with `Operation not permitted` outside the workspace, create one in-repo (`python3 -m venv .venv`) and reinstall, or rerun install with full permissions once.
 
 ## Philosophy
 

@@ -1,7 +1,7 @@
 ---
 name: open-github-pr
 description: Prepares and opens a GitHub pull request for this repository. Use when opening a PR, merging via GitHub, pushing a feature branch, or when the user says pull request, gh pr, or ready to merge.
-compatibility: Requires git; `git push` and GitHub API need network. Install GitHub CLI (`gh`) for `gh pr create`, or open the compare URL in a browser.
+compatibility: Requires git; `git push` and GitHub API need network. Install GitHub CLI (`gh`) for `gh pr create`, or open the compare URL in a browser. Linked worktrees may need **full** (non-sandboxed) terminal permissions for `git checkout -b` / `git push` if refs live outside the worktree path.
 ---
 
 # Open a GitHub pull request
@@ -23,6 +23,10 @@ The same repo may be edited in a **linked worktree** (`git worktree list` shows 
 | **Already on a feature branch** | No extra branch step; ensure it is pushed |
 
 Use a branch name that reflects the change. If unsure, derive it from the main commit theme.
+
+### Worktrees and sandboxed git
+
+In a **linked worktree**, branch refs are stored under the **main repository’s `.git`**, not only inside the worktree directory. Agent terminals with a **filesystem sandbox** may deny creating refs (`cannot lock ref`, `Operation not permitted` under `.../refs/heads/...`). If that happens when running `git checkout -b` or similar, **retry the same git command with full permissions** (disable sandbox / request `all`) so the parent `.git` can be updated.
 
 ## Push
 
@@ -56,7 +60,14 @@ If the PR is large, prefer accurate summary over listing every file.
 gh pr create --title "..." --body "..."
 ```
 
-Use `--draft` if the user wants a draft. If `gh` is missing, say so and give the remote compare URL pattern: `https://github.com/<org>/<repo>/compare/<branch>?expand=1` (derive org/repo from `git remote -v`).
+If `gh` is **not on `PATH`** (common in non-interactive shells), try Homebrew locations first, then fall back to the compare URL:
+
+```bash
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" gh pr create --title "..." --body "..."
+# or: /opt/homebrew/bin/gh pr create ...
+```
+
+Use `--draft` if the user wants a draft. If `gh` is not installed anywhere, give the remote compare URL: `https://github.com/<org>/<repo>/compare/<branch>?expand=1` (derive org/repo from `git remote -v`).
 
 ## Checklist
 
