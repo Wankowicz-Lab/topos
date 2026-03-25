@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: Runs Ruff (`ruff check src tests`) per CI, then pytest using a fast, incremental workflow (scoped tests first with fail-fast, then full suite). Covers install per project docs, CI parity, and network for remote-dependent tests. Use when running tests, fixing failures, or preparing a PR; use when the user mentions pytest, ruff, test suite, CI tests, or local verification.
+description: Runs Ruff then pytest. Use when running tests, fixing failures, or preparing a PR; use when the user mentions pytest, ruff, test suite, CI tests, or local verification.
 compatibility: Outbound network is often required for integration tests (HTTP, registries, external services). Use terminal network/full_network permissions in sandboxed agent runs when tests fail with connection or DNS errors. Prefer a **project-local `.venv`** for `pip`/`pytest` so installs do not write outside the workspace; if `pip install` hits permission errors on user site-packages, create `.venv` in the repo or use full permissions once.
 ---
 
