@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: Runs and interprets pytest using a fast, incremental workflow (scoped tests first with fail-fast, then full suite). Covers install per project docs, CI parity, and network for remote-dependent tests. Use when running tests, fixing failures, or preparing a PR; use when the user mentions pytest, test suite, CI tests, or local verification.
+description: Runs Ruff then pytest. Use when running tests, fixing failures, or preparing a PR; use when the user mentions pytest, ruff, test suite, CI tests, or local verification.
 compatibility: Outbound network is often required for integration tests (HTTP, registries, external services). Use terminal network/full_network permissions in sandboxed agent runs when tests fail with connection or DNS errors. Prefer a **project-local `.venv`** for `pip`/`pytest` so installs do not write outside the workspace; if `pip install` hits permission errors on user site-packages, create `.venv` in the repo or use full permissions once.
 ---
 
@@ -25,6 +25,16 @@ pip install -e ".[test]"
 - **Fail fast**: if a test fails, fix it before running more tests in that phase (`pytest -x` or `--maxfail=1`). No need to burn time on the rest until the current failure is resolved.
 - **Full suite last**: once scoped tests pass, run the **entire** test tree (same expectation as CI).
 - **Testing style**: if the repo has [AGENTS.md](../../../AGENTS.md), follow it; otherwise prefer high-value assertions and small deterministic inputs.
+
+## Ruff (lint, CI parity)
+
+CI runs **Ruff** before pytest on Python 3.11 (see [`.github/workflows/test.yml`](../../../.github/workflows/test.yml) “Run Ruff”). After `pip install -e ".[test]"` (which includes `ruff`), run the same check locally:
+
+```bash
+ruff check src tests
+```
+
+Fix any reported issues before merging. Running Ruff early (e.g. right after install, or after small edits) catches style issues before you spend time on pytest. CI only executes this step on one matrix version; locally you can run it with any Python that has `ruff` installed.
 
 ## Network / sandbox (default)
 
@@ -72,6 +82,8 @@ pytest <path/to/test_a.py> <path/to/test_b.py> -v -x
 For a single test: `pytest tests/path/test_file.py::test_function_name -v`. For a name filter: `pytest -k "pattern" -v` (use sparingly).
 
 ## Step 4 — Full suite (after scoped tests pass)
+
+Run **Ruff** (`ruff check src tests`) if you have not already, so local results match CI lint + test order.
 
 Align with CI if the repo has a workflow (e.g. [`.github/workflows/test.yml`](../../../.github/workflows/test.yml))—match its pytest arguments when practical:
 

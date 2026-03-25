@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from src.metrics import sequence as metrics
+from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.sequence.utils import convert_amino_acid
 from tests.test_utils import AA_LIST, _make_aaindex_data, _make_residue_table
 
@@ -184,17 +185,18 @@ def test_calculate_aaindex_scores_no_muts():
     aaindex_df = metrics.calculate_aaindex_scores(context)
 
     # check that aaindex scores are added
-    output_cols = [f'AAIndex_{acc}_wt' for acc in accessions]
+    output_cols = [f"{r['accession']}_{r['category']}_wt" for _, r in aaindex_data.iterrows()]
 
     for col in output_cols:
         assert col in aaindex_df.columns
 
     # verify that values are correct for wildtype
-    for acc in accessions:
-        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[1:]
+    for _, r in aaindex_data.iterrows():
+        base = f"{r['accession']}_{r['category']}"
+        feature_values = r.loc[list(AAINDEX_AA_COLUMNS)]
         for idx, row in aaindex_df.iterrows():
             expected_value = feature_values.get(row['resn_mut'], np.nan)
-            assert aaindex_df.at[idx, f'AAIndex_{acc}_wt'] == expected_value
+            assert aaindex_df.at[idx, f'{base}_wt'] == expected_value
 
 
 def test_calculate_aaindex_scores_with_muts():
@@ -215,26 +217,28 @@ def test_calculate_aaindex_scores_with_muts():
 
     # check that aaindex scores are added
     output_cols = []
-    for acc in accessions:
-        output_cols.extend([f'AAIndex_{acc}_wt', f'AAIndex_{acc}_mut', f'AAIndex_{acc}_diff'])
+    for _, r in aaindex_data.iterrows():
+        base = f"{r['accession']}_{r['category']}"
+        output_cols.extend([f'{base}_wt', f'{base}_mut', f'{base}_diff'])
 
     for col in output_cols:
         assert col in aaindex_df.columns
 
     # verify that values are correct for wildtype, mutant, and diff
-    for acc in accessions:
-        feature_values = aaindex_data.set_index('accession').loc[acc].iloc[1:]
+    for _, r in aaindex_data.iterrows():
+        base = f"{r['accession']}_{r['category']}"
+        feature_values = r.loc[list(AAINDEX_AA_COLUMNS)]
         for idx, row in aaindex_df.iterrows():
             expected_wt = feature_values.get(row['resn_mut'], np.nan)
             expected_mut = feature_values.get(row['resm'], np.nan)
             expected_diff = expected_mut - expected_wt if not (np.isnan(expected_wt) or np.isnan(expected_mut)) else np.nan
 
-            assert aaindex_df.at[idx, f'AAIndex_{acc}_wt'] == expected_wt
-            assert aaindex_df.at[idx, f'AAIndex_{acc}_mut'] == expected_mut
+            assert aaindex_df.at[idx, f'{base}_wt'] == expected_wt
+            assert aaindex_df.at[idx, f'{base}_mut'] == expected_mut
             if np.isnan(expected_diff):
-                assert np.isnan(aaindex_df.at[idx, f'AAIndex_{acc}_diff'])
+                assert np.isnan(aaindex_df.at[idx, f'{base}_diff'])
             else:
-                assert aaindex_df.at[idx, f'AAIndex_{acc}_diff'] == expected_diff
+                assert aaindex_df.at[idx, f'{base}_diff'] == expected_diff
 
 
 def test_calculate_kidera_factor_scores_no_muts():

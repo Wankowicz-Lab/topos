@@ -1,6 +1,7 @@
 """Tests for pipeline context module."""
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import tomli
 
@@ -69,8 +70,25 @@ def test_context(tmp_path):
     context_with_aaindex = Context(array=arr, config=config)
 
     assert 'aaindex' in context_with_aaindex.extras
-    assert context_with_aaindex.extras['aaindex'].equals(aaindex_data)
+    pd.testing.assert_frame_equal(
+        context_with_aaindex.extras['aaindex'],
+        aaindex_data,
+        rtol=1e-9,
+        atol=1e-12,
+    )
     assert context_with_aaindex.config.membrane_protein is True
+
+
+def test_context_rejects_invalid_aaindex_columns(tmp_path):
+    arr = _make_chain(aa_list=['ALA'], chain_id='A')
+    bad_path = tmp_path / "bad_aaindex.csv"
+    pd.DataFrame({'accession': ['X'], 'description': ['d'], 'category': ['c'], 'ALA': [0.0]}).to_csv(
+        bad_path, index=False
+    )
+    config = Config(aaindex_path=bad_path, membrane_protein=False)
+    with pytest.raises(ValueError, match="AAindex CSV columns must match"):
+        Context(array=arr, config=config)
+
 
 def test_context_with_altloc():
     """Test that Context properly handles arrays with altloc information."""

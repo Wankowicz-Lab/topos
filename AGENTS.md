@@ -33,6 +33,22 @@ These guidelines apply to all code in this repository.
 - Comment dense/non-obvious sections frequently enough that intent is clear without reverse-engineering.
 - Explain "why/how", not line-by-line "what".
 
+### Docstrings and inline comments (scope)
+
+The goal is a **high-level summary**: what the unit does, non-obvious behavior, and real constraints that affect callers. The goal is **not** to restate every contract, file format, or column list that already lives elsewhere.
+
+- **Docstrings (functions, methods):** Summarize purpose, parameters, and return shape in plain language. Put **stable user-facing contracts** (file layouts, config tables, output column dictionaries) in the **README** or other top-level docs—not in every helper’s docstring. If a format is essential to *using* the function, one short sentence can point to the canonical doc or the named constant (e.g. “Uses `AAINDEX_AA_COLUMNS` for residue order”) instead of enumerating all columns.
+- **Config / field descriptions:** Prefer a **short phrase** (“Path to amino acid index database”) over duplicating full schemas next to each field. Detailed layout belongs in the README’s parameter or data sections.
+- **Comments:** Use them where the code is not self-explanatory (indexing strategy, merge keys, invariants). Do not add comments that only repeat names already in the code or that duplicate README tables.
+
+**Edits to existing functions:** Extra verbosity shows up most often here. When you change behavior, **do not** treat the docstring as the place for a full restatement of inputs/outputs or file formats “because the function changed.” Update the **minimal** text needed so the summary stays accurate; move exhaustive detail to README or keep it in code via clear names and constants.
+
+**Anti-patterns:**
+
+- Long “Expects `context[...]` to be a DataFrame whose columns are …” blocks in docstrings when the README or a module constant already defines the format.
+- Copying README tables or config field lists into docstrings or `Config` field help text.
+- Comments that narrate every line of a straightforward loop.
+
 ## When to break the rules
 
 - User-facing or I/O boundaries (e.g., API handlers, CLI entrypoints, file parsing) should use defensive checks and clear error messages; internal pipeline helpers should assume valid upstream inputs.

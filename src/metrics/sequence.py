@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from Bio.Align import substitution_matrices
 
+from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.metrics.registry import register_metric
 from src.pipeline.context import Context
 from src.sequence.utils import convert_amino_acid
@@ -147,7 +148,8 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     return effect_ranking
 
 
-@register_metric(name='aaindex_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
+@register_metric(name='aaindex_scores', provides={'{accession}_{category}_wt', '{accession}_{category}_mut',
+                                                   '{accession}_{category}_diff'},
                  tags={'sequence'})
 def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
@@ -161,9 +163,9 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with 'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff' along with residue metadata.
+        DataFrame with ``{accession}_{category}_wt``, ``{accession}_{category}_mut``,
+        and ``{accession}_{category}_diff`` for each index row, along with residue metadata.
     """
-    
     # extract params
     residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
 
@@ -171,18 +173,19 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table.loc[residue_table.mut_info, keep_cols].copy()
 
-    # Create a dictionary mapping AAIndex feature to its values, truncating first two metadata columns
-    feature_dict = {f: aaindex_data.loc[aaindex_data.accession == f].iloc[0][2:]
-                    for f in aaindex_data.accession.unique()}
+    for _, row in aaindex_data.iterrows():
+        accession = row.iloc[0]
+        category = row.iloc[2]
+        base = f'{accession}_{category}'
+        feature_values = row.loc[list(AAINDEX_AA_COLUMNS)]
 
-    for aa_feature, feature_values in feature_dict.items():
-        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
+        aaindex_scores[f'{base}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
 
         # calculate for mutant only if mutation column exists
         if 'resm' in keep_cols:
-            aaindex_scores[f'AAIndex_{aa_feature}_mut'] = aaindex_scores['resm'].map(feature_values)
-            aaindex_scores[f'AAIndex_{aa_feature}_diff'] = (
-                aaindex_scores[f'AAIndex_{aa_feature}_mut'] - aaindex_scores[f'AAIndex_{aa_feature}_wt']
+            aaindex_scores[f'{base}_mut'] = aaindex_scores['resm'].map(feature_values)
+            aaindex_scores[f'{base}_diff'] = (
+                aaindex_scores[f'{base}_mut'] - aaindex_scores[f'{base}_wt']
             )
 
     return aaindex_scores
