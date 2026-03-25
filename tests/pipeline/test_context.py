@@ -1,6 +1,7 @@
 """Tests for pipeline context module."""
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import tomli
 
@@ -69,7 +70,12 @@ def test_context(tmp_path):
     context_with_aaindex = Context(array=arr, config=config)
 
     assert 'aaindex' in context_with_aaindex.extras
-    assert context_with_aaindex.extras['aaindex'].equals(aaindex_data)
+    pd.testing.assert_frame_equal(
+        context_with_aaindex.extras['aaindex'],
+        aaindex_data,
+        rtol=1e-9,
+        atol=1e-12,
+    )
     assert context_with_aaindex.config.membrane_protein is True
 
 def test_context_with_altloc():

@@ -286,7 +286,7 @@ It records:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `aaindex_path` | `str` | `"data/aaindex_parsed_small.csv"` | Path to amino acid index database |
+| `aaindex_path` | `str` | `"data/aaindex_parsed_small.csv"` | Path to AAindex CSV |
 | `kidera_path` | `str` | `"data/kidera_factors.csv"` | Path to Kidera factors data |
 
 ### Pipeline parameters
@@ -359,9 +359,9 @@ It records:
 | `wildtype_aa_group` | Amino acid physicochemical group of the wildtype residue |
 | `mut_aa_group` | Amino acid physicochemical group of the mutant residue |
 | `wildtype_mut_aa_group` | Combined wildtype→mutant group label |
-| `AAIndex_{accession}_wt` | AA index property value for wildtype residue |
-| `AAIndex_{accession}_mut` | AA index property value for mutant residue |
-| `AAIndex_{accession}_diff` | Difference (mut − wt) for this AA index |
+| `{accession}_{category}_wt` | AA index property value for wildtype residue (one column per CSV row) |
+| `{accession}_{category}_mut` | AA index property value for mutant residue |
+| `{accession}_{category}_diff` | Difference (mut − wt) for that index |
 | `kidera_f{1-10}_wt` | Kidera factor for wildtype residue |
 | `kidera_f{1-10}_mut` | Kidera factor for mutant residue |
 | `kidera_f{1-10}_diff` | Difference (mut − wt) for this Kidera factor |

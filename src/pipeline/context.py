@@ -61,7 +61,8 @@ class Config(BaseModel):
     mutation_score_col_name : str
         Column name for mutation effect scores in mutation data (default: "effect").
     aaindex_path : Path
-        Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
+        Path to AAindex CSV with columns ``accession``, ``description``, ``category``,
+        then ``ALA``…``VAL`` in order (default: 'data/aaindex_parsed_small.csv').
     kidera_path: Path
         Path to Kidera factors data (default: 'data/kidera_factors.csv').
     structural_feature_chains : Optional[List[str]]
