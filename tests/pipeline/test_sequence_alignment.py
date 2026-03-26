@@ -152,6 +152,7 @@ def test_evaluate_sequence_alignment():
         assert len(w) == 2 # poor alignment and mismatches
         assert issubclass(w[-2].category, UserWarning)
         assert "Alignment quality below cutoff of 0.80. Found 40.00%" in str(w[-2].message)
+        assert "Sequence alignment" in str(w[-2].message)
 
     # check that warning is raised for mismatched residues
     mismatch_merged_df = pd.DataFrame({
@@ -168,7 +169,7 @@ def test_evaluate_sequence_alignment():
 
         assert len(w) == 1
         assert issubclass(w[-1].category, UserWarning)
-        assert "Found 1 mismatches out of 6 residues" in str(w[-1].message)
+        assert "Found 1 mismatches out of 6 alignment positions" in str(w[-1].message)
 
     # check that warning is raised for indels
     indel_merged_df = pd.DataFrame({
@@ -185,7 +186,7 @@ def test_evaluate_sequence_alignment():
 
         assert len(w) == 1
         assert issubclass(w[-1].category, UserWarning)
-        assert "Found 2 residues with indels out of 7 residues" in str(w[-1].message)
+        assert "Found 2 alignment positions with internal indels out of 7" in str(w[-1].message)
 
 
     # check that warning is raised for terminal gaps, and that they don't count towards alignment quality
@@ -227,15 +228,17 @@ def test_merge_mutation_scores(tmp_path):
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         # Call the function that should issue the warning
-        merged_df = merge_mutation_scores(mutation_scores=mutation_scores_df, residue_table=residue_table, chain='A',
+        merged_df, alignment_merged = merge_mutation_scores(mutation_scores=mutation_scores_df, residue_table=residue_table, chain='A',
                                           alignment_cutoff=0.7)
 
         assert len(w) == 1
         assert issubclass(w[-1].category, UserWarning)
-        assert "Found 1 mismatches out of 4 residues" in str(w[-1].message)
+        assert "Found 1 mismatches out of 4 alignment positions" in str(w[-1].message)
 
         assert len(merged_df) == 8 # 1 row for each mutant, plus 1 for residue in chain B
         assert set(merged_df.columns) == {'resn_struct', 'resi_struct', 'resn_mut', 'resi_mut', 'resm', 'type',
                                           'effect', 'chain', 'mut_info', 'struct_info', 'ss_group', 'ss_domains', 'align_pos'}
         assert merged_df['mut_info'].tolist() == [False, True, True, True, True, True, True, True]
         assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True]
+        assert set(alignment_merged.columns) >= {'chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'align_pos'}
+        assert len(alignment_merged) == 4

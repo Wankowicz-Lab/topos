@@ -8,7 +8,7 @@ alignment, and merging mutation data with structural context.
 import logging
 import warnings
 from pathlib import Path
-from typing import Union
+from typing import Tuple, Union
 
 import pandas as pd
 from Bio.Align import PairwiseAligner
@@ -16,6 +16,37 @@ from Bio.Align import PairwiseAligner
 from src.sequence.utils import convert_amino_acid
 
 logger = logging.getLogger(__name__)
+
+# User-facing labels for alignment warnings (merged columns use resn_df1 / resn_df2 before rename).
+_LABEL_MUTATION = "mutation sequence"
+_LABEL_STRUCTURAL = "structural sequence"
+
+
+def _format_residue_ranges(positions: pd.Series) -> str:
+    """
+    Format residue indices as compact ranges, e.g. ``1-3, 5, 10-12``.
+
+    Non-finite values are dropped. Empty input returns an em dash placeholder.
+    """
+    vals = pd.to_numeric(positions, errors="coerce").dropna()
+    if vals.empty:
+        return "—"
+    ints = sorted({int(x) for x in vals})
+    if not ints:
+        return "—"
+    ranges: list[tuple[int, int]] = []
+    start = prev = ints[0]
+    for x in ints[1:]:
+        if x == prev + 1:
+            prev = x
+        else:
+            ranges.append((start, prev))
+            start = prev = x
+    ranges.append((start, prev))
+    parts: list[str] = []
+    for a, b in ranges:
+        parts.append(str(a) if a == b else f"{a}-{b}")
+    return ", ".join(parts)
 
 
 def load_mutation_scores(
@@ -207,7 +238,8 @@ def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -
     Parameters
     ----------
     merged : pd.DataFrame
-        Merged DataFrame containing combined sequence information from both sequences.
+        Merged DataFrame with columns resn_df1/resi_df1 (mutation sequence) and
+        resn_df2/resi_df2 (structural sequence).
     alignment_cutoff : float
         Quality cutoff for the alignment. If the proportion of alignment is below this cutoff,
         a warning is issued.
@@ -242,31 +274,56 @@ def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -
     error_mask = mismatch_mask | indel_mask
     error_mask = error_mask[~pd.Series(termini_mask)]
 
+    readme_hint = (
+        " See the README section \"Sequence alignment\" for how warnings map to "
+        "runner.context.extras['sequence_alignment_merged']."
+    )
+
     if (error_mask.sum() / len(error_mask)) > 1 - alignment_cutoff:
-        warnings.warn(f"Alignment quality below cutoff of {alignment_cutoff:.2f}. "
-                      f"Found {(error_mask.sum() / len(error_mask)) * 100:.2f}% errors "
-                      f"({error_mask.sum()} out of {len(error_mask)} residues) "
-                      f"excluding terminal gaps.")
+        warnings.warn(
+            f"Alignment quality below cutoff of {alignment_cutoff:.2f}. "
+            f"Found {(error_mask.sum() / len(error_mask)) * 100:.2f}% errors "
+            f"({error_mask.sum()} out of {len(error_mask)} alignment positions) "
+            f"excluding terminal gaps.{readme_hint}"
+        )
 
     if mismatches := mismatch_mask.sum():
-        warnings.warn(f"Found {mismatches} mismatches out of {total_residues} residues "
-              f"({(mismatches / total_residues) * 100:.2f}%) \n"
-              f" Mismatches found at the following positions in df1: {merged.loc[mismatch_mask, 'resi_df1'].tolist()}.")
+        mut_pos = _format_residue_ranges(merged.loc[mismatch_mask, "resi_df1"])
+        struct_pos = _format_residue_ranges(merged.loc[mismatch_mask, "resi_df2"])
+        warnings.warn(
+            f"Found {mismatches} mismatches out of {total_residues} alignment positions "
+            f"({(mismatches / total_residues) * 100:.2f}%).\n"
+            f"  {_LABEL_MUTATION.capitalize()} residue positions: {mut_pos}\n"
+            f"  {_LABEL_STRUCTURAL.capitalize()} residue positions: {struct_pos}"
+        )
 
     if indels := indel_mask.sum():
-        warnings.warn(f"Found {indels} residues with indels out of {total_residues} residues "
-              f"({(indels / total_residues) * 100:.2f}%) \n"
-              f" Indels found at the following positions in df1 {merged.loc[indel_mask, 'resi_df1'].tolist()}"
-                      f" and df2 {merged.loc[indel_mask, 'resi_df2'].tolist()}.")
+        mut_pos = _format_residue_ranges(merged.loc[indel_mask, "resi_df1"])
+        struct_pos = _format_residue_ranges(merged.loc[indel_mask, "resi_df2"])
+        warnings.warn(
+            f"Found {indels} alignment positions with internal indels out of {total_residues} "
+            f"({(indels / total_residues) * 100:.2f}%).\n"
+            f"  {_LABEL_MUTATION.capitalize()} residue positions: {mut_pos}\n"
+            f"  {_LABEL_STRUCTURAL.capitalize()} residue positions: {struct_pos}"
+        )
 
     if sum(termini_mask):
-        warnings.warn(f"Found gaps at the termini of the sequence alignment, "
-                       f" at positions {merged.loc[termini_mask, 'resi_df1'].tolist()} in df1 "
-                       f" and {merged.loc[termini_mask, 'resi_df2'].tolist()} in df2.")
+        tm = pd.Series(termini_mask)
+        mut_pos = _format_residue_ranges(merged.loc[tm, "resi_df1"])
+        struct_pos = _format_residue_ranges(merged.loc[tm, "resi_df2"])
+        warnings.warn(
+            f"Found gaps at the termini of the sequence alignment.\n"
+            f"  {_LABEL_MUTATION.capitalize()} residue positions: {mut_pos}\n"
+            f"  {_LABEL_STRUCTURAL.capitalize()} residue positions: {struct_pos}"
+        )
 
 
-def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame,
-                          chain: str, alignment_cutoff: float) -> pd.DataFrame:
+def merge_mutation_scores(
+    mutation_scores: pd.DataFrame,
+    residue_table: pd.DataFrame,
+    chain: str,
+    alignment_cutoff: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Merge mutation scores with structural context based on residue positions.
 
@@ -285,10 +342,13 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
 
     Returns
     -------
-    pd.DataFrame
-        Merged DataFrame with mutation scores and structural features. Contains
-        columns for chain, resi_mut, resn_mut, resm, resi_struct, resn_struct,
-        type, effect, mut_info, and struct_info.
+    tuple[pd.DataFrame, pd.DataFrame]
+        ``(residue_table, alignment_merged)``: full merged residue table for all chains,
+        and one row per alignment position for the aligned chain only (columns
+        ``resn_mut`` / ``resi_mut`` / ``resn_struct`` / ``resi_struct``, plus ``align_pos``,
+        ``chain``) before joining duplicate mutation rows. Inspect the latter via
+        ``runner.context.extras['sequence_alignment_merged']`` after constructing ``Runner``
+        with mutation data; see README "Sequence alignment".
     """
     aligner = PairwiseAligner()
 
@@ -322,8 +382,17 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=alignment_cutoff)
 
     # Add chain information and rename columns
-    merged_df['chain'] = chain
-    merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
+    merged_df["chain"] = chain
+    merged_df.rename(
+        columns={
+            "resn_df1": "resn_mut",
+            "resi_df1": "resi_mut",
+            "resn_df2": "resn_struct",
+            "resi_df2": "resi_struct",
+        },
+        inplace=True,
+    )
+    alignment_merged = merged_df.copy()
 
     # Add mutation information into merged_df
     merged_df = merged_df.merge(mutation_scores, how='left', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
@@ -344,4 +413,4 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     keep_cols = ['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'ss_domains', 'ss_group', 'type', 'effect', 'mut_info', 'struct_info', 'align_pos']
     residue_table = residue_table[keep_cols]
 
-    return residue_table
+    return residue_table, alignment_merged
