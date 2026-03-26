@@ -75,10 +75,9 @@ def test_identify_hbonds():
     assert all(result['bond_type'] == 'hbond')
     # Two rows per hbond
     assert len(result) % 2 == 0
-    # Each row has extras['category'] with first part = this row's residue type (backbone or sidechain)
+    # Each row has extras string with first part = this row's residue type (backbone or sidechain)
     for _, row in result.iterrows():
-        assert 'category' in row['extras']
-        parts = row['extras']['category'].split('-')
+        parts = row['extras'].split('-')
         assert len(parts) == 2
         assert parts[0] in ('backbone', 'sidechain')
         assert parts[1] in ('backbone', 'sidechain')
@@ -270,7 +269,7 @@ def test_identify_pi_stacking():
     assert result.iloc[0]['partner_resi'] == 2
     assert result.iloc[0]['partner_resn'] == 'PHE'
     assert result.iloc[0]['bond_type'] == 'pi_stacking'
-    assert 'geometry' in result.iloc[0]['extras']
+    assert result.iloc[0]['extras'] in {'sandwich', 'parallel_displaced', 't_shaped'}
     assert result.iloc[1]['chain'] == 'A'
     assert result.iloc[1]['resi_struct'] == 2
     assert result.iloc[1]['resn_struct'] == 'PHE'
@@ -278,7 +277,7 @@ def test_identify_pi_stacking():
     assert result.iloc[1]['partner_resi'] == 1
     assert result.iloc[1]['partner_resn'] == 'PHE'
     assert result.iloc[1]['bond_type'] == 'pi_stacking'
-    assert 'geometry' in result.iloc[1]['extras']
+    assert result.iloc[1]['extras'] in {'sandwich', 'parallel_displaced', 't_shaped'}
 
 
 def test_calculate_pi_stacking_count():
@@ -320,9 +319,9 @@ def test_calculate_pi_stacking_count():
     # Check that bonds_df contains pi_stacking bond type
     pi_stacking_rows = bonds_df[bonds_df['bond_type'] == 'pi_stacking']
     assert len(pi_stacking_rows) > 0
-    # Check extras column contains geometry
+    # Check extras column contains geometry token
     for _, row in pi_stacking_rows.iterrows():
-        assert 'geometry' in row['extras']
+        assert row['extras'] in {'sandwich', 'parallel_displaced', 't_shaped'}
 
 def test_identify_pi_stacking_parallel():
     """Two TYR rings stacked face-to-face (parallel) should be detected with geometry='parallel'."""
@@ -347,8 +346,8 @@ def test_identify_pi_stacking_parallel():
 
     assert len(result) == 2
     assert result.iloc[0]['bond_type'] == 'pi_stacking'
-    assert result.iloc[0]['extras']['geometry'] == 'sandwich'
-    assert result.iloc[1]['extras']['geometry'] == 'sandwich'
+    assert result.iloc[0]['extras'] == 'sandwich'
+    assert result.iloc[1]['extras'] == 'sandwich'
 
 
 def test_identify_pi_stacking_t_shaped():
@@ -375,8 +374,8 @@ def test_identify_pi_stacking_t_shaped():
 
     assert len(result) == 2
     assert result.iloc[0]['bond_type'] == 'pi_stacking'
-    assert result.iloc[0]['extras']['geometry'] == 't_shaped'
-    assert result.iloc[1]['extras']['geometry'] == 't_shaped'
+    assert result.iloc[0]['extras'] == 't_shaped'
+    assert result.iloc[1]['extras'] == 't_shaped'
 
 
 def test_identify_cation_pi():
@@ -415,8 +414,7 @@ def test_identify_cation_pi():
     assert cation_row['partner_resi'] == 2
     assert cation_row['partner_resn'] == 'PHE'
     assert cation_row['bond_type'] == 'cation_pi'
-    assert 'role' in cation_row['extras']
-    assert cation_row['extras']['role'] == 'cation'
+    assert cation_row['extras'] == 'cation'
     
     # Second row should be the aromatic (PHE)
     aromatic_row = result[result['resn_struct'] == 'PHE'].iloc[0]
@@ -427,8 +425,7 @@ def test_identify_cation_pi():
     assert aromatic_row['partner_resi'] == 1
     assert aromatic_row['partner_resn'] == 'LYS'
     assert aromatic_row['bond_type'] == 'cation_pi'
-    assert 'role' in aromatic_row['extras']
-    assert aromatic_row['extras']['role'] == 'aromatic'
+    assert aromatic_row['extras'] == 'aromatic'
 
 
 def test_calculate_cation_pi_count():
@@ -465,9 +462,9 @@ def test_calculate_cation_pi_count():
     # Check that bonds_df contains cation_pi bond type
     cation_pi_rows = bonds_df[bonds_df['bond_type'] == 'cation_pi']
     assert len(cation_pi_rows) > 0
-    # Check extras column contains role
+    # Check extras column contains role token
     for _, row in cation_pi_rows.iterrows():
-        assert 'role' in row['extras']
+        assert row['extras'] in {'cation', 'aromatic'}
 
 
 def test_identify_vdw_contacts():
@@ -508,7 +505,7 @@ def test_identify_vdw_contacts():
     assert result.iloc[0]['partner_resi'] in [1, 2]
     assert result.iloc[0]['partner_resn'] == 'ALA'
     assert result.iloc[0]['bond_type'] == 'vdw_contact'
-    assert result.iloc[0]['extras'] == {}
+    assert result.iloc[0]['extras'] == ''
 
 
 def test_calculate_vdw_contact_count():
@@ -566,8 +563,7 @@ def test_calculate_hbond_metrics():
     hbond_rows = bonds_df[bonds_df['bond_type'] == 'hbond']
     assert len(hbond_rows) > 0
     for _, row in hbond_rows.iterrows():
-        assert 'category' in row['extras']
-        parts = row['extras']['category'].split('-')
+        parts = row['extras'].split('-')
         assert parts[0] in ('backbone', 'sidechain') and parts[1] in ('backbone', 'sidechain')
 
     # With protein + ligand: some hbonds are protein-protein, some are protein-ligand (not all ligands)
@@ -591,7 +587,8 @@ def test_calculate_hbond_metrics_with_altloc():
 
     hbond_rows = context.extras['bonds_df'][context.extras['bonds_df']['bond_type'] == 'hbond']
     if len(hbond_rows) > 0:
-        assert 'category' in hbond_rows.iloc[0]['extras']
+        parts = hbond_rows.iloc[0]['extras'].split('-')
+        assert len(parts) == 2
 
 
 def test_bonds_df_consolidation():
@@ -634,29 +631,29 @@ def test_calculate_total_bond_count_from_bonds_df():
         {
             'chain': 'A', 'resi_struct': 1, 'resn_struct': 'ALA',
             'partner_chain': 'A', 'partner_resi': 2, 'partner_resn': 'GLY',
-            'bond_type': 'salt_bridge', 'extras': {}, 'protein_protein': True,
+            'bond_type': 'salt_bridge', 'extras': '', 'protein_protein': True,
         },
         {
             'chain': 'A', 'resi_struct': 2, 'resn_struct': 'GLY',
             'partner_chain': 'A', 'partner_resi': 1, 'partner_resn': 'ALA',
-            'bond_type': 'salt_bridge', 'extras': {}, 'protein_protein': True,
+            'bond_type': 'salt_bridge', 'extras': '', 'protein_protein': True,
         },
         # Between-chain bond (counted)
         {
             'chain': 'A', 'resi_struct': 3, 'resn_struct': 'CYS',
             'partner_chain': 'B', 'partner_resi': 4, 'partner_resn': 'CYS',
-            'bond_type': 'disulfide', 'extras': {}, 'protein_protein': True,
+            'bond_type': 'disulfide', 'extras': '', 'protein_protein': True,
         },
         {
             'chain': 'B', 'resi_struct': 4, 'resn_struct': 'CYS',
             'partner_chain': 'A', 'partner_resi': 3, 'partner_resn': 'CYS',
-            'bond_type': 'disulfide', 'extras': {}, 'protein_protein': True,
+            'bond_type': 'disulfide', 'extras': '', 'protein_protein': True,
         },
         # Protein-ligand row (excluded by protein_protein filter)
         {
             'chain': 'A', 'resi_struct': 1, 'resn_struct': 'ALA',
             'partner_chain': 'L', 'partner_resi': 100, 'partner_resn': 'LIG',
-            'bond_type': 'vdw_contact', 'extras': {}, 'protein_protein': False,
+            'bond_type': 'vdw_contact', 'extras': '', 'protein_protein': False,
         },
     ])
 
