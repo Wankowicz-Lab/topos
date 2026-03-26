@@ -998,9 +998,9 @@ class Runner:
         # Save bonds (one row per unique pair)
         if 'bonds_df' in self.context.extras and len(self.context.extras['bonds_df']) > 0:
             bonds = self.context.extras['bonds_df'].copy()
-            bonds['category'] = bonds['extras'].apply(lambda x: x.get('category', '') if isinstance(x, dict) else '')
-            bonds['geometry'] = bonds['extras'].apply(lambda x: x.get('geometry', '') if isinstance(x, dict) else '')
-            bonds['role']     = bonds['extras'].apply(lambda x: x.get('role', '')     if isinstance(x, dict) else '')
+            bonds['category'] = np.where(bonds['bond_type'] == 'hbond', bonds['extras'], '')
+            bonds['geometry'] = np.where(bonds['bond_type'] == 'pi_stacking', bonds['extras'], '')
+            bonds['role'] = np.where(bonds['bond_type'] == 'cation_pi', bonds['extras'], '')
             bonds = bonds.drop(columns=['extras'])
             bonds = bonds[bonds['residue_key'] <= bonds['partner_residue_key']].reset_index(drop=True)
             bonds_path = output_dir / f"{prefix}_bonds.csv"
