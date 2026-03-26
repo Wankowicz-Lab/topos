@@ -356,8 +356,13 @@ def merge_mutation_scores(
     # Subset residue table to the specified chain
     residue_table_chain = residue_table[residue_table['chain'] == chain]
 
-    # Subset mutation scores to only the wildtype sequence
-    mutation_scores_subset = mutation_scores[['resi', 'resn']].drop_duplicates()
+    # Subset mutation scores to only the wildtype sequence (N-to-C order, not CSV row order)
+    mutation_scores_subset = (
+        mutation_scores[['resi', 'resn']]
+        .drop_duplicates()
+        .sort_values(['resi', 'resn'], kind='mergesort')
+        .reset_index(drop=True)
+    )
 
     # Prepare sequences for alignment, a single string of single-letter amino acids
     mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))

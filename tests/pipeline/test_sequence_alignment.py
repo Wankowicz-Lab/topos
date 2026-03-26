@@ -242,3 +242,46 @@ def test_merge_mutation_scores(tmp_path):
         assert merged_df['struct_info'].tolist() == [True, True, True, True, True, True, True, True]
         assert set(alignment_merged.columns) >= {'chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'align_pos'}
         assert len(alignment_merged) == 4
+
+
+def test_merge_mutation_scores_row_order_invariant():
+    """Shuffled mutation score rows must not permute the wildtype sequence used for alignment."""
+    mutation_scores_df = pd.DataFrame({
+        'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU', 'ASP'],
+        'resi': [12, 12, 13, 13, 14, 14, 15],
+        'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP', 'MET'],
+        'type': ['missense', 'missense', 'nonsense', 'missense', 'missense', 'nonsense', 'missense'],
+        'effect': [0.5, -1.2, 0.3, -0.7, 1.0, -0.4, -0.1],
+        'extra_col': [10, 20, 30, 40, 50, 60, 70],
+    })
+    residue_table = pd.DataFrame({
+        'chain': ['A', 'A', 'A', 'A', 'B'],
+        'resi': [1, 2, 3, 4, 1],
+        'resn': ['LEU', 'THR', 'GLU', 'ASP', 'TYR'],
+        'ss_group': ['TM1', 'TM1', 'TM1', 'TM1', 'TM1'],
+        'ss_domains': ['TM1_start', 'TM1_mid', 'TM1_mid', 'TM1_end', 'TM1_start'],
+    })
+
+    merged_ordered, align_ordered = merge_mutation_scores(
+        mutation_scores=mutation_scores_df,
+        residue_table=residue_table.copy(),
+        chain='A',
+        alignment_cutoff=0.7,
+    )
+
+    shuffled = mutation_scores_df.sample(frac=1, random_state=0).reset_index(drop=True)
+    merged_shuf, align_shuf = merge_mutation_scores(
+        mutation_scores=shuffled,
+        residue_table=residue_table.copy(),
+        chain='A',
+        alignment_cutoff=0.7,
+    )
+
+    cmp_align = ['resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'align_pos']
+    pd.testing.assert_frame_equal(align_ordered[cmp_align], align_shuf[cmp_align])
+
+    sort_keys = ['align_pos', 'resi_mut', 'resn_mut', 'resm', 'type', 'effect']
+    pd.testing.assert_frame_equal(
+        merged_ordered.sort_values(sort_keys, kind='mergesort').reset_index(drop=True),
+        merged_shuf.sort_values(sort_keys, kind='mergesort').reset_index(drop=True),
+    )
