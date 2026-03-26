@@ -673,6 +673,19 @@ def test_runner_save_results(tmp_path):
         membrane_protein=True)
     save_runner.features = features_df
     save_runner.context.residue_table = residue_table
+    save_runner.context.extras['bonds_df'] = pd.DataFrame({
+        'chain': ['A'],
+        'resi_struct': [1],
+        'resn_struct': ['ALA'],
+        'residue_key': ['A:1:ALA'],
+        'partner_chain': ['A'],
+        'partner_resi': [2],
+        'partner_resn': ['VAL'],
+        'partner_residue_key': ['A:2:VAL'],
+        'bond_type': ['hbond'],
+        'extras': ['backbone-sidechain'],
+        'protein_protein': [True],
+    })
 
     manual_output_dir = tmp_path / 'output'
     save_runner.save_results(output_dir=manual_output_dir)
@@ -680,8 +693,10 @@ def test_runner_save_results(tmp_path):
     # Check that files are created
     features_path = manual_output_dir / f"{pdb_id}_features.csv"
     metadata_path = manual_output_dir / f"{pdb_id}_metadata.csv"
+    bonds_path = manual_output_dir / f"{pdb_id}_bonds.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+    assert bonds_path.exists()
 
     saved_features = pd.read_csv(features_path)
     pd.testing.assert_frame_equal(saved_features, features_df)
@@ -690,6 +705,10 @@ def test_runner_save_results(tmp_path):
     assert set(saved_metadata['resi_mut']) == set(residue_table['resi_mut'])
     assert set(saved_metadata['ss_domains']) == set(residue_table['ss_domains'])
     assert set(saved_metadata['ss_group']) == set(residue_table['ss_group'])
+    saved_bonds = pd.read_csv(bonds_path)
+    assert len(saved_bonds) == 1
+    assert saved_bonds.iloc[0]['bond_type'] == 'hbond'
+    assert saved_bonds.iloc[0]['category'] == 'backbone-sidechain'
 
     # Check that files are created with custom prefix
     custom_prefix = 'testprefix'
