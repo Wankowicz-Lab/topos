@@ -547,7 +547,7 @@ class Runner:
                 raise ValueError(f"Specified mutation_data_chain '{self.context.config.mutation_data_chain}' not "
                                  f"found in structure chains {self.context.residue_table['chain'].unique()}")
 
-            self.context.residue_table = merge_mutation_scores(
+            self.context.residue_table, self.context.extras['sequence_alignment_merged'] = merge_mutation_scores(
                 mutation_scores=self.context.extras['mutation_data'],
                 residue_table=self.context.residue_table,
                 chain=self.context.config.mutation_data_chain,
@@ -561,6 +561,7 @@ class Runner:
             )
         # Otherwise create mutation columns from structure data
         else:
+            self.context.extras['sequence_alignment_merged'] = None
             self.context.residue_table.rename(columns={'resn': 'resn_struct', 'resi': 'resi_struct'}, inplace=True)
             self.context.residue_table['resn_mut'] = self.context.residue_table['resn_struct']
             self.context.residue_table['resi_mut'] = self.context.residue_table['resi_struct']
