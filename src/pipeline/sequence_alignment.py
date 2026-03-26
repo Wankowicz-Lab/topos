@@ -343,12 +343,9 @@ def merge_mutation_scores(
     Returns
     -------
     tuple[pd.DataFrame, pd.DataFrame]
-        ``(residue_table, alignment_merged)``: full merged residue table for all chains,
-        and one row per alignment position for the aligned chain only (columns
-        ``resn_mut`` / ``resi_mut`` / ``resn_struct`` / ``resi_struct``, plus ``align_pos``,
-        ``chain``) before joining duplicate mutation rows. Inspect the latter via
-        ``runner.context.extras['sequence_alignment_merged']`` after constructing ``Runner``
-        with mutation data; see README "Sequence alignment".
+        ``(residue_table, alignment_merged)`` where ``residue_table`` is the merged
+        output used by the pipeline, and ``alignment_merged`` is the aligned mutation/
+        structure wildtype mapping for the selected chain before mutation-row expansion.
     """
     aligner = PairwiseAligner()
 
