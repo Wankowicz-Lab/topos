@@ -15,6 +15,15 @@ np.random.seed(42)
 import random
 
 
+def test_make_contiguous_group_labels():
+    input = ['A', 'A', 'B', 'B', 'A', 'A', 'A', 'C', 'C', 'B']
+    expected_output = ['A_1', 'A_1', 'B_1', 'B_1', 'A_2', 'A_2', 'A_2', 'C_1', 'C_1', 'B_2']
+
+    output = make_contiguous_group_labels(input)
+
+    assert output == expected_output
+
+
 def test_get_secondary_structure_annotations():
     aa_list = random.choices(AA_LIST, k=10)
     arr = _make_chain(aa_list=aa_list, chain_id='A')
@@ -78,15 +87,6 @@ def test_get_secondary_structure_annotations_unknown_backend():
     context.extras["ss_backend"] = "not_a_backend"
     with pytest.raises(ValueError, match="Unknown secondary-structure backend"):
         get_secondary_structure_annotations(context)
-
-
-def test_make_contiguous_group_labels():
-    input = ['A', 'A', 'B', 'B', 'A', 'A', 'A', 'C', 'C', 'B']
-    expected_output = ['A_1', 'A_1', 'B_1', 'B_1', 'A_2', 'A_2', 'A_2', 'C_1', 'C_1', 'B_2']
-
-    output = make_contiguous_group_labels(input)
-
-    assert output == expected_output
 
 
 def test_define_membrane_secondary_structure():

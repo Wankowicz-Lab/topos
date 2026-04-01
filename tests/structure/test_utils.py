@@ -4,27 +4,24 @@ from src.structure import utils
 from tests.test_utils import _make_chain, _make_residue
 
 
-def test_is_heavy():
-    # Test heavy atoms
-    assert utils.is_heavy("C") == True
-    assert utils.is_heavy("CA") == True
-    assert utils.is_heavy("N") == True
-    assert utils.is_heavy("O") == True
-    
-    # Test hydrogen atoms (should return False)
-    assert utils.is_heavy("H") == False
-    assert utils.is_heavy("HA") == False
-    assert utils.is_heavy("H1") == False
-    assert utils.is_heavy("HG") == False
-    assert utils.is_heavy("HD1") == False
-    
-    # Test deuterium
-    assert utils.is_heavy("D") == False
-    assert utils.is_heavy("DA") == False
-    
-    # Test edge cases
-    assert utils.is_heavy("  C  ") == True  # with whitespace
-    assert utils.is_heavy("  H  ") == False  # with whitespace
+def test_get_metadata_cols():
+    """Test that get_metadata_cols extracts correct metadata including altloc."""
+    # Create a chain with altloc identifiers
+    aa_list = ['ALA', 'CYS', 'ASP']
+    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
+
+    metadata_df = utils.get_metadata_cols(arr)
+
+    # Check that all expected columns are present
+    assert 'chain' in metadata_df.columns
+    assert 'resi_struct' in metadata_df.columns
+    assert 'resn_struct' in metadata_df.columns
+
+    # Check values
+    assert len(metadata_df) == 3
+    assert list(metadata_df['resn_struct']) == ['ALA', 'CYS', 'ASP']
+    assert list(metadata_df['resi_struct']) == [1, 2, 3]
+    assert all(metadata_df['chain'] == 'A')
 
 
 def test_res_key():
@@ -55,6 +52,29 @@ def test_is_backbone_atom():
     assert utils.is_backbone_atom("CG") == False
     assert utils.is_backbone_atom("NZ") == False
     assert utils.is_backbone_atom("OD1") == False
+
+
+def test_is_heavy():
+    # Test heavy atoms
+    assert utils.is_heavy("C") == True
+    assert utils.is_heavy("CA") == True
+    assert utils.is_heavy("N") == True
+    assert utils.is_heavy("O") == True
+
+    # Test hydrogen atoms (should return False)
+    assert utils.is_heavy("H") == False
+    assert utils.is_heavy("HA") == False
+    assert utils.is_heavy("H1") == False
+    assert utils.is_heavy("HG") == False
+    assert utils.is_heavy("HD1") == False
+
+    # Test deuterium
+    assert utils.is_heavy("D") == False
+    assert utils.is_heavy("DA") == False
+
+    # Test edge cases
+    assert utils.is_heavy("  C  ") == True  # with whitespace
+    assert utils.is_heavy("  H  ") == False  # with whitespace
 
 
 def test_norm_alt():
@@ -204,26 +224,6 @@ def test_detect_hbonds_parameters():
     
     # Lenient should find at least as many as strict
     assert len(hbonds_lenient) >= len(hbonds_strict)
-
-
-def test_get_metadata_cols():
-    """Test that get_metadata_cols extracts correct metadata including altloc."""
-    # Create a chain with altloc identifiers
-    aa_list = ['ALA', 'CYS', 'ASP']
-    arr = _make_chain(aa_list=aa_list, chain_id='A', altloc='')
-    
-    metadata_df = utils.get_metadata_cols(arr)
-    
-    # Check that all expected columns are present
-    assert 'chain' in metadata_df.columns
-    assert 'resi_struct' in metadata_df.columns
-    assert 'resn_struct' in metadata_df.columns
-    
-    # Check values
-    assert len(metadata_df) == 3
-    assert list(metadata_df['resn_struct']) == ['ALA', 'CYS', 'ASP']
-    assert list(metadata_df['resi_struct']) == [1, 2, 3]
-    assert all(metadata_df['chain'] == 'A')
 
 
 

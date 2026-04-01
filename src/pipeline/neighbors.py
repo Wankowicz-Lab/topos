@@ -9,21 +9,6 @@ from src.pipeline.context import Context
 from src.structure.utils import is_heavy, res_key
 
 
-def calculate_neighborhood_features(
-    context: Context,
-    features: pd.DataFrame,
-) -> pd.DataFrame:
-    """Run registered neighborhood metric functions and merge their outputs."""
-    merge_cols = ["chain", "resi_struct", "resn_struct"]
-    base = features[merge_cols].drop_duplicates().reset_index(drop=True)
-
-    for func in NEIGHBORHOOD_METRIC_FUNCTIONS:
-        df = func(context, features)
-        base = pd.merge(base, df, on=merge_cols, how="left")
-
-    return base
-
-
 def compute_residue_neighbors(
     context: Context,
     cutoff: float,
@@ -81,3 +66,18 @@ def compute_residue_neighbors(
 
     context.extras["residue_neighbors"] = mapping
     return mapping
+
+
+def calculate_neighborhood_features(
+    context: Context,
+    features: pd.DataFrame,
+) -> pd.DataFrame:
+    """Run registered neighborhood metric functions and merge their outputs."""
+    merge_cols = ["chain", "resi_struct", "resn_struct"]
+    base = features[merge_cols].drop_duplicates().reset_index(drop=True)
+
+    for func in NEIGHBORHOOD_METRIC_FUNCTIONS:
+        df = func(context, features)
+        base = pd.merge(base, df, on=merge_cols, how="left")
+
+    return base
