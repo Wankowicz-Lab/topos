@@ -100,6 +100,22 @@ def test_calculate_position_effect_quartiles_custom_percentiles():
     assert custom_q1_count > default_q1_count
 
 
+def test_calculate_position_effect_quartiles_multichain_error():
+    """Test that ValueError is raised when residue table contains data from more than one chain."""
+    # Create test residue table with multiple chains
+    residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=True)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
+    # Verify that ValueError is raised with appropriate message
+    with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
+        metrics.calculate_position_effect_quartiles(context)
+
+
 def test_calculate_effect_variance():
     # create test residue table
     residue_table = _make_residue_table(num_residues=100, num_chains=1, make_muts=True)
@@ -342,94 +358,6 @@ def test_calculate_blosum_score():
         assert blosum_df.at[idx, 'blosum90'] == expected_score
 
 
-def test_calculate_position_effect_quartiles_multichain_error():
-    """Test that ValueError is raised when residue table contains data from more than one chain."""
-    # Create test residue table with multiple chains
-    residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=True)
-    
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-    
-    context = MockContext(residue_table)
-    
-    # Verify that ValueError is raised with appropriate message
-    with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
-        metrics.calculate_position_effect_quartiles(context)
-
-
-def test_calculate_aa_groupings_with_muts():
-    """Test amino acid groupings with mutations."""
-    # Define expected groups for verification
-    aa_groups = {
-        "Nonpolar_Aliphatic": ["ALA", "VAL", "LEU", "ILE", "MET"],
-        "Aromatic": ["PHE", "TRP", "TYR"],
-        "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
-        "Positively_Charged": ["LYS", "ARG", "HIS"],
-        "Negatively_Charged": ["ASP", "GLU"],
-        "Special": ["PRO", "GLY"]
-    }
-    
-    # Create reverse mapping for verification
-    aa_to_group = {}
-    for group_name, aa_list in aa_groups.items():
-        for aa in aa_list:
-            aa_to_group[aa] = group_name
-    
-    # create test residue table with mutations
-    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
-    
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-    
-    context = MockContext(residue_table)
-    
-    # calculate aa groupings
-    aa_groupings_df = metrics.calculate_aa_groupings(context)
-    
-    # check that all three output columns exist
-    assert 'wildtype_aa_group' in aa_groupings_df.columns
-    assert 'mut_aa_group' in aa_groupings_df.columns
-    assert 'wildtype_mut_aa_group' in aa_groupings_df.columns
-    
-    # verify that values are correctly assigned
-    for idx, row in aa_groupings_df.iterrows():
-        expected_wt_group = aa_to_group.get(row['resn_mut'], np.nan)
-        expected_mut_group = aa_to_group.get(row['resm'], np.nan)
-        
-        assert aa_groupings_df.at[idx, 'wildtype_aa_group'] == expected_wt_group
-        assert aa_groupings_df.at[idx, 'mut_aa_group'] == expected_mut_group
-
-        expected_concatenated = f"{expected_wt_group}_{expected_mut_group}"
-        assert aa_groupings_df.at[idx, 'wildtype_mut_aa_group'] == expected_concatenated
-
-
-def test_calculate_aa_groupings_no_muts():
-    """Test amino acid groupings without mutations."""
-    # create test residue table without mutations
-    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
-    
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-    
-    context = MockContext(residue_table)
-    
-    # calculate aa groupings
-    aa_groupings_df = metrics.calculate_aa_groupings(context)
-    
-    # check that wildtype_aa_group column exists
-    assert 'wildtype_aa_group' in aa_groupings_df.columns
-    
-    # check that mut columns do not exist when resm is missing
-    # Note: The function should still create mut columns if resm is in KEEP_COLS but empty
-    # But if resm column doesn't exist at all, the columns shouldn't be created
-    if 'resm' not in residue_table.columns:
-        assert 'mut_aa_group' not in aa_groupings_df.columns
-        assert 'wildtype_mut_aa_group' not in aa_groupings_df.columns
-
-
 def test_make_phat75_73():
     """Test that make_phat75_73 returns Phat 75/73 substitution matrix."""
     phat75_73 = metrics.make_phat75_73()
@@ -458,3 +386,75 @@ def test_calculate_phat_score():
     context = MockContext(residue_table)
     phat_df = metrics.calculate_phat_score(context)
     assert phat_df['phat_score'].iloc[0] == np.inf
+
+
+def test_calculate_aa_groupings_with_muts():
+    """Test amino acid groupings with mutations."""
+    # Define expected groups for verification
+    aa_groups = {
+        "Nonpolar_Aliphatic": ["ALA", "VAL", "LEU", "ILE", "MET"],
+        "Aromatic": ["PHE", "TRP", "TYR"],
+        "Polar_Uncharged": ["SER", "THR", "ASN", "GLN", "CYS"],
+        "Positively_Charged": ["LYS", "ARG", "HIS"],
+        "Negatively_Charged": ["ASP", "GLU"],
+        "Special": ["PRO", "GLY"]
+    }
+
+    # Create reverse mapping for verification
+    aa_to_group = {}
+    for group_name, aa_list in aa_groups.items():
+        for aa in aa_list:
+            aa_to_group[aa] = group_name
+
+    # create test residue table with mutations
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=True)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
+    # calculate aa groupings
+    aa_groupings_df = metrics.calculate_aa_groupings(context)
+
+    # check that all three output columns exist
+    assert 'wildtype_aa_group' in aa_groupings_df.columns
+    assert 'mut_aa_group' in aa_groupings_df.columns
+    assert 'wildtype_mut_aa_group' in aa_groupings_df.columns
+
+    # verify that values are correctly assigned
+    for idx, row in aa_groupings_df.iterrows():
+        expected_wt_group = aa_to_group.get(row['resn_mut'], np.nan)
+        expected_mut_group = aa_to_group.get(row['resm'], np.nan)
+
+        assert aa_groupings_df.at[idx, 'wildtype_aa_group'] == expected_wt_group
+        assert aa_groupings_df.at[idx, 'mut_aa_group'] == expected_mut_group
+
+        expected_concatenated = f"{expected_wt_group}_{expected_mut_group}"
+        assert aa_groupings_df.at[idx, 'wildtype_mut_aa_group'] == expected_concatenated
+
+
+def test_calculate_aa_groupings_no_muts():
+    """Test amino acid groupings without mutations."""
+    # create test residue table without mutations
+    residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+
+    context = MockContext(residue_table)
+
+    # calculate aa groupings
+    aa_groupings_df = metrics.calculate_aa_groupings(context)
+
+    # check that wildtype_aa_group column exists
+    assert 'wildtype_aa_group' in aa_groupings_df.columns
+
+    # check that mut columns do not exist when resm is missing
+    # Note: The function should still create mut columns if resm is in KEEP_COLS but empty
+    # But if resm column doesn't exist at all, the columns shouldn't be created
+    if 'resm' not in residue_table.columns:
+        assert 'mut_aa_group' not in aa_groupings_df.columns
+        assert 'wildtype_mut_aa_group' not in aa_groupings_df.columns

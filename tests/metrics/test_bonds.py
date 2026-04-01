@@ -9,42 +9,6 @@ from src.structure.utils import res_key
 from tests.test_utils import _make_atoms, _make_chain, _make_residue
 
 
-def test_identify_salt_bridges():
-    """Test salt bridge identification with ASP-LYS pairs."""
-    # Create ASP and LYS residues close together
-    # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
-    asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
-                  [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [5.0, 0.0, 0.0], [1.5, 1.5, -0.5]]  # CB, CG, OD1, OD2
-    # LYS: N, CA, C, O, CB, CG, CD, CE, NZ (9 atoms)
-    lys_coords = [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0], [13.0, 0.0, 0.0],
-                  [11.5, 1.0, 0.0], [11.5, 2.0, 0.0], [11.5, 3.0, 0.0], [11.5, 4.0, 0.0],
-                  [5.0, 0.0, 3.5]]  # CB, CG, CD, CE, NZ (3.5 A away from OD1)
-    
-    asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
-    lys = _make_residue('LYS', res_id=3, chain_id='A', coords=lys_coords)
-    arr = struc.concatenate([asp, lys])
-    
-    result = bonds.identify_salt_bridges(arr, cutoff=4.0)
-    
-    assert len(result) == 2
-    
-    # Check that expected residues are found
-    assert result.iloc[0]['chain'] == 'A'
-    assert result.iloc[0]['resi_struct'] == 1
-    assert result.iloc[0]['resn_struct'] == 'ASP'
-    assert result.iloc[0]['partner_chain'] == 'A'
-    assert result.iloc[0]['partner_resi'] == 3
-    assert result.iloc[0]['partner_resn'] == 'LYS'
-    assert result.iloc[0]['bond_type'] == 'salt_bridge'
-    assert result.iloc[1]['chain'] == 'A'
-    assert result.iloc[1]['resi_struct'] == 3
-    assert result.iloc[1]['resn_struct'] == 'LYS'
-    assert result.iloc[1]['partner_chain'] == 'A'
-    assert result.iloc[1]['partner_resi'] == 1
-    assert result.iloc[1]['partner_resn'] == 'ASP'
-    assert result.iloc[1]['bond_type'] == 'salt_bridge'
-
-
 def test_classify_bond_types():
     """Classify bond types correctly flags protein/protein vs protein/ligand."""
     ala = _make_residue('ALA', res_id=1, chain_id='A')
@@ -81,6 +45,42 @@ def test_identify_hbonds():
         assert len(parts) == 2
         assert parts[0] in ('backbone', 'sidechain')
         assert parts[1] in ('backbone', 'sidechain')
+
+
+def test_identify_salt_bridges():
+    """Test salt bridge identification with ASP-LYS pairs."""
+    # Create ASP and LYS residues close together
+    # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
+    asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
+                  [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [5.0, 0.0, 0.0], [1.5, 1.5, -0.5]]  # CB, CG, OD1, OD2
+    # LYS: N, CA, C, O, CB, CG, CD, CE, NZ (9 atoms)
+    lys_coords = [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0], [13.0, 0.0, 0.0],
+                  [11.5, 1.0, 0.0], [11.5, 2.0, 0.0], [11.5, 3.0, 0.0], [11.5, 4.0, 0.0],
+                  [5.0, 0.0, 3.5]]  # CB, CG, CD, CE, NZ (3.5 A away from OD1)
+
+    asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
+    lys = _make_residue('LYS', res_id=3, chain_id='A', coords=lys_coords)
+    arr = struc.concatenate([asp, lys])
+
+    result = bonds.identify_salt_bridges(arr, cutoff=4.0)
+
+    assert len(result) == 2
+
+    # Check that expected residues are found
+    assert result.iloc[0]['chain'] == 'A'
+    assert result.iloc[0]['resi_struct'] == 1
+    assert result.iloc[0]['resn_struct'] == 'ASP'
+    assert result.iloc[0]['partner_chain'] == 'A'
+    assert result.iloc[0]['partner_resi'] == 3
+    assert result.iloc[0]['partner_resn'] == 'LYS'
+    assert result.iloc[0]['bond_type'] == 'salt_bridge'
+    assert result.iloc[1]['chain'] == 'A'
+    assert result.iloc[1]['resi_struct'] == 3
+    assert result.iloc[1]['resn_struct'] == 'LYS'
+    assert result.iloc[1]['partner_chain'] == 'A'
+    assert result.iloc[1]['partner_resi'] == 1
+    assert result.iloc[1]['partner_resn'] == 'ASP'
+    assert result.iloc[1]['bond_type'] == 'salt_bridge'
 
 
 def test_calculate_salt_bridges():

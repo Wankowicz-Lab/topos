@@ -285,6 +285,64 @@ class Runner:
         return Config(**base_dict)
 
 
+    def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
+        """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
+
+        Parameters
+        ----------
+        dfs : List[pd.DataFrame]
+            List of DataFrames to merge.
+
+        mutations : bool
+            Whether mutation-level data is included (i.e., resm column present).
+
+        Returns
+        -------
+        pd.DataFrame
+            Merged DataFrame.
+        """
+        # Get all unique rows to merge on
+
+        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'align_pos']
+        keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
+
+        # Add mutation columns if mutations are present
+        keep_cols += ['resm'] if mutations else []
+
+        merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
+
+        # Filter merged_df to only include structural_feature_chains if specified
+        # This ensures the final output only contains the specified chains, even though
+        # residue_table itself is not filtered (filtering happens in individual metrics)
+        if self.context.config.structural_feature_chains is not None:
+            merged_df = merged_df[
+                merged_df['chain'].isin(self.context.config.structural_feature_chains)
+            ].reset_index(drop=True)
+
+        for df in dfs:
+            # Determine merge columns based on what's available in the df
+            merge_cols = ['chain']
+
+            # Check if this is a sequence-based or structure-based metric
+            if 'resi_mut' in df.columns:
+                merge_cols.extend(['resi_mut', 'resn_mut'])
+                if 'resm' in df.columns:
+                    merge_cols.append('resm')
+            elif 'resi_struct' in df.columns:
+                merge_cols.extend(['resi_struct', 'resn_struct'])
+
+            merged_df = pd.merge(merged_df, df, on=merge_cols, how='left')
+
+        # Sort using the same logic as residue_table
+        mutation_chain = self.context.config.mutation_data_chain if mutations else None
+        merged_df = _sort_residue_table(merged_df, mutation_chain=mutation_chain)
+
+        # Drop align_pos before returning (it's just for internal sorting)
+        merged_df = merged_df.drop(columns=['align_pos'])
+
+        return merged_df
+
+
     def run_metrics(self, metrics: List[str], mutations: bool = False) -> pd.DataFrame:
         """Compute specified metrics and return as a merged DataFrame.
 
@@ -396,64 +454,6 @@ class Runner:
                 how='left',
                 validate='many_to_one',
             )
-
-
-    def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
-        """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
-
-        Parameters
-        ----------
-        dfs : List[pd.DataFrame]
-            List of DataFrames to merge.
-
-        mutations : bool
-            Whether mutation-level data is included (i.e., resm column present).
-
-        Returns
-        -------
-        pd.DataFrame
-            Merged DataFrame.
-        """
-        # Get all unique rows to merge on
-
-        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'align_pos']
-        keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
-        
-        # Add mutation columns if mutations are present
-        keep_cols += ['resm'] if mutations else []
-        
-        merged_df = self.context.residue_table[keep_cols].drop_duplicates().reset_index(drop=True)
-
-        # Filter merged_df to only include structural_feature_chains if specified
-        # This ensures the final output only contains the specified chains, even though
-        # residue_table itself is not filtered (filtering happens in individual metrics)
-        if self.context.config.structural_feature_chains is not None:
-            merged_df = merged_df[
-                merged_df['chain'].isin(self.context.config.structural_feature_chains)
-            ].reset_index(drop=True)
-
-        for df in dfs:
-            # Determine merge columns based on what's available in the df
-            merge_cols = ['chain']
-            
-            # Check if this is a sequence-based or structure-based metric
-            if 'resi_mut' in df.columns:
-                merge_cols.extend(['resi_mut', 'resn_mut'])
-                if 'resm' in df.columns:
-                    merge_cols.append('resm')
-            elif 'resi_struct' in df.columns:
-                merge_cols.extend(['resi_struct', 'resn_struct'])
-            
-            merged_df = pd.merge(merged_df, df, on=merge_cols, how='left')
-
-        # Sort using the same logic as residue_table
-        mutation_chain = self.context.config.mutation_data_chain if mutations else None
-        merged_df = _sort_residue_table(merged_df, mutation_chain=mutation_chain)
-        
-        # Drop align_pos before returning (it's just for internal sorting)
-        merged_df = merged_df.drop(columns=['align_pos'])
-        
-        return merged_df
 
     def run_neighborhood(
         self,

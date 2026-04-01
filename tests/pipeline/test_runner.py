@@ -23,6 +23,40 @@ np.random.seed(42)
 random.seed(42)
 
 
+def test_sort_residue_table():
+    """Test that _sort_residue_table works correctly."""
+    # Test 1: Sorting with mutation_chain specified
+    df_with_mutation = pd.DataFrame({
+        'chain': ['C', 'B', 'A', 'B', 'A', 'C'],
+        'align_pos': [2, 0, 1, 3, 4, 5],
+        'resi_mut': [1, 2, 3, 4, 5, 6],
+        'resn_mut': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU']
+    })
+
+    sorted_df = runner._sort_residue_table(df_with_mutation, mutation_chain='B')
+
+    # Check that chain B comes first
+    chains = sorted_df['chain'].tolist()
+    assert chains[0] == 'B' and chains[1] == 'B', "Mutation chain B should come first"
+
+    # Check that within each chain, residues are sorted by align_pos
+    chain_b_align_pos = sorted_df[sorted_df['chain'] == 'B']['align_pos'].tolist()
+    assert chain_b_align_pos == sorted(chain_b_align_pos), "Within chain B, should be sorted by align_pos"
+
+    # Check that other chains are alphabetically ordered
+    assert chains == ['B', 'B', 'A', 'A', 'C', 'C'], "Should be B first, then A, then C"
+
+    # Test 2: Sorting without mutation_chain (alphabetical)
+    sorted_df_alpha = runner._sort_residue_table(df_with_mutation, mutation_chain=None)
+    chains_alpha = sorted_df_alpha['chain'].tolist()
+    assert chains_alpha == ['A', 'A', 'B', 'B', 'C', 'C'], "Should be alphabetically sorted when no mutation_chain"
+
+    # Check sorting within each chain
+    for chain in ['A', 'B', 'C']:
+        chain_align_pos = sorted_df_alpha[sorted_df_alpha['chain'] == chain]['align_pos'].tolist()
+        assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
+
+
 def test_runner_initialization_from_config(tmp_path):
 
     config_path = tmp_path / 'config.toml'
@@ -334,6 +368,159 @@ def test_runner__merge_config(tmp_path):
 
 
 
+def test_runner__merge_features():
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        name='test_merge_features',
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None
+    )
+
+    residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=False)
+
+    # df1 has residue level features from a subset of the residues
+    df1_keep_resis = np.random.choice(residue_table['resi_struct'], size=7, replace=False)
+    df1 = residue_table[residue_table['resi_struct'].isin(df1_keep_resis)].copy()
+    df1 = df1[['chain', 'resi_struct', 'resn_struct']]
+    df1['feature1'] = np.random.rand(len(df1))
+
+    # df2 has residue-level features from a subset of positions in chain A
+    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_struct'], size=3, replace=False)
+    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_struct'].isin(df2_keep_resis))].copy()
+    df2 = df2[['chain', 'resi_struct', 'resn_struct']]
+    df2['feature2'] = np.random.rand(len(df2))
+
+    # df3 has residue level features from residues in Chain B
+    df3_keep_resis = np.random.choice(residue_table.loc[residue_table['chain']=='B']['resi_struct'],
+                                      size=5, replace=False)
+    df3 = residue_table[residue_table['resi_struct'].isin(df3_keep_resis)].copy()
+    df3 = df3[['chain', 'resi_struct', 'resn_struct']]
+    df3['feature3'] = np.random.rand(len(df3))
+
+    result_frames = [df1, df2, df3]
+
+    class MockConfig:
+        structural_feature_chains = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+    myrunner.context = MockContext(residue_table=residue_table)
+
+    merged_df = myrunner._merge_features(result_frames, mutations=False)
+
+    assert 'resm' not in merged_df.columns.tolist()
+    assert len(merged_df) == len(residue_table)
+
+    # Check that df values are correctly merged
+    df1_mask = merged_df['resi_struct'].isin(df1_keep_resis)
+    assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
+    assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
+
+    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_struct'].isin(df2_keep_resis))
+    assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
+    assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
+
+    df3_mask = merged_df['resi_struct'].isin(df3_keep_resis)
+    assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
+    assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
+
+
+def test_runner__merge_features_with_muts():
+    pdb_id = '8smv'
+
+    myrunner = runner.Runner(
+        pdb_id=pdb_id,
+        name='test_merge_features_with_muts',
+        pdb_path=None,
+        membrane_protein=False,
+        mutation_data_path=None
+    )
+
+    residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=[True, False])
+    residue_table_no_muts = residue_table[['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']].drop_duplicates().reset_index(drop=True)
+
+    # df1 has residue level features from a subset of the residues
+    df1_keep_resis = np.random.choice(residue_table_no_muts['resi_struct'], size=7, replace=False)
+    df1 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df1_keep_resis)].copy()
+    df1 = df1[['chain', 'resi_struct', 'resn_struct']]
+    df1['feature1'] = np.random.rand(len(df1))
+
+    # df2 has mutation-level features for all mutations from a subset of positions in chain A
+    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_mut'], size=3, replace=False)
+    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_mut'].isin(df2_keep_resis))].copy()
+    df2 = df2[['chain', 'resi_mut', 'resn_mut', 'resm']]
+    df2['feature2'] = np.random.rand(len(df2))
+
+    # df3 has residue level features from residues in Chain B
+    df3_keep_resis = np.random.choice(residue_table_no_muts.loc[residue_table_no_muts['chain']=='B']['resi_struct'],
+                                      size=5, replace=False)
+    df3 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df3_keep_resis)].copy()
+    df3 = df3[['chain', 'resi_struct', 'resn_struct']]
+    df3['feature3'] = np.random.rand(len(df3))
+
+    # df4 has a subset of mutations at each position
+    df4_keep_resis = np.random.choice(len(residue_table), size=40, replace=False)
+    df4 = residue_table.iloc[df4_keep_resis].copy()
+    df4 = df4[['chain', 'resi_mut', 'resn_mut', 'resm']]
+    df4['feature4'] = np.random.rand(len(df4))
+
+    result_frames = [df1, df2, df3, df4]
+
+    class MockConfig:
+        def __init__(self):
+            self.mutation_data_chain = 'A'
+            self.structural_feature_chains = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    myrunner.context = MockContext(residue_table=residue_table)
+
+    merged_df = myrunner._merge_features(result_frames, mutations=True)
+
+    assert len(merged_df) == len(residue_table)
+    assert 'resm' in merged_df.columns.tolist()
+
+    # Check that df values are correctly merged for structure-based features
+    df1_mask = merged_df['resi_struct'].isin(df1_keep_resis)
+    assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
+    assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
+
+    # Check sequence-based features
+    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_mut'].isin(df2_keep_resis))
+    assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
+    assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
+
+    df3_mask = merged_df['resi_struct'].isin(df3_keep_resis)
+    assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
+    assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
+
+    df4 = df4.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
+    merged_df = merged_df.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
+    df4_mask = merged_df.index.isin(df4.index)
+    assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
+    assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
+
+    # Reset index for sorting checks
+    merged_df = merged_df.reset_index()
+
+    # Check that output is sorted appropriately (chains in order)
+    chains = merged_df['chain'].tolist()
+    unique_chains = []
+    for c in chains:
+        if not unique_chains or unique_chains[-1] != c:
+            unique_chains.append(c)
+    # Should be alphabetically sorted since no mutation_chain
+    assert unique_chains == sorted(unique_chains), "Chains should be alphabetically sorted"
+
+
 def test_runner_run_metric(tmp_path):
     # Create a mock mutation dataset
     residue_table = _make_residue_table(
@@ -487,157 +674,40 @@ def test_runner_run(tmp_path):
     assert returned_features[all_graph_cols].notna().any().any(), "graph_all_* columns are all null."
 
 
-def test_runner__merge_features():
-    pdb_id = '8smv'
+def test_run_neighborhood_requires_run_first(tmp_path):
+    """run_neighborhood must be called after run(); it raises if self.features is missing."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path)
 
-    myrunner = runner.Runner(
-        pdb_id=pdb_id,
-        name='test_merge_features',
-        pdb_path=None,
-        membrane_protein=False,
-        mutation_data_path=None
-    )
-
-    residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=False)
-
-    # df1 has residue level features from a subset of the residues
-    df1_keep_resis = np.random.choice(residue_table['resi_struct'], size=7, replace=False)
-    df1 = residue_table[residue_table['resi_struct'].isin(df1_keep_resis)].copy()
-    df1 = df1[['chain', 'resi_struct', 'resn_struct']]
-    df1['feature1'] = np.random.rand(len(df1))
-
-    # df2 has residue-level features from a subset of positions in chain A
-    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_struct'], size=3, replace=False)
-    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_struct'].isin(df2_keep_resis))].copy()
-    df2 = df2[['chain', 'resi_struct', 'resn_struct']]
-    df2['feature2'] = np.random.rand(len(df2))
-
-    # df3 has residue level features from residues in Chain B
-    df3_keep_resis = np.random.choice(residue_table.loc[residue_table['chain']=='B']['resi_struct'],
-                                      size=5, replace=False)
-    df3 = residue_table[residue_table['resi_struct'].isin(df3_keep_resis)].copy()
-    df3 = df3[['chain', 'resi_struct', 'resn_struct']]
-    df3['feature3'] = np.random.rand(len(df3))
-
-    result_frames = [df1, df2, df3]
-
-    class MockConfig:
-        structural_feature_chains = None
-
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-            self.config = MockConfig()
-    myrunner.context = MockContext(residue_table=residue_table)
-
-    merged_df = myrunner._merge_features(result_frames, mutations=False)
-
-    assert 'resm' not in merged_df.columns.tolist()
-    assert len(merged_df) == len(residue_table)
-
-    # Check that df values are correctly merged
-    df1_mask = merged_df['resi_struct'].isin(df1_keep_resis)
-    assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
-    assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
-
-    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_struct'].isin(df2_keep_resis))
-    assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
-    assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
-
-    df3_mask = merged_df['resi_struct'].isin(df3_keep_resis)
-    assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
-    assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
+    base_runner = runner.Runner(config_path=config_path)
+    with pytest.raises(ValueError, match="No features to extend"):
+        base_runner.run_neighborhood(cutoff=10.0)
 
 
-def test_runner__merge_features_with_muts():
-    pdb_id = '8smv'
+def test_run_neighborhood_fills_extras_and_merges(tmp_path):
+    """run_neighborhood fills context.extras['residue_neighbors'] and merges n_ala_neighbors into self.features."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path)
 
-    myrunner = runner.Runner(
-        pdb_id=pdb_id,
-        name='test_merge_features_with_muts',
-        pdb_path=None,
-        membrane_protein=False,
-        mutation_data_path=None
-    )
+    myrunner = runner.Runner(config_path=config_path)
+    myrunner.features = myrunner.run_metrics(metrics=['sasa', 'kyte_doolittle'])
 
-    residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=[True, False])
-    residue_table_no_muts = residue_table[['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut']].drop_duplicates().reset_index(drop=True)
+    myrunner.run_neighborhood(cutoff=10.0)
 
-    # df1 has residue level features from a subset of the residues  
-    df1_keep_resis = np.random.choice(residue_table_no_muts['resi_struct'], size=7, replace=False)
-    df1 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df1_keep_resis)].copy()
-    df1 = df1[['chain', 'resi_struct', 'resn_struct']]
-    df1['feature1'] = np.random.rand(len(df1))
+    # Extras filled with residue_key -> [residue_key, ...]; no self-neighbors
+    mapping = myrunner.context.extras['residue_neighbors']
+    assert isinstance(mapping, dict)
+    for residue_key, neighbors in mapping.items():
+        assert isinstance(residue_key, str)
+        assert ":" in residue_key
+        assert isinstance(neighbors, list)
+        assert residue_key not in neighbors, "neighbors must not include self"
 
-    # df2 has mutation-level features for all mutations from a subset of positions in chain A
-    df2_keep_resis = np.random.choice(residue_table[residue_table['chain']=='A']['resi_mut'], size=3, replace=False)
-    df2 = residue_table[(residue_table['chain']=='A') & (residue_table['resi_mut'].isin(df2_keep_resis))].copy()
-    df2 = df2[['chain', 'resi_mut', 'resn_mut', 'resm']]
-    df2['feature2'] = np.random.rand(len(df2))
-
-    # df3 has residue level features from residues in Chain B
-    df3_keep_resis = np.random.choice(residue_table_no_muts.loc[residue_table_no_muts['chain']=='B']['resi_struct'],
-                                      size=5, replace=False)
-    df3 = residue_table_no_muts[residue_table_no_muts['resi_struct'].isin(df3_keep_resis)].copy()
-    df3 = df3[['chain', 'resi_struct', 'resn_struct']]
-    df3['feature3'] = np.random.rand(len(df3))
-
-    # df4 has a subset of mutations at each position
-    df4_keep_resis = np.random.choice(len(residue_table), size=40, replace=False)
-    df4 = residue_table.iloc[df4_keep_resis].copy()
-    df4 = df4[['chain', 'resi_mut', 'resn_mut', 'resm']]
-    df4['feature4'] = np.random.rand(len(df4))
-
-    result_frames = [df1, df2, df3, df4]
-
-    class MockConfig:
-        def __init__(self):
-            self.mutation_data_chain = 'A'
-            self.structural_feature_chains = None
-
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-            self.config = MockConfig()
-
-    myrunner.context = MockContext(residue_table=residue_table)
-
-    merged_df = myrunner._merge_features(result_frames, mutations=True)
-
-    assert len(merged_df) == len(residue_table)
-    assert 'resm' in merged_df.columns.tolist()
-
-    # Check that df values are correctly merged for structure-based features
-    df1_mask = merged_df['resi_struct'].isin(df1_keep_resis)
-    assert not merged_df.loc[df1_mask, 'feature1'].isnull().all()
-    assert merged_df.loc[~df1_mask, 'feature1'].isnull().all()
-
-    # Check sequence-based features
-    df2_mask = (merged_df['chain']=='A') & (merged_df['resi_mut'].isin(df2_keep_resis))
-    assert not merged_df.loc[df2_mask, 'feature2'].isnull().all()
-    assert merged_df.loc[~df2_mask, 'feature2'].isnull().all()
-
-    df3_mask = merged_df['resi_struct'].isin(df3_keep_resis)
-    assert not merged_df.loc[df3_mask, 'feature3'].isnull().all()
-    assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
-
-    df4 = df4.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
-    merged_df = merged_df.set_index(['chain', 'resi_mut', 'resn_mut', 'resm'])
-    df4_mask = merged_df.index.isin(df4.index)
-    assert not merged_df.loc[df4_mask, 'feature4'].isnull().all()
-    assert merged_df.loc[~df4_mask,  'feature4'].isnull().all()
-    
-    # Reset index for sorting checks
-    merged_df = merged_df.reset_index()
-    
-    # Check that output is sorted appropriately (chains in order)
-    chains = merged_df['chain'].tolist()
-    unique_chains = []
-    for c in chains:
-        if not unique_chains or unique_chains[-1] != c:
-            unique_chains.append(c)
-    # Should be alphabetically sorted since no mutation_chain
-    assert unique_chains == sorted(unique_chains), "Chains should be alphabetically sorted"
+    # n_ala_neighbors from count_ala_neighbors is merged into self.features
+    assert 'n_ala_neighbors' in myrunner.features.columns
+    assert 'neighborhood_sasa' in myrunner.features.columns
+    assert 'neighborhood_kyte_doolittle' in myrunner.features.columns
+    assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
 
 
 def test_runner_save_results(tmp_path):
@@ -737,76 +807,6 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
-
-
-def test_sort_residue_table():
-    """Test that _sort_residue_table works correctly."""
-    # Test 1: Sorting with mutation_chain specified
-    df_with_mutation = pd.DataFrame({
-        'chain': ['C', 'B', 'A', 'B', 'A', 'C'],
-        'align_pos': [2, 0, 1, 3, 4, 5],
-        'resi_mut': [1, 2, 3, 4, 5, 6],
-        'resn_mut': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU']
-    })
-    
-    sorted_df = runner._sort_residue_table(df_with_mutation, mutation_chain='B')
-    
-    # Check that chain B comes first
-    chains = sorted_df['chain'].tolist()
-    assert chains[0] == 'B' and chains[1] == 'B', "Mutation chain B should come first"
-    
-    # Check that within each chain, residues are sorted by align_pos
-    chain_b_align_pos = sorted_df[sorted_df['chain'] == 'B']['align_pos'].tolist()
-    assert chain_b_align_pos == sorted(chain_b_align_pos), "Within chain B, should be sorted by align_pos"
-    
-    # Check that other chains are alphabetically ordered
-    assert chains == ['B', 'B', 'A', 'A', 'C', 'C'], "Should be B first, then A, then C"
-    
-    # Test 2: Sorting without mutation_chain (alphabetical)
-    sorted_df_alpha = runner._sort_residue_table(df_with_mutation, mutation_chain=None)
-    chains_alpha = sorted_df_alpha['chain'].tolist()
-    assert chains_alpha == ['A', 'A', 'B', 'B', 'C', 'C'], "Should be alphabetically sorted when no mutation_chain"
-    
-    # Check sorting within each chain
-    for chain in ['A', 'B', 'C']:
-        chain_align_pos = sorted_df_alpha[sorted_df_alpha['chain'] == chain]['align_pos'].tolist()
-        assert chain_align_pos == sorted(chain_align_pos), f"Within chain {chain}, should be sorted by align_pos"
-
-
-def test_run_neighborhood_requires_run_first(tmp_path):
-    """run_neighborhood must be called after run(); it raises if self.features is missing."""
-    config_path = tmp_path / 'config.toml'
-    _make_config_file(config_path)
-
-    base_runner = runner.Runner(config_path=config_path)
-    with pytest.raises(ValueError, match="No features to extend"):
-        base_runner.run_neighborhood(cutoff=10.0)
-
-
-def test_run_neighborhood_fills_extras_and_merges(tmp_path):
-    """run_neighborhood fills context.extras['residue_neighbors'] and merges n_ala_neighbors into self.features."""
-    config_path = tmp_path / 'config.toml'
-    _make_config_file(config_path)
-
-    myrunner = runner.Runner(config_path=config_path)
-    myrunner.features = myrunner.run_metrics(metrics=['sasa', 'kyte_doolittle'])
-
-    myrunner.run_neighborhood(cutoff=10.0)
-
-    # Extras filled with residue_key -> [residue_key, ...]; no self-neighbors
-    mapping = myrunner.context.extras['residue_neighbors']
-    assert isinstance(mapping, dict)
-    for residue_key, neighbors in mapping.items():
-        assert isinstance(residue_key, str)
-        assert ":" in residue_key
-        assert isinstance(neighbors, list)
-        assert residue_key not in neighbors, "neighbors must not include self"
-
-    # n_ala_neighbors from count_ala_neighbors is merged into self.features
-    assert 'n_ala_neighbors' in myrunner.features.columns
-    assert 'neighborhood_sasa' in myrunner.features.columns
-    assert 'neighborhood_kyte_doolittle' in myrunner.features.columns
-    assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
 
 
 def test_structural_feature_chains_validation(tmp_path):

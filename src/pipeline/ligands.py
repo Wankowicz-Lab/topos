@@ -30,6 +30,11 @@ KNOWN_LIGANDS = frozenset({
 })
 
 
+def _sanitize_column_name(value: str) -> str:
+    """Normalize ligand-derived strings for safe column names."""
+    return str(value).strip().replace(" ", "_")
+
+
 def format_ligand_id(chain: str, res_id: int, res_name: str) -> str:
     """Build a canonical ligand identifier for joins against partner residue keys."""
     res_name_str = "" if res_name is None else str(res_name).strip()
@@ -94,11 +99,6 @@ def find_ligands(
                 )
 
     return result
-
-
-def _sanitize_column_name(value: str) -> str:
-    """Normalize ligand-derived strings for safe column names."""
-    return str(value).strip().replace(" ", "_")
 
 
 def calculate_protein_ligand_interactions(
