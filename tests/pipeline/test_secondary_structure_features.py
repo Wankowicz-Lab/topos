@@ -69,9 +69,9 @@ def test_calculate_secondary_structure_features_columns_exist(tmp_path):
     assert "ss_domain_length" in out.columns
     assert "ss_domain_metric_a" in out.columns
 
-    from src.metrics import secondary_structure as ss_metrics
+    from src.metrics import secondary_structure as ss_module
 
-    for group_name in ss_metrics.AA_GROUPS:
+    for group_name in ss_module.AA_GROUPS:
         assert f"ss_domain_log2_aa_group_ratio_{group_name}" in out.columns
 
     feat_with_ss = features.merge(
