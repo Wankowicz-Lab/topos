@@ -8,17 +8,20 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, gettempdir
 from typing import Literal, Optional, Union
 
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
+import requests
 from biotite.database import rcsb
 from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile, get_structure
 
 logger = logging.getLogger(__name__)
+
+ALPHAFOLD_API_BASE = "https://alphafold.ebi.ac.uk/api/prediction"
 
 
 def residue_table(array: struc.AtomArray) -> pd.DataFrame:
@@ -47,6 +50,7 @@ def residue_table(array: struc.AtomArray) -> pd.DataFrame:
 def load_structure(
     path: Optional[Union[str, Path]] = None,
     pdb_id: Optional[str] = None,
+    uniprot_id: Optional[str] = None,
     model: Optional[int] = 1,
     altloc_policy: Literal["highest", "all"] = "highest",
 ) -> struc.AtomArray:
@@ -59,6 +63,8 @@ def load_structure(
         Path to the structure file (PDB or mmCIF format). If not provided, pdb_id must be provided.
     pdb_id : str, optional
         PDB identifier for fetching structure from RCSB. If not provided, path must be provided.
+    uniprot_id : str, optional
+        UniProt accession for fetching an AlphaFold PDB when neither path nor pdb_id is provided.
     model : int, optional
         Model number to load. Default is 1. Use None to load all models.
     altloc_policy : {'highest', 'all'}, optional
@@ -74,7 +80,7 @@ def load_structure(
     """
     extra_fields = ["b_factor", "occupancy"]
     
-    # Handle PDB ID fetching if path is not provided
+    # Handle remote fetching if path is not provided
     if path is None and pdb_id is not None:
         logger.info("Fetching PDB structure from RCSB")
         obj = rcsb.fetch(pdb_id, format="cif")
@@ -83,11 +89,15 @@ def load_structure(
         tmp_file.close()
         path = Path(tmp_file.name)
         pdb_ext = "cif"
+    elif path is None and uniprot_id is not None:
+        logger.info("Fetching AlphaFold structure from UniProt accession")
+        path = download_alphafold_pdb(uniprot_id=uniprot_id)
+        pdb_ext = path.suffix.lstrip(".")
     elif path is not None:
         path = Path(path)
         pdb_ext = path.suffix.lstrip(".")
     else:
-        raise ValueError("Either pdb_id or path must be provided")
+        raise ValueError("Either pdb_id, uniprot_id, or path must be provided")
 
     # Rename 'highest' to 'occupancy' to match biotite convention
     altloc_policy = "occupancy" if altloc_policy == 'highest' else altloc_policy
@@ -105,6 +115,39 @@ def load_structure(
             arr = pdb.get_structure(model=model or 1, extra_fields=extra_fields, altloc=altloc_policy)
     
     return arr
+
+
+def download_alphafold_pdb(uniprot_id: str, out_dir: Optional[Union[str, Path]] = None) -> Path:
+    """Download an AlphaFold PDB for a UniProt accession and return the local file path."""
+    api_url = f"{ALPHAFOLD_API_BASE}/{uniprot_id}"
+
+    try:
+        response = requests.get(api_url, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        raise RuntimeError(f"Failed to fetch AlphaFold metadata for {uniprot_id}: {e}")
+
+    data = response.json()
+    if not data:
+        raise ValueError(f"No AlphaFold prediction found for {uniprot_id}")
+
+    pdb_url = data[0].get("pdbUrl")
+    if not pdb_url:
+        raise ValueError(f"No AlphaFold PDB URL found for {uniprot_id}")
+
+    out_dir = Path(gettempdir()) if out_dir is None else Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = Path(out_dir) / f"{uniprot_id}_alphafold.pdb"
+
+    try:
+        pdb_response = requests.get(pdb_url, timeout=60)
+        pdb_response.raise_for_status()
+    except requests.RequestException as e:
+        raise RuntimeError(f"Failed to download AlphaFold PDB for {uniprot_id}: {e}")
+
+    out_path.write_bytes(pdb_response.content)
+    return out_path
 
 
 def ensure_altloc_annotation(array: struc.AtomArray) -> struc.AtomArray:

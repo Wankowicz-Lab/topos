@@ -403,10 +403,12 @@ def _make_aaindex_data(accessions, categories=None):
 def _make_config_file(file_path: Path, pdb_id='8smv', name='test_protein', membrane_protein=False,
                       mutation_data_path=None,
                       mutation_data_chain=None, aaindex_path=None, altloc_policy='highest',
+                      uniprot_id=None,
                       structural_feature_chains=None) -> None:
     """Write a configuration file for testing in .toml format with the following defaults"""
 
     defaults = {"pdb_id": pdb_id,
+                "uniprot_id": uniprot_id,
                 'name': name,
                 "membrane_protein": membrane_protein,
                 "mutation_data_path": str(mutation_data_path) if mutation_data_path is not None else None,

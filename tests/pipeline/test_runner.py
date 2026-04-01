@@ -349,11 +349,11 @@ def test_runner__merge_config(tmp_path):
     assert merged_config.mutation_data_path is None
     assert merged_config.aaindex_path == aaindex_file_path
 
-    # Test missing pdb_id and pdb_path
+    # Test missing pdb_id, pdb_path, and uniprot_id
     empty_config = Config(name='test')
-    with pytest.raises(ValueError, match="Either 'pdb_id' or 'pdb_path' must be provided"):
+    with pytest.raises(ValueError, match="Either 'pdb_id', 'pdb_path', or 'uniprot_id' must be provided"):
         myrunner._merge_config(base=empty_config, overrides={})
-    with pytest.raises(ValueError, match="Either 'pdb_id' or 'pdb_path' must be provided"):
+    with pytest.raises(ValueError, match="Either 'pdb_id', 'pdb_path', or 'uniprot_id' must be provided"):
         myrunner._merge_config(base=empty_config,
                                overrides={'membrane_protein': True})
 
@@ -364,6 +364,28 @@ def test_runner__merge_config(tmp_path):
     merged2 = myrunner._merge_config(base=empty_config,
                                      overrides={'membrane_protein': True})
     assert merged2.name == '1abc'
+
+    # Test that name is auto-derived from uniprot_id when not explicitly provided
+    uniprot_config = Config(uniprot_id='P12345')
+    merged3 = myrunner._merge_config(base=uniprot_config, overrides={})
+    assert merged3.name == 'P12345'
+
+
+def test_runner_initialization_from_uniprot_config(tmp_path):
+    """Test that Runner can initialize from config using only uniprot_id."""
+    config_path = tmp_path / 'config.toml'
+    _make_config_file(config_path, pdb_id=None, name=None, uniprot_id='P00533', mutation_data_path="")
+
+    uniprot_runner = runner.Runner(config_path=config_path)
+
+    assert uniprot_runner.context.array is not None
+    assert uniprot_runner.context.array.array_length() > 0
+    assert uniprot_runner.context.residue_table is not None
+    assert len(uniprot_runner.context.residue_table) > 0
+    assert uniprot_runner.context.config.uniprot_id == 'P00533'
+    assert uniprot_runner.context.config.pdb_id is None
+    assert uniprot_runner.context.config.pdb_path is None
+    assert uniprot_runner.context.config.name == 'P00533'
 
 
 
