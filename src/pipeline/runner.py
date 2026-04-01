@@ -131,6 +131,7 @@ class Runner:
         arr = load_structure(
             path=config.pdb_path,
             pdb_id=config.pdb_id,
+            uniprot_id=config.uniprot_id,
             altloc_policy=config.altloc_policy
         )
 
@@ -176,15 +177,25 @@ class Runner:
         ss_df = get_secondary_structure_annotations(self.context)
 
         if self.context.config.membrane_protein:
-            try:
-                logger.info("Fetching PDBTM annotation")
-                pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
-                self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
-                self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
-                self.context.aa = self.context.array[struc.filter_amino_acids(self.context.array)]
-                self.context.residue_table = define_membrane_secondary_structure(self.context.residue_table, ss_df)
-            except RuntimeError as e:
-                raise RuntimeError(f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. Rerun with membrane_protein=False to calculate soluble secondary structure.")
+            if self.context.config.pdb_id is None and self.context.config.uniprot_id is not None:
+                warnings.warn(
+                    "Skipping PDBTM annotation for AlphaFold-derived structure because "
+                    "PDBTM requires a PDB ID. Membrane features will not be generated; "
+                    "continuing with soluble secondary-structure assignment.",
+                    UserWarning,
+                )
+                self.context.config.membrane_protein = False
+                self.context.residue_table = define_soluble_secondary_structure(self.context.residue_table, ss_df)
+            else:
+                try:
+                    logger.info("Fetching PDBTM annotation")
+                    pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
+                    self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
+                    self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
+                    self.context.aa = self.context.array[struc.filter_amino_acids(self.context.array)]
+                    self.context.residue_table = define_membrane_secondary_structure(self.context.residue_table, ss_df)
+                except RuntimeError as e:
+                    raise RuntimeError(f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. Rerun with membrane_protein=False to calculate soluble secondary structure.")
         else:
             self.context.residue_table = define_soluble_secondary_structure(self.context.residue_table, ss_df)
 
@@ -275,12 +286,22 @@ class Runner:
             elif base_dict.get('pdb_path') is not None:
                 # Fall back to the structure filename stem
                 base_dict['name'] = Path(base_dict['pdb_path']).stem
+            elif base_dict.get('uniprot_id') is not None:
+                # Fall back to the UniProt accession for AlphaFold-derived structures
+                base_dict['name'] = base_dict['uniprot_id']
             else:
                 raise ValueError(
                     "'name' must be provided either in config file or directly to Runner."
                 )
-        if base_dict.get('pdb_id') is None and base_dict.get('pdb_path') is None:
-            raise ValueError("Either 'pdb_id' or 'pdb_path' must be provided (in config file or directly to Runner).")
+        if (
+            base_dict.get('pdb_id') is None
+            and base_dict.get('pdb_path') is None
+            and base_dict.get('uniprot_id') is None
+        ):
+            raise ValueError(
+                "Either 'pdb_id', 'pdb_path', or 'uniprot_id' must be provided "
+                "(in config file or directly to Runner)."
+            )
 
         return Config(**base_dict)
 

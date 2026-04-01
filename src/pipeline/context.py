@@ -37,6 +37,8 @@ class Config(BaseModel):
         Name of the protein
     pdb_id : Optional[str]
         PDB identifier for fetching structure from RCSB.
+    uniprot_id : Optional[str]
+        UniProt accession for fetching an AlphaFold-predicted structure.
     pdb_path : Optional[Path]
         Local path to structure file (PDB or mmCIF format).
     membrane_protein : Optional[bool]
@@ -78,6 +80,7 @@ class Config(BaseModel):
     # structure data
     name: Optional[str] = None
     pdb_id: Optional[str] = None
+    uniprot_id: Optional[str] = None
     pdb_path: Optional[Path] = None
     membrane_protein: Optional[bool] = False
 

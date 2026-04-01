@@ -10,7 +10,7 @@ from tests.test_utils import _make_aaindex_data, _make_chain, _make_config_file
 
 
 def test_config(tmp_path):
-    config_args = {'pdb_id': "1abc", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
+    config_args = {'pdb_id': "1abc", 'uniprot_id': "P12345", 'membrane_protein': True, 'mutation_data_path': "data/aaindex_parsed_small.csv",
                    'mutation_data_chain': "A", 'aaindex_path': "data/aaindex_parsed_small.csv"}
 
     _ = Config(**config_args)
