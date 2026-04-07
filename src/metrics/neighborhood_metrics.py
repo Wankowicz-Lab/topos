@@ -62,6 +62,48 @@ def count_ala_neighbors(
     return pd.DataFrame(rows)
 
 
+def count_chain_neighbors(
+    context: Context,
+    features: pd.DataFrame,
+) -> pd.DataFrame:
+    """Count same-chain and cross-chain residues in each residue neighborhood."""
+    neighbor_map = context.extras["residue_neighbors"]
+    struct_cols = ["chain", "resi_struct", "resn_struct"]
+
+    unique = features[struct_cols].drop_duplicates()
+    unique = unique.loc[unique.resi_struct.notna(), :]
+
+    key_to_chain = dict(
+        zip(
+            (res_key(c, r, n) for c, r, n in zip(unique["chain"], unique["resi_struct"], unique["resn_struct"])),
+            unique["chain"],
+        )
+    )
+
+    rows = []
+    for _, row in unique.iterrows():
+        chain, resi, resn = row["chain"], row["resi_struct"], row["resn_struct"]
+        residue_key = res_key(chain, resi, resn)
+        neighbor_keys = neighbor_map.get(residue_key, [])
+
+        n_same_chain = sum(1 for key in neighbor_keys if key_to_chain.get(key) == chain)
+        n_different_chain = sum(
+            1 for key in neighbor_keys if key in key_to_chain and key_to_chain[key] != chain
+        )
+
+        rows.append(
+            {
+                "chain": chain,
+                "resi_struct": resi,
+                "resn_struct": resn,
+                "n_same_chain_neighbors": n_same_chain,
+                "n_different_chain_neighbors": n_different_chain,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
 def average_neighbor_metrics(
     context: Context,
     features: pd.DataFrame,
@@ -136,4 +178,4 @@ def average_neighbor_metrics(
     return pd.DataFrame(rows)
 
 
-NEIGHBORHOOD_METRIC_FUNCTIONS = [count_ala_neighbors, average_neighbor_metrics]
+NEIGHBORHOOD_METRIC_FUNCTIONS = [count_ala_neighbors, count_chain_neighbors, average_neighbor_metrics]
