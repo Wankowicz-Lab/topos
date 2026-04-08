@@ -24,8 +24,8 @@ from src.pipeline.context import Config, Context
 from src.pipeline.ligands import calculate_protein_ligand_interactions
 from src.pipeline.neighbors import calculate_neighborhood_features, compute_residue_neighbors
 from src.pipeline.secondary_structure_features import calculate_secondary_structure_features
-from src.pipeline.sequence_window_features import calculate_sequence_window_features
 from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
+from src.pipeline.sequence_window_features import calculate_sequence_window_features
 from src.structure.secondary_structure import (
     define_membrane_secondary_structure,
     define_soluble_secondary_structure,
