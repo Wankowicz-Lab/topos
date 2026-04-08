@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import pandas as pd
 import pytest
@@ -135,6 +136,35 @@ def test_calculate_neighborhood_features_neighbor_averages_deterministic():
     assert result.loc[("A", 2, "VAL"), "neighborhood_sasa"] == 1.0
     assert result.loc[("A", 3, "GLY"), "neighborhood_sasa"] == 1.0
     assert result.loc[("A", 4, "SER"), "neighborhood_sasa"] == 6.0
+
+
+def test_neighbor_entropy_metrics_filters_missing_and_nonstandard_neighbors():
+    """Entropy metrics ignore unresolved and non-standard neighbor residue labels."""
+
+    class DummyContext:
+        def __init__(self, neighbor_map):
+            self.extras = {"residue_neighbors": neighbor_map}
+
+    features = pd.DataFrame({
+        "chain": ["A", "A", "A"],
+        "resi_struct": [1, 2, 3],
+        "resn_struct": ["ALA", "VAL", "MSE"],
+        "sasa": [1.0, 2.0, 3.0],
+    })
+    neighbor_map = {
+        "A:1:ALA": ["A:2:VAL", "A:3:MSE", "A:999:UNK"],
+        "A:2:VAL": ["A:1:ALA"],
+        "A:3:MSE": ["A:1:ALA"],
+    }
+    context = DummyContext(neighbor_map)
+
+    result = calculate_neighborhood_features(context, features)
+    result = result.set_index(["chain", "resi_struct", "resn_struct"])
+
+    row = result.loc[("A", 1, "ALA")]
+    assert row["n_neighbors"] == 2
+    assert row["neighbor_aa_entropy"] == pytest.approx(1.0)
+    assert row["neighbor_aa_group_entropy"] == pytest.approx(0.0)
 
 
 def test_calculate_neighborhood_features_secondary_structure_coarse_granular_metrics_deterministic():
@@ -306,3 +336,32 @@ def test_neighbor_sequence_range_metrics_same_chain_and_threshold():
     custom = neighbor_sequence_range_metrics(context, features, long_range_threshold=20)
     custom = custom.set_index(["chain", "resi_struct", "resn_struct"])
     assert custom.loc[("A", 15, "ALA"), "prop_long_range_neighbors"] == pytest.approx(1 / 3)
+
+
+def test_neighbor_sequence_range_metrics_warns_when_same_chain_neighbors_missing():
+    """Sequence-range metrics warn and skip residues whose neighbors are only cross-chain."""
+
+    class DummyContext:
+        def __init__(self, neighbor_map):
+            self.extras = {"residue_neighbors": neighbor_map}
+
+    features = pd.DataFrame({
+        "chain": ["A", "B"],
+        "resi_struct": [10, 50],
+        "resn_struct": ["ALA", "GLY"],
+    })
+    neighbor_map = {
+        "A:10:ALA": ["B:50:GLY"],
+        "B:50:GLY": ["A:10:ALA"],
+    }
+    context = DummyContext(neighbor_map)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = neighbor_sequence_range_metrics(context, features)
+
+    assert len(caught) == 2
+    assert "No same-chain neighbors for residue A:10:ALA" in str(caught[0].message)
+    result = result.set_index(["chain", "resi_struct", "resn_struct"])
+    assert pd.isna(result.loc[("A", 10, "ALA"), "prop_long_range_neighbors"])
+    assert pd.isna(result.loc[("A", 10, "ALA"), "mean_neighbor_sequence_distance"])

@@ -8,6 +8,7 @@ They read the neighbor mapping from context.extras['residue_neighbors'].
 from __future__ import annotations
 
 import math
+import warnings
 from collections import Counter
 
 import pandas as pd
@@ -233,14 +234,18 @@ def neighbor_entropy_metrics(
         chain, resi, resn = row["chain"], row["resi_struct"], row["resn_struct"]
         residue_key = res_key(chain, resi, resn)
         neighbor_keys = neighbor_map.get(residue_key, [])
+        # Restrict entropy inputs to neighbors that resolve back to a residue in the output table.
         neighbor_residues = [key_to_resn[k] for k in neighbor_keys if k in key_to_resn]
-        neighbor_groups = [AA_TO_GROUP[neighbor_resn] for neighbor_resn in neighbor_residues]
+        # Skip non-standard or modified residue names that do not participate in AA_TO_GROUP.
+        neighbor_groups = [
+            aa_group for neighbor_resn in neighbor_residues if (aa_group := AA_TO_GROUP.get(neighbor_resn)) is not None
+        ]
         rows.append(
             {
                 "chain": chain,
                 "resi_struct": resi,
                 "resn_struct": resn,
-                "n_neighbors": len(neighbor_keys),
+                "n_neighbors": len(neighbor_residues),
                 "neighbor_aa_entropy": _shannon_entropy(neighbor_residues),
                 "neighbor_aa_group_entropy": _shannon_entropy(neighbor_groups),
             }
@@ -291,15 +296,27 @@ def neighbor_sequence_range_metrics(
                 continue
             same_chain_distances.append(abs(neighbor_resi - target_resi))
 
+        # Warn and skip the sequence-range metrics when 3D neighbors are all cross-chain.
+        if len(same_chain_distances) == 0:
+            warnings.warn(
+                f"No same-chain neighbors for residue {residue_key}; skipping sequence-range metrics.",
+                UserWarning,
+            )
+            mean_neighbor_sequence_distance = float("nan")
+            prop_long_range_neighbors = float("nan")
+        else:
+            prop_long_range_neighbors = sum(
+                distance > long_range_threshold for distance in same_chain_distances
+            ) / len(same_chain_distances)
+            mean_neighbor_sequence_distance = sum(same_chain_distances) / len(same_chain_distances)
+
         rows.append(
             {
                 "chain": row["chain"],
                 "resi_struct": row["resi_struct"],
                 "resn_struct": row["resn_struct"],
-                "prop_long_range_neighbors": sum(
-                    distance > long_range_threshold for distance in same_chain_distances
-                ) / len(same_chain_distances),
-                "mean_neighbor_sequence_distance": sum(same_chain_distances) / len(same_chain_distances),
+                "prop_long_range_neighbors": prop_long_range_neighbors,
+                "mean_neighbor_sequence_distance": mean_neighbor_sequence_distance,
             }
         )
 
@@ -391,6 +408,7 @@ def neighbor_secondary_structure_coarse_granular_metrics(
 NEIGHBORHOOD_METRIC_FUNCTIONS = [
     count_ala_neighbors,
     average_neighbor_metrics,
+    neighbor_entropy_metrics,
     neighbor_sequence_range_metrics,
     neighbor_secondary_structure_coarse_granular_metrics,
 ]
