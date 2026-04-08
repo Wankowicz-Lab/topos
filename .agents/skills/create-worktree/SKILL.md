@@ -13,16 +13,23 @@ Use a separate checkout and branch for isolated agent work. Prefer a sibling dir
 ## 1. Create the worktree safely
 
 - If the target directory is outside the current workspace, sandboxed terminals may block directory creation or git ref updates. If `git worktree add` fails with `Operation not permitted`, `Permission denied`, or ref-locking errors, rerun the same command with full permissions.
+- When creating a new branch, pass an explicit base such as `origin/main`. Do not rely on the current checkout `HEAD`, which may be on a feature branch or detached.
 - Create a new branch with the worktree when starting fresh:
 
 ```bash
-git worktree add -b <branch-name> ../biogenesis-<slug>
+git worktree add -b <branch-name> ../biogenesis-<slug> origin/main
 ```
 
 - If the branch already exists, attach it explicitly:
 
 ```bash
 git worktree add ../biogenesis-<slug> <branch-name>
+```
+
+- If the intended base is not `origin/main`, still pass it explicitly:
+
+```bash
+git worktree add -b <branch-name> ../biogenesis-<slug> <base-commit-ish>
 ```
 
 ## 2. Verify the checkout immediately
