@@ -9,7 +9,7 @@ from Bio.Align import substitution_matrices
 from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.metrics.registry import register_metric
 from src.pipeline.context import Context
-from src.sequence.utils import convert_amino_acid
+from src.sequence.utils import convert_amino_acid_3to1
 
 logger = logging.getLogger(__name__)
 
@@ -300,8 +300,8 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     b_matrix = bl.BLOSUM(blosum_threshold)
 
     def get_blosum_score(row):
-        wt = convert_amino_acid(row['resn_mut'])
-        mut = convert_amino_acid(row['resm'])
+        wt = convert_amino_acid_3to1(row['resn_mut'])
+        mut = convert_amino_acid_3to1(row['resm'])
         return b_matrix[wt][mut]
 
     blosum_scores[f'blosum{blosum_threshold}'] = blosum_scores.apply(get_blosum_score, axis=1)
@@ -330,8 +330,8 @@ def calculate_phat_score(context: Context) -> pd.DataFrame:
     PHAT75_73 = make_phat75_73()
 
     def get_phat_score(row):
-        wt = convert_amino_acid(row['resn_mut'])
-        mut = convert_amino_acid(row['resm'])
+        wt = convert_amino_acid_3to1(row['resn_mut'])
+        mut = convert_amino_acid_3to1(row['resm'])
         if wt not in PHAT75_73.alphabet or mut not in PHAT75_73.alphabet:
             return np.inf
         return PHAT75_73[wt][mut]

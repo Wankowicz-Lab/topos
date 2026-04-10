@@ -7,7 +7,7 @@ import pytest
 
 from src.metrics import sequence as metrics
 from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
-from src.sequence.utils import convert_amino_acid
+from src.sequence.utils import convert_amino_acid_3to1
 from tests.test_utils import AA_LIST, _make_aaindex_data, _make_residue_table
 
 # Seed RNGs for deterministic tests
@@ -354,7 +354,7 @@ def test_calculate_blosum_score():
     # verify that values are correct
     b_matrix = metrics.bl.BLOSUM(90)
     for idx, row in blosum_df.iterrows():
-        expected_score = b_matrix[convert_amino_acid(row['resn_mut'])][convert_amino_acid(row['resm'])]
+        expected_score = b_matrix[convert_amino_acid_3to1(row['resn_mut'])][convert_amino_acid_3to1(row['resm'])]
         assert blosum_df.at[idx, 'blosum90'] == expected_score
 
 
