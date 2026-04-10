@@ -152,8 +152,17 @@ A CSV file with one row per mutation. Default required columns (names configurab
 | Residue position | `position` | Integer residue number |
 | Wildtype amino acid | `wildtype` | 1-letter or 3-letter code |
 | Mutant amino acid | `mutation` | 1-letter or 3-letter code |
-| Mutation type | `type` | `"missense"`, `"synonymous"`, `"stop_codon"` |
+| Mutation type | `type` | `"missense"`, `"synonymous"`, `"stop"`, `"deletion"`, or `"insertion"` |
 | Effect score | `effect` | Numerical fitness / effect score |
+
+#### Mutation input requirements
+
+- `wildtype` must use a single code system across the file: either all 1-letter amino acid codes or all 3-letter amino acid codes.
+- `mutation` may use standard 1-letter amino acid codes, standard 3-letter amino acid codes, `*`, or the shorthand indel tokens `DEL`, `DEL1`, `DEL2`, `DEL3`, `INS1`, `INS2`, and `INS3`.
+- Mixed `mutation` formats are allowed. Standard 1-letter mutant amino acid codes are normalized to 3-letter codes during loading; the explicit indel shorthand tokens remain unchanged.
+- `type` must use one of the canonical values `missense`, `synonymous`, `stop`, `deletion`, or `insertion`.
+
+Loader validation errors reference this section as `README.md#mutation-input-requirements`.
 
 The pipeline aligns the mutation data sequence to the PDB chain you specify via
 `mutation_data_chain`.  Alignment warnings (mismatches, gaps) are reported in the
@@ -288,7 +297,7 @@ It records:
 | `resn_struct` | Residue name (3-letter) from the structure |
 | `resi_mut` | Residue number from mutation data (same as `resi_struct` in structure-only mode) |
 | `resn_mut` | Residue name from mutation data |
-| `resm` | Mutant residue 1-letter code (DMS mode only) |
+| `resm` | Mutant residue token after loading, typically 3-letter for substitutions and unchanged for explicit indel shorthand tokens |
 | `name` | Run name (derived from PDB ID or the `name` parameter) |
 | `ss_domains` | Secondary structure domain label (e.g. `helix_1`, `sheet_2`, `coil_3`) |
 
