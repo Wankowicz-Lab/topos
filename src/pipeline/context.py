@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Literal, Optional
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.metrics.aaindex_schema import validate_aaindex_columns
 
@@ -64,8 +64,6 @@ class Config(BaseModel):
         Column name for mutation types in mutation data (default: "type").
     mutation_score_col_name : str
         Column name for mutation effect scores in mutation data (default: "effect").
-    mutation_category_central_interval : float
-        Central probability mass for equal-tail intervals in mutation_category.
     mutation_category_logs_base : Optional[Path]
         Parent directory for ``logs/`` mutation_category diagnostic figures; defaults to ``output_dir``.
     aaindex_path : Path
@@ -103,7 +101,6 @@ class Config(BaseModel):
     mutation_col_name: str = "mutation"
     mutation_type_col_name: str = "type"
     mutation_score_col_name: str = "effect"
-    mutation_category_central_interval: float = Field(default=0.90, gt=0, lt=1)
     mutation_category_logs_base: Optional[Path] = None
 
     # sequence features

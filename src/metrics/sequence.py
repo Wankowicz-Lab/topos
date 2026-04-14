@@ -9,6 +9,7 @@ from Bio.Align import substitution_matrices
 
 from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.metrics.mutation_category_gmm import (
+    MUTATION_CATEGORY_CENTRAL_INTERVAL,
     classify_stop,
     classify_synonymous,
     fit_mutation_category_reference,
@@ -31,28 +32,6 @@ def _empty_mutation_category_frame(seq_data: pd.DataFrame) -> pd.DataFrame:
     empty['total_lof'] = np.nan
     empty['total_gof'] = np.nan
     return empty
-
-
-def _mutation_category_logs_base_dir(config) -> Optional[Path]:
-    if config.mutation_category_logs_base is not None:
-        return Path(config.mutation_category_logs_base)
-    if config.output_dir is not None:
-        return Path(config.output_dir)
-    return None
-
-
-def _mutation_category_diagnostic_filename(config) -> str:
-    parts = []
-    if config.output_prefix:
-        p = str(config.output_prefix).strip().strip('_')
-        if p:
-            parts.append(p)
-    if config.name:
-        parts.append(str(config.name))
-    elif config.pdb_id:
-        parts.append(str(config.pdb_id))
-    stem = '_'.join(parts) if parts else 'run'
-    return f"{stem}_mutation_category_gmm_fit.png"
 
 
 def make_phat75_73():
@@ -243,14 +222,13 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
     Classify mutations from a 2-component Gaussian mixture reference and count LOF/GOF per position.
 
     Synonymous effects use a mixture-sampled equal-tail interval; stop effects use the lower-mean
-    component when well-separated, otherwise the combined mixture. Diagnostic figures may be written
-    under ``logs/`` when an output base path is configured.
+    component when well-separated, otherwise the combined mixture.
     """
     seq_data = context.residue_table.loc[context.residue_table.mut_info, :].copy()
     if seq_data.empty:
         return _empty_mutation_category_frame(seq_data)
 
-    central_interval = context.config.mutation_category_central_interval
+    central_interval = MUTATION_CATEGORY_CENTRAL_INTERVAL
     fit = fit_mutation_category_reference(seq_data, central_interval)
     if fit is None:
         return _empty_mutation_category_frame(seq_data)
@@ -283,10 +261,26 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
         how='left',
     )
 
-    base = _mutation_category_logs_base_dir(context.config)
+    cfg = context.config
+    if cfg.mutation_category_logs_base is not None:
+        base = Path(cfg.mutation_category_logs_base)
+    elif cfg.output_dir is not None:
+        base = Path(cfg.output_dir)
+    else:
+        base = None
+
     if base is not None:
-        log_dir = base / 'logs'
-        out_path = log_dir / _mutation_category_diagnostic_filename(context.config)
+        parts = []
+        if cfg.output_prefix:
+            p = str(cfg.output_prefix).strip().strip('_')
+            if p:
+                parts.append(p)
+        if cfg.name:
+            parts.append(str(cfg.name))
+        elif cfg.pdb_id:
+            parts.append(str(cfg.pdb_id))
+        stem = '_'.join(parts) if parts else 'run'
+        out_path = base / 'logs' / f'{stem}_mutation_category_gmm_fit.png'
         save_mutation_category_diagnostic_png(fit, central_interval, out_path)
 
     return mutation_categories

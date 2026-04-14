@@ -1,7 +1,5 @@
 """
 2-component Gaussian mixture EM and helpers for mutation_category.
-
-Fixed policy constants (not user-configurable) mirror the prior method-comparison prototype.
 """
 
 from __future__ import annotations
@@ -14,6 +12,9 @@ from typing import Literal, Optional
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+
+# Equal-tail central mass for LOF/GOF vs neutral (fixed policy; not user-configurable)
+MUTATION_CATEGORY_CENTRAL_INTERVAL = 0.90
 
 # Reference sanity (empirically reasonable defaults; revisit with large DMS panels if needed)
 MIN_REFERENCE_SAMPLE_COUNT = 5
@@ -42,7 +43,7 @@ def fit_gaussian_mixture(
     sigma_floor: float = _EPS_SIGMA,
     n_iter: int = N_MIXTURE_EM_ITER,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """2-component diagonal Gaussian EM (same structure as the exploratory script)."""
+    """2-component diagonal Gaussian EM."""
     values = np.asarray(values, dtype=float)
     sorted_values = np.sort(values)
     means = np.array(

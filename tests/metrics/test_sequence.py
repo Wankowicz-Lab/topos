@@ -199,7 +199,6 @@ def test_calculate_mutation_category_from_synonymous_reference():
     })
 
     class MockConfig:
-        mutation_category_central_interval = 0.90
         mutation_category_logs_base = None
         output_dir = None
         output_prefix = ''
@@ -243,7 +242,6 @@ def test_calculate_mutation_category_falls_back_to_stop_reference():
     })
 
     class MockConfig:
-        mutation_category_central_interval = 0.90
         mutation_category_logs_base = None
         output_dir = None
         output_prefix = ''
@@ -286,7 +284,6 @@ def test_calculate_mutation_category_rejects_implausibly_narrow_synonymous_fit()
     })
 
     class MockConfig:
-        mutation_category_central_interval = 0.90
         mutation_category_logs_base = None
         output_dir = None
         output_prefix = ''
@@ -321,7 +318,6 @@ def test_mutation_category_diagnostic_png(tmp_path):
     })
 
     class MockConfig:
-        mutation_category_central_interval = 0.90
         mutation_category_logs_base = None
         output_dir = tmp_path
         output_prefix = 'pfx'
