@@ -245,8 +245,8 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
 
     position_cols = ['chain', 'resi_mut', 'resn_mut']
     position_counts = seq_data[position_cols].copy()
-    position_counts['total_lof'] = mutation_category.eq('LOF').astype(int)
-    position_counts['total_gof'] = mutation_category.eq('GOF').astype(int)
+    position_counts['total_lof'] = mutation_category.eq('LOF').fillna(False).astype(int)
+    position_counts['total_gof'] = mutation_category.eq('GOF').fillna(False).astype(int)
     position_counts = (
         position_counts
         .groupby(position_cols, dropna=False)[['total_lof', 'total_gof']]

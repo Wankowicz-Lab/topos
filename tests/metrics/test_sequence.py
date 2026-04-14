@@ -334,6 +334,39 @@ def test_mutation_category_diagnostic_png(tmp_path):
     assert out.is_file()
 
 
+def test_calculate_mutation_category_nonfinite_effect_excluded_from_position_counts():
+    """NaN effect stays unlabeled; position LOF/GOF sums must not raise on boolean NA."""
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 11,
+        'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_mut': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resi_struct': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_struct': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resm': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU', 'ILE', 'PHE', 'TYR', 'ASN', 'GLN'],
+        'effect': [-0.2, -0.1, 0.0, 0.1, 0.2, -2.0, np.nan, 0.05, 0.2, -1.5, 2.2],
+        'type': ['synonymous'] * 5 + ['missense'] * 6,
+        'struct_info': [True] * 11,
+        'mut_info': [True] * 11,
+    })
+
+    class MockConfig:
+        mutation_category_logs_base = None
+        output_dir = None
+        output_prefix = ''
+        name = None
+        pdb_id = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    result = metrics.calculate_mutation_category(MockContext(residue_table))
+    assert pd.isna(result.loc[result['resm'] == 'ILE', 'mutation_category'].iloc[0])
+    pos2 = result.loc[result['resi_mut'] == 2, ['total_lof', 'total_gof']].drop_duplicates()
+    assert pos2.iloc[0].to_dict() == {'total_lof': 1, 'total_gof': 0}
+
+
 def test_calculate_aaindex_scores_no_muts():
     # create test residue table
     residue_table = _make_residue_table(num_residues=5, num_chains=1, make_muts=False)
