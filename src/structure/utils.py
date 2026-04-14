@@ -15,29 +15,6 @@ import biotite.structure as struc
 import numpy as np
 import pandas as pd
 
-
-def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
-    """
-    Extract metadata columns (chain, resi_struct, resn_struct) from an AtomArray.
-
-    Parameters
-    ----------
-    array : struc.AtomArray
-        Biotite AtomArray containing protein structure data.
-
-    Returns
-    -------
-    pd.DataFrame
-
-    """
-    res_starts = struc.get_residue_starts(array)
-    chains = array.chain_id[res_starts]
-    resi = array.res_id[res_starts]
-    resn = array.res_name[res_starts]
-        
-    return pd.DataFrame({"chain": chains, "resi_struct": resi, "resn_struct": resn})
-
-
 #________________HYDROGEN BONDS__________________________
 
 DA_MAX = 3.5           # Å donor–acceptor distance
@@ -61,6 +38,28 @@ AcceptorSite = namedtuple(
     "AcceptorSite",
     "res_key resname chain resi atom_name altloc coord is_backbone",
 )
+
+
+def get_metadata_cols(array: struc.AtomArray) -> pd.DataFrame:
+    """
+    Extract metadata columns (chain, resi_struct, resn_struct) from an AtomArray.
+
+    Parameters
+    ----------
+    array : struc.AtomArray
+        Biotite AtomArray containing protein structure data.
+
+    Returns
+    -------
+    pd.DataFrame
+
+    """
+    res_starts = struc.get_residue_starts(array)
+    chains = array.chain_id[res_starts]
+    resi = array.res_id[res_starts]
+    resn = array.res_name[res_starts]
+
+    return pd.DataFrame({"chain": chains, "resi_struct": resi, "resn_struct": resn})
 
 
 def _norm_vec(v: np.ndarray) -> np.ndarray:
@@ -112,6 +111,25 @@ def is_backbone_atom(atom_name: str) -> bool:
         True if the atom is a backbone atom, False otherwise.
     """
     return atom_name in ("N", "CA", "C", "O", "OXT", "H", "H1", "H2", "H3")
+
+
+def is_heavy(atom_name: str) -> bool:
+    """
+    Check if an atom is a heavy atom (non-hydrogen).
+
+    Parameters
+    ----------
+    atom_name : str
+        Name of the atom.
+
+    Returns
+    -------
+    bool
+        True if the atom is heavy (does not start with 'H' or 'D'),
+        False otherwise.
+    """
+    n = atom_name.strip()
+    return not (n.startswith("H") or n.startswith("D"))
 
 
 def norm_alt(a: Any) -> str:
@@ -527,24 +545,5 @@ def detect_hbonds(
                 }
             )
     return hbonds
-
-#_________________________________PACKING_________________________
-def is_heavy(atom_name: str) -> bool:
-    """
-    Check if an atom is a heavy atom (non-hydrogen).
-
-    Parameters
-    ----------
-    atom_name : str
-        Name of the atom.
-
-    Returns
-    -------
-    bool
-        True if the atom is heavy (does not start with 'H' or 'D'),
-        False otherwise.
-    """
-    n = atom_name.strip()
-    return not (n.startswith("H") or n.startswith("D"))
 
 

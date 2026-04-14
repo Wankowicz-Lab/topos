@@ -96,28 +96,6 @@ ATOM   2537 HD22 LEU A 169     -22.200 -37.598  -0.114  1.00 27.94           H
 ATOM   2538 HD23 LEU A 169     -22.842 -39.045   0.017  1.00 27.94           H"""
 
 
-def test_calculate_membrane_distance():
-    # Create a test chain with varying z-coordinates
-    z_values = list(range(-25, 25, 5))
-    coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
-    aa_list = random.choices(AA_LIST, k=len(z_values))
-    arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A', altloc='')
-
-    class MockContext:
-        def __init__(self, array):
-            self.array = array
-            self.config = Config()
-
-    context = MockContext(array=arr)
-
-    distances = metrics.calculate_membrane_distance(context)
-
-    # Expected distance is absolute z minus membrane thickness
-    expected_distances = np.abs(np.array(z_values)) - 15.0
-
-    assert np.allclose(distances['distance_from_membrane_edge'], expected_distances)
-
-
 ##TO DO MAKE MORE ROBUST WITH REAL PDB FILE
 def test_calculate_sasa():  
     # Create a simple chain with a few residues
@@ -225,6 +203,28 @@ def test_KD_values():
     assert kd_values.iloc[0] > 4.0, "ILE should be highly hydrophobic"
     assert kd_values.iloc[3] < -3.0, "ASP should be hydrophilic"
     assert kd_values.iloc[4] < -3.0, "GLU should be hydrophilic"
+
+
+def test_calculate_membrane_distance():
+    # Create a test chain with varying z-coordinates
+    z_values = list(range(-25, 25, 5))
+    coords = [[np.random.randint(10), np.random.randint(10), z] for z in z_values]
+    aa_list = random.choices(AA_LIST, k=len(z_values))
+    arr = _make_chain(aa_list=aa_list, coords=coords, chain_id='A', altloc='')
+
+    class MockContext:
+        def __init__(self, array):
+            self.array = array
+            self.config = Config()
+
+    context = MockContext(array=arr)
+
+    distances = metrics.calculate_membrane_distance(context)
+
+    # Expected distance is absolute z minus membrane thickness
+    expected_distances = np.abs(np.array(z_values)) - 15.0
+
+    assert np.allclose(distances['distance_from_membrane_edge'], expected_distances)
 
 
 ##TO DO MAKE MORE ROBUST WITH REAL PDB FILE

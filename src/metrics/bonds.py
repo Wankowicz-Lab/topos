@@ -111,8 +111,9 @@ def identify_hbonds(array: struc.AtomArray) -> pd.DataFrame:
     """Identify hydrogen bonds between donor and acceptor sites.
 
     Returns a DataFrame with two rows per hbond (donor as residue, acceptor as partner;
-    acceptor as residue, donor as partner). extras['category'] is 'residue_type-partner_type'
-    so the first part always describes this row's residue (backbone or sidechain).
+    acceptor as residue, donor as partner). extras is a scalar string
+    'residue_type-partner_type' so the first part always describes this row's
+    residue (backbone or sidechain).
 
     Parameters
     ----------
@@ -122,7 +123,7 @@ def identify_hbonds(array: struc.AtomArray) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with standard bond columns and extras['category'].
+        DataFrame with standard bond columns and scalar extras string.
     """
     donors, acceptors = build_sites_biotite(array)
     hbonds = detect_hbonds(donors, acceptors)
@@ -136,7 +137,7 @@ def identify_hbonds(array: struc.AtomArray) -> pd.DataFrame:
             'residue_key': res_key(h['donor_chain'], h['donor_resi'], h['donor_resname']),
             'partner_chain': h['acceptor_chain'], 'partner_resi': int(h['acceptor_resi']), 'partner_resn': h['acceptor_resname'],
             'partner_residue_key': res_key(h['acceptor_chain'], h['acceptor_resi'], h['acceptor_resname']),
-            'bond_type': 'hbond', 'extras': {'category': cat}
+            'bond_type': 'hbond', 'extras': cat
         })
         # Acceptor-view row: residue = acceptor, partner = donor; category so first part = this row's residue (acceptor)
         donor_part, acceptor_part = cat.split('-')
@@ -145,7 +146,7 @@ def identify_hbonds(array: struc.AtomArray) -> pd.DataFrame:
             'residue_key': res_key(h['acceptor_chain'], h['acceptor_resi'], h['acceptor_resname']),
             'partner_chain': h['donor_chain'], 'partner_resi': int(h['donor_resi']), 'partner_resn': h['donor_resname'],
             'partner_residue_key': res_key(h['donor_chain'], h['donor_resi'], h['donor_resname']),
-            'bond_type': 'hbond', 'extras': {'category': f'{acceptor_part}-{donor_part}'}
+            'bond_type': 'hbond', 'extras': f'{acceptor_part}-{donor_part}'
         })
     if results:
         return pd.DataFrame(results)
@@ -206,13 +207,13 @@ def identify_salt_bridges(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Dat
                     'chain': acid_chain, 'resi_struct': int(acid_resi), 'resn_struct': acid_resn, 'residue_key': res_key(acid_chain, acid_resi, acid_resn),
                     'partner_chain': base_chain, 'partner_resi': int(base_resi), 'partner_resn': base_resn, 'partner_residue_key': res_key(base_chain, base_resi, base_resn),
                     'bond_type': 'salt_bridge',
-                    'extras': {}
+                    'extras': ''
                 })
                 results.append({
                     'chain': base_chain, 'resi_struct': int(base_resi), 'resn_struct': base_resn, 'residue_key': res_key(base_chain, base_resi, base_resn),
                     'partner_chain': acid_chain, 'partner_resi': int(acid_resi), 'partner_resn': acid_resn, 'partner_residue_key': res_key(acid_chain, acid_resi, acid_resn),
                     'bond_type': 'salt_bridge',
-                    'extras': {}
+                    'extras': ''
                 })
     
     # Define standard columns
@@ -342,7 +343,6 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
                     'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
                     'bond_type': 'ionic',
                     'extras': {},
-                })
  
     standard_columns = [
         'chain', 'resi_struct', 'resn_struct', 'residue_key',
@@ -440,13 +440,13 @@ def identify_disulfide_bonds(array: struc.AtomArray, cutoff: float = 2.5) -> pd.
                     'chain': cys1_chain, 'resi_struct': int(cys1_resi), 'resn_struct': 'CYS', 'residue_key': res_key(cys1_chain, cys1_resi, 'CYS'),
                     'partner_chain': cys2_chain, 'partner_resi': int(cys2_resi), 'partner_resn': 'CYS', 'partner_residue_key': res_key(cys2_chain, cys2_resi, 'CYS'),
                     'bond_type': 'disulfide',
-                    'extras': {}
+                    'extras': ''
                 })
                 results.append({
                     'chain': cys2_chain, 'resi_struct': int(cys2_resi), 'resn_struct': 'CYS', 'residue_key': res_key(cys2_chain, cys2_resi, 'CYS'),
                     'partner_chain': cys1_chain, 'partner_resi': int(cys1_resi), 'partner_resn': 'CYS', 'partner_residue_key': res_key(cys1_chain, cys1_resi, 'CYS'),
                     'bond_type': 'disulfide',
-                    'extras': {}
+                    'extras': ''
                 })
     
     # Define standard columns
@@ -527,7 +527,7 @@ def identify_pi_stacking(
         DataFrame with columns: chain, resi_struct, resn_struct,
         residue_key, partner_chain, partner_resi, partner_resn,
         partner_residue_key, bond_type, extras.
-        extras contains 'geometry'.
+        extras contains geometry token.
     """
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
@@ -579,9 +579,7 @@ def identify_pi_stacking(
                 # Ambiguous interplanar angle — skip
                 continue
 
-            extras = {
-                'geometry': geometry,
-            }
+            extras = geometry
 
             results.append({
                 'chain': ch1, 'resi_struct': int(ri1), 'resn_struct': rn1,
@@ -665,7 +663,7 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0, angle_cutoff
     pd.DataFrame
         DataFrame with cation-pi interactions with columns:
         chain, resi_struct, resn_struct, partner_chain, partner_resi, partner_resn, bond_type, extras
-        (extras contains 'role' key)
+        (extras contains role token)
     """
 
     res_starts = struc.get_residue_starts(array)
@@ -826,13 +824,13 @@ def identify_vdw_contacts(array: struc.AtomArray, cutoff_factor: float = 1.0) ->
                 'chain': atom_chains[i], 'resi_struct': int(atom_res_ids[i]), 'resn_struct': atom_res_names[i], 'residue_key': res_key(atom_chains[i], atom_res_ids[i], atom_res_names[i]),
                 'partner_chain': atom_chains[j], 'partner_resi': int(atom_res_ids[j]), 'partner_resn': atom_res_names[j], 'partner_residue_key': res_key(atom_chains[j], atom_res_ids[j], atom_res_names[j]),
                 'bond_type': 'vdw_contact',
-                'extras': {}
+                'extras': ''
             })
             results.append({
                 'chain': atom_chains[j], 'resi_struct': int(atom_res_ids[j]), 'resn_struct': atom_res_names[j], 'residue_key': res_key(atom_chains[j], atom_res_ids[j], atom_res_names[j]),
                 'partner_chain': atom_chains[i], 'partner_resi': int(atom_res_ids[i]), 'partner_resn': atom_res_names[i], 'partner_residue_key': res_key(atom_chains[i], atom_res_ids[i], atom_res_names[i]),
                 'bond_type': 'vdw_contact',
-                'extras': {}
+                'extras': ''
             })
     
     # Define standard columns
@@ -925,7 +923,7 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
         if idx is None:
             continue
         total_counts[idx] += 1
-        parts = row['extras']['category'].split('-')
+        parts = row['extras'].split('-')
         if parts[0] == 'backbone':
             bb_counts[idx] += 1
         else:

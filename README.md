@@ -16,70 +16,16 @@ function.
   - [Structure file](#1-structure-file-required)
   - [Config file](#2-config-file-required)
   - [Mutation / DMS data](#3-mutation--dms-data-optional)
+- [Sequence alignment](#sequence-alignment)
 - [Outputs](#outputs)
   - [Features CSV](#features-csv-prefix_featurescsv)
   - [Metadata CSV](#metadata-csv-prefix_metadatacsv)
   - [Run log](#run-log-prefix_run_logtxt)
 - [Config reference](#config-reference)
 - [Output column reference](#output-column-reference)
-- [Examples](#examples)
-- [Logging](#logging)
 - [Developers](#developers)
 
 ---
-
-## Developers
-
-Use the environment setup in [Installation](#installation). For development tooling, install test extras once:
-
-```bash
-pip install -e ".[test]"
-```
-
-The code below allows you to run formatting checks locally, this will flag errors prior automatic CI/CD
-
-Run Ruff (configured in `pyproject.toml`):
-
-```bash
-ruff check src tests
-```
-
-Apply safe Ruff autofixes:
-
-```bash
-ruff check src tests --fix
-```
-
-Run mypy (current high-value scope):
-
-```bash
-mypy
-```
-
-Current lint/type scope:
-- Ruff checks `src/` and `tests/`.
-- Mypy checks:
-  - `src/pipeline/runner.py`
-  - `src/pipeline/context.py`
-  - `src/pipeline/sequence_alignment.py`
-  - `src/metrics/registry.py`
-- Excluded for now: `src/grouped_analysis/**`, `venv/**`, `results/**`, scratch files such as `working_*.py`, `debug.py`, and `plots.py`.
-
-Run checks on changed Python files only:
-
-```bash
-CHANGED_PY="$(git diff --name-only -- '*.py')"
-if [ -n "$CHANGED_PY" ]; then
-  ruff check $CHANGED_PY
-fi
-```
-
-```bash
-CHANGED_SCOPE="$(git diff --name-only -- src/pipeline/runner.py src/pipeline/context.py src/pipeline/sequence_alignment.py src/metrics/registry.py)"
-if [ -n "$CHANGED_SCOPE" ]; then
-  mypy
-fi
-```
 
 ## Installation
 
@@ -206,13 +152,55 @@ A CSV file with one row per mutation. Default required columns (names configurab
 | Residue position | `position` | Integer residue number |
 | Wildtype amino acid | `wildtype` | 1-letter or 3-letter code |
 | Mutant amino acid | `mutation` | 1-letter or 3-letter code |
-| Mutation type | `type` | `"missense"`, `"synonymous"`, `"stop_codon"` |
+| Mutation type | `type` | `"missense"`, `"synonymous"`, `"stop"`, `"deletion"`, or `"insertion"` |
 | Effect score | `effect` | Numerical fitness / effect score |
+
+#### Mutation input requirements
+
+- `wildtype` must use a single code system across the file: either all 1-letter amino acid codes or all 3-letter amino acid codes.
+- `mutation` may use standard 1-letter amino acid codes, standard 3-letter amino acid codes, `*`, or the shorthand indel tokens `DEL`, `DEL1`, `DEL2`, `DEL3`, `INS1`, `INS2`, and `INS3`.
+- Mixed `mutation` formats are allowed. Standard 1-letter mutant amino acid codes are normalized to 3-letter codes during loading; the explicit indel shorthand tokens remain unchanged.
+- `type` must use one of the canonical values `missense`, `synonymous`, `stop`, `deletion`, or `insertion`.
+
+Loader validation errors reference this section as `README.md#mutation-input-requirements`.
 
 The pipeline aligns the mutation data sequence to the PDB chain you specify via
 `mutation_data_chain`.  Alignment warnings (mismatches, gaps) are reported in the
 run log and as Python warnings — these are expected when the experimental construct
 differs from the deposited structure.
+
+---
+
+## Sequence alignment
+
+When `mutation_data_path` is set, the pipeline performs a pairwise alignment of the **mutation wildtype sequence** to the **PDB chain** given by `mutation_data_chain`. Each row of the resulting table is one **alignment column**: residues on the same row are paired; `NaN` on one side means a gap (insertion or deletion relative to the other sequence).
+
+### Accessing the alignment table
+
+After you construct `Runner` with mutation data, the merged alignment is stored on the context:
+
+```python
+runner = Runner(config_path="...")
+alignment_df = runner.context.extras["sequence_alignment_merged"]
+```
+
+The table includes `align_pos`, `chain`, `resi_mut`, `resn_mut`, `resi_struct`, and `resn_struct` (see also the [metadata CSV](#metadata-csv-prefix_metadatacsv) and [Output column reference](#output-column-reference)).
+
+### Worked example
+
+**Row index** below is **0-based** (pandas `iloc`). **Residue numbers** in `resi_mut` / `resi_struct` are the numbering from each source. The table is a toy illustration, not a real protein.
+
+| Row index | align_pos | resi_mut | resn_mut | resi_struct | resn_struct | Notes |
+|-----------|-----------|----------|----------|-------------|-------------|--------|
+| 0 | 0 | 1 | ALA | 10 | ALA | Match |
+| 1 | 1 | 2 | ARG | 11 | LYS | **Mismatch** — same alignment row, different wildtype letters |
+| 2 | 2 | 3 | GLY | — | — | **Internal indel** — paired gap; positions depend on mapping |
+| 3 | 3 | — | — | 12 | ASN | **Internal indel** — residue only on structural side |
+
+- **Mismatch:** At **row index 1**, `resn_mut` is ARG and `resn_struct` is LYS while both `resi_mut` and `resi_struct` are present. A mismatch warning lists **residue positions** (e.g. mutation sequence `2`, structural sequence `11`) as compact ranges, not per-row indices.
+- **Internal indel:** Rows where either `resn_mut` or `resn_struct` is missing (NaN) and the row is **not** classified as a terminal gap, e.g. **row index 3** with structure only.
+- **Terminal gap:** Rows at the **beginning** or **end** of the alignment where one sequence has no residue for the partner; these are called out in a separate warning and **excluded** from the alignment-quality error-rate.
+- **Alignment quality below cutoff:** Compares the count of mismatch + internal indel rows (excluding terminal gaps) to `alignment_cutoff`; see the warning text and cross-check against filtered rows in `alignment_df`.
 
 ---
 
@@ -309,7 +297,7 @@ It records:
 | `resn_struct` | Residue name (3-letter) from the structure |
 | `resi_mut` | Residue number from mutation data (same as `resi_struct` in structure-only mode) |
 | `resn_mut` | Residue name from mutation data |
-| `resm` | Mutant residue 1-letter code (DMS mode only) |
+| `resm` | Mutant residue token after loading, typically 3-letter for substitutions and unchanged for explicit indel shorthand tokens |
 | `name` | Run name (derived from PDB ID or the `name` parameter) |
 | `ss_domains` | Secondary structure domain label (e.g. `helix_1`, `sheet_2`, `coil_3`) |
 
@@ -359,9 +347,9 @@ It records:
 | `wildtype_aa_group` | Amino acid physicochemical group of the wildtype residue |
 | `mut_aa_group` | Amino acid physicochemical group of the mutant residue |
 | `wildtype_mut_aa_group` | Combined wildtype→mutant group label |
-| `AAIndex_{accession}_wt` | AA index property value for wildtype residue |
-| `AAIndex_{accession}_mut` | AA index property value for mutant residue |
-| `AAIndex_{accession}_diff` | Difference (mut − wt) for this AA index |
+| `{accession}_{category}_wt` | AA index property value for wildtype residue |
+| `{accession}_{category}_mut` | AA index property value for mutant residue |
+| `{accession}_{category}_diff` | Difference (mut − wt) for this AA index |
 | `kidera_f{1-10}_wt` | Kidera factor for wildtype residue |
 | `kidera_f{1-10}_mut` | Kidera factor for mutant residue |
 | `kidera_f{1-10}_diff` | Difference (mut − wt) for this Kidera factor |
@@ -411,3 +399,32 @@ Computed on three bond-type graphs: `all` (all bonds), `vdw_contact`, `hbond`.
 | `graph_{type}_graph_in_lcc` | `True` if residue is in the largest connected component |
 
 ---
+
+## Developers
+
+Use the environment setup in [Installation](#installation). For development tooling, install test extras once:
+
+```bash
+pip install -e ".[test]"
+```
+
+The code below allows you to run formatting checks locally, this will flag errors prior automatic CI/CD
+
+Run Ruff (configured in `pyproject.toml`):
+
+```bash
+ruff check src tests
+```
+
+Apply safe Ruff autofixes:
+
+```bash
+ruff check src tests --fix
+```
+
+Run mypy (current high-value scope):
+
+```bash
+mypy
+```
+

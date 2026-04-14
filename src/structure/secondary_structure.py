@@ -13,6 +13,37 @@ from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
 
 
+def make_contiguous_group_labels(lst: List[str]) -> List[str]:
+    """
+    Given a list of values, return a new list where contiguous identical values
+    are labeled with a suffix indicating their group number.
+
+    Parameters
+    ----------
+
+    lst : List[str]
+        Input list of values.
+
+    Returns
+    -------
+
+    result : List[str]
+        List with contiguous group labels.
+    """
+    result = []
+    counters = {}
+
+    # Group by contiguous identical values
+    for val, group in groupby(lst):
+        counters[val] = counters.get(val, 0) + 1
+
+        # Create label with group number
+        label = f"{val}_{counters[val]}"
+        result.extend([label] * len(list(group)))
+
+    return result
+
+
 def get_secondary_structure_annotations(context: Context) -> pd.DataFrame:
     """
     Get secondary structure annotations for an atom array.
@@ -209,38 +240,6 @@ def _annotate_with_pydssp(context: Context) -> pd.DataFrame:
 
     keys_df["sse"] = labels
     return keys_df[["chain", "resi", "sse"]]
-
-
-
-def make_contiguous_group_labels(lst: List[str]) -> List[str]:
-    """
-    Given a list of values, return a new list where contiguous identical values
-    are labeled with a suffix indicating their group number.
-
-    Parameters
-    ----------
-
-    lst : List[str]
-        Input list of values.
-
-    Returns
-    -------
-
-    result : List[str]
-        List with contiguous group labels.
-    """
-    result = []
-    counters = {}
-
-    # Group by contiguous identical values
-    for val, group in groupby(lst):
-        counters[val] = counters.get(val, 0) + 1
-
-        # Create label with group number
-        label = f"{val}_{counters[val]}"
-        result.extend([label] * len(list(group)))
-
-    return result
 
 
 def define_membrane_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.DataFrame) -> pd.DataFrame:

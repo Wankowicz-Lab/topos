@@ -19,6 +19,31 @@ from src.structure.utils import get_metadata_cols, is_backbone_atom, is_heavy, r
 
 logger = logging.getLogger(__name__)
 
+# Reference (max) SASA per residue type, Tien et al. 2013 PLOS ONE empirical values (Å²)
+_REF_SASA = {
+    "ALA": 121.0, "ARG": 265.0, "ASN": 187.0, "ASP": 187.0, "CYS": 148.0,
+    "GLN": 214.0, "GLU": 214.0, "GLY": 97.0, "HIS": 216.0, "ILE": 195.0,
+    "LEU": 191.0, "LYS": 230.0, "MET": 203.0, "PHE": 228.0, "PRO": 154.0,
+    "SER": 143.0, "THR": 163.0, "TRP": 264.0, "TYR": 255.0, "VAL": 165.0,
+}
+
+DSSP_METRIC_COLUMNS = [
+    "dssp_acc",
+    "dssp_nh_o_1_relidx",
+    "dssp_nh_o_1_energy",
+    "dssp_o_nh_1_relidx",
+    "dssp_o_nh_1_energy",
+    "dssp_nh_o_2_relidx",
+    "dssp_nh_o_2_energy",
+    "dssp_o_nh_2_relidx",
+    "dssp_o_nh_2_energy",
+    "dssp_tco",
+    "dssp_kappa",
+    "dssp_alpha",
+    "dssp_phi",
+    "dssp_psi",
+]
+
 
 @register_metric(name='sasa', provides=['sasa', 'sasa_backbone', 'sasa_sidechain', 'sasa_polar', 'sasa_nonpolar'], tags={'structure'})
 def calculate_sasa(context: Context) -> pd.DataFrame:
@@ -86,15 +111,6 @@ def calculate_sasa(context: Context) -> pd.DataFrame:
     metadata_df['sasa_nonpolar'] = res_sasa_nonpolar
     
     return metadata_df
-
-
-# Reference (max) SASA per residue type, Tien et al. 2013 PLOS ONE empirical values (Å²)
-_REF_SASA = {
-    "ALA": 121.0, "ARG": 265.0, "ASN": 187.0, "ASP": 187.0, "CYS": 148.0,
-    "GLN": 214.0, "GLU": 214.0, "GLY": 97.0, "HIS": 216.0, "ILE": 195.0,
-    "LEU": 191.0, "LYS": 230.0, "MET": 203.0, "PHE": 228.0, "PRO": 154.0,
-    "SER": 143.0, "THR": 163.0, "TRP": 264.0, "TYR": 255.0, "VAL": 165.0,
-}
 
 
 @register_metric(name='distance_to_surface', provides=['distance_to_nearest_surface_residue'], tags={'structure'})
@@ -233,6 +249,8 @@ def calculate_membrane_distance(context: Context) -> pd.DataFrame:
     metadata_df['distance_from_membrane_edge'] = distance_from_edge
 
     return metadata_df
+
+
 @register_metric(name='calculate_packing_metrics', provides=['packing_n_atoms', 'packing_n_neighbor_residues', 'packing_contact_density'], tags={'structure', 'interaction'})
 def calculate_residue_packing(context: Context, cutoff: float = 5.0) -> pd.DataFrame:
     """
@@ -383,24 +401,6 @@ def calculate_center_of_mass_distance(context: Context) -> pd.DataFrame:
     metadata_df['distance_to_center_of_mass'] = distances
     
     return metadata_df
-
-
-DSSP_METRIC_COLUMNS = [
-    "dssp_acc",
-    "dssp_nh_o_1_relidx",
-    "dssp_nh_o_1_energy",
-    "dssp_o_nh_1_relidx",
-    "dssp_o_nh_1_energy",
-    "dssp_nh_o_2_relidx",
-    "dssp_nh_o_2_energy",
-    "dssp_o_nh_2_relidx",
-    "dssp_o_nh_2_energy",
-    "dssp_tco",
-    "dssp_kappa",
-    "dssp_alpha",
-    "dssp_phi",
-    "dssp_psi",
-]
 
 
 @register_metric(name="dssp_metrics", provides=DSSP_METRIC_COLUMNS, tags={"structure", "dssp"})

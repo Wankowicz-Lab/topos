@@ -1,8 +1,9 @@
 """Tests for structure loading utilities."""
 
 import numpy as np
+import pytest
 
-from src.structure.structure_context import load_structure, residue_table
+from src.structure.structure_context import download_alphafold_pdb, load_structure, residue_table
 from tests.test_utils import _make_chain, _write_mmcif_file
 
 
@@ -90,3 +91,19 @@ def test_load_structure_altloc_policy():
 
     arr_altloc_highest = load_structure(pdb_id='5C1M', altloc_policy='highest')
     assert len(arr_altloc_highest) < len(arr_altloc_all)
+
+
+def test_download_alphafold_pdb(tmp_path):
+    """Test downloading an AlphaFold PDB from the live AlphaFold API."""
+    out_path = download_alphafold_pdb("P00533", out_dir=tmp_path)
+
+    assert out_path == tmp_path / "P00533_alphafold.pdb"
+    assert out_path.exists()
+    assert out_path.stat().st_size > 0
+    assert b"ATOM" in out_path.read_bytes()
+
+
+def test_download_alphafold_pdb_invalid_uniprot_id(tmp_path):
+    """Test AlphaFold helper failure for an invalid UniProt accession."""
+    with pytest.raises(RuntimeError, match="Failed to fetch AlphaFold metadata for NOT_A_REAL_UNIPROT_ID"):
+        download_alphafold_pdb("NOT_A_REAL_UNIPROT_ID", out_dir=tmp_path)

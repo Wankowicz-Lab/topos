@@ -120,12 +120,4 @@ rerun with standard (non-membrane) secondary structure assignment.
 
 ### Alignment warnings in DMS mode
 
-```
-UserWarning: Found N residues with indels...
-UserWarning: Found gaps at the termini...
-```
-
-These are expected and do not prevent the run.  They occur when the DMS construct
-differs from the deposited PDB sequence (e.g. engineered ICL3 loops in GPCRs,
-expression tags, terminal truncations).  Residues that cannot be aligned receive
-`NaN` for structural metrics.
+Warnings are produced when there is a mismatch between sequence in the mutation data and protein sequence in the structural data. See the [Sequence alignment](../README.md#sequence-alignment) section in the main README for more information.

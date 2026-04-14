@@ -6,14 +6,62 @@ import numpy as np
 import pandas as pd
 from Bio.Align import substitution_matrices
 
+from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
 from src.metrics.registry import register_metric
 from src.pipeline.context import Context
-from src.sequence.utils import convert_amino_acid
+from src.sequence.utils import convert_amino_acid_3to1
 
 logger = logging.getLogger(__name__)
 
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi_mut', 'resn_mut', 'resm']
+
+
+def make_phat75_73():
+    """
+    Make Phat 75/73 substitution matrix.
+
+    Returns
+    -------
+    substitution_matrices.Array
+        Phat 75/73 substitution matrix.
+    """
+
+    PHAT_ALPHABET = "ARNDCQEGHILKMFPSTWYV"
+
+    # PHAT 75/73 scores (symmetric). Values transcribed from the PHAT paper figure.
+    _PHAT_LOWER_TRI = [
+    [  5],
+    [ -6,  9],
+    [ -2, -3, 11],
+    [ -5, -7,  2, 12],
+    [  1, -8, -2, -7,  7],
+    [ -3, -2,  2,  0, -5,  9],
+    [ -5, -6,  0,  6, -7,  1, 12],
+    [  1, -5, -1, -2, -2, -2, -3,  9],
+    [ -3, -4,  4, -1, -7,  2, -1, -4, 11],
+    [  0, -6, -3, -5, -3, -3, -5, -2, -5,  5],
+    [ -1, -6, -3, -5, -2, -3, -5, -2, -4,  2,  4],
+    [ -7, -1, -2, -5,-10, -1, -4, -5, -5, -7, -7,  5],
+    [ -1, -6, -2, -5, -2, -1, -5, -1, -4,  3,  2, -6,  6],
+    [ -1, -7, -1, -5,  0, -2, -5, -2, -2,  0,  1, -7,  0,  6],
+    [ -3, -7, -4, -5, -8, -3, -5, -3, -6, -4, -5, -4, -5, -5, 13],
+    [  2, -6,  1, -4,  1, -1, -3,  1, -2, -2, -2, -5, -2, -2, -3,  6],
+    [  0, -6, -1, -5, -1, -3, -5, -1, -4, -1, -1, -6,  0, -2, -4,  1,  3],
+    [ -4, -7, -5, -7, -4,  1, -7, -5, -3, -4, -3, -8, -4,  0, -6, -5, -7, 11],
+    [ -3, -6,  2, -4, -1,  0, -2, -3,  3, -3, -2, -4, -2,  4, -5, -2, -3,  1, 11],
+    [  1, -7, -3, -5, -2, -3, -5, -2, -5,  3,  1, -8,  1, -1, -4, -2,  0, -4, -3,  4],
+    ]
+
+    n = len(PHAT_ALPHABET)
+    mat = np.zeros((n, n), dtype=int)
+    # fill lower triangle + diagonal
+    for i, row in enumerate(_PHAT_LOWER_TRI):
+        mat[i, :i+1] = row
+    # symmetrize
+    mat = mat + mat.T - np.diag(np.diag(mat))
+
+    return substitution_matrices.Array(alphabet=PHAT_ALPHABET, data=mat)
 
 @register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
                  requires={'resm'}, tags={'sequence'})
@@ -147,7 +195,8 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     return effect_ranking
 
 
-@register_metric(name='aaindex_scores', provides={'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff'},
+@register_metric(name='aaindex_scores', provides={'{accession}_{category}_wt', '{accession}_{category}_mut',
+                                                   '{accession}_{category}_diff'},
                  tags={'sequence'})
 def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     """
@@ -161,9 +210,9 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with 'AAIndex_{acc}_wt', 'AAIndex_{acc}_mut', 'AAIndex_{acc}_diff' along with residue metadata.
+        DataFrame with ``{accession}_{category}_wt``, ``{accession}_{category}_mut``,
+        and ``{accession}_{category}_diff`` for each index row, along with residue metadata.
     """
-    
     # extract params
     residue_table, aaindex_data = context.residue_table, context.extras['aaindex']
 
@@ -171,18 +220,19 @@ def calculate_aaindex_scores(context: Context) -> pd.DataFrame:
     keep_cols = [col for col in KEEP_COLS if col in residue_table.columns]
     aaindex_scores = residue_table.loc[residue_table.mut_info, keep_cols].copy()
 
-    # Create a dictionary mapping AAIndex feature to its values, truncating first two metadata columns
-    feature_dict = {f: aaindex_data.loc[aaindex_data.accession == f].iloc[0][2:]
-                    for f in aaindex_data.accession.unique()}
+    for _, row in aaindex_data.iterrows():
+        accession = row.iloc[0]
+        category = row.iloc[2]
+        base = f'{accession}_{category}'
+        feature_values = row.loc[list(AAINDEX_AA_COLUMNS)]
 
-    for aa_feature, feature_values in feature_dict.items():
-        aaindex_scores[f'AAIndex_{aa_feature}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
+        aaindex_scores[f'{base}_wt'] = aaindex_scores['resn_mut'].map(feature_values)
 
         # calculate for mutant only if mutation column exists
         if 'resm' in keep_cols:
-            aaindex_scores[f'AAIndex_{aa_feature}_mut'] = aaindex_scores['resm'].map(feature_values)
-            aaindex_scores[f'AAIndex_{aa_feature}_diff'] = (
-                aaindex_scores[f'AAIndex_{aa_feature}_mut'] - aaindex_scores[f'AAIndex_{aa_feature}_wt']
+            aaindex_scores[f'{base}_mut'] = aaindex_scores['resm'].map(feature_values)
+            aaindex_scores[f'{base}_diff'] = (
+                aaindex_scores[f'{base}_mut'] - aaindex_scores[f'{base}_wt']
             )
 
     return aaindex_scores
@@ -250,60 +300,13 @@ def calculate_blosum_score(context: Context) -> pd.DataFrame:
     b_matrix = bl.BLOSUM(blosum_threshold)
 
     def get_blosum_score(row):
-        wt = convert_amino_acid(row['resn_mut'])
-        mut = convert_amino_acid(row['resm'])
+        wt = convert_amino_acid_3to1(row['resn_mut'])
+        mut = convert_amino_acid_3to1(row['resm'])
         return b_matrix[wt][mut]
 
     blosum_scores[f'blosum{blosum_threshold}'] = blosum_scores.apply(get_blosum_score, axis=1)
 
     return blosum_scores
-
-
-def make_phat75_73():
-    """
-    Make Phat 75/73 substitution matrix.
-
-    Returns
-    -------
-    substitution_matrices.Array
-        Phat 75/73 substitution matrix.
-    """
-
-    PHAT_ALPHABET = "ARNDCQEGHILKMFPSTWYV"
-
-    # PHAT 75/73 scores (symmetric). Values transcribed from the PHAT paper figure.
-    _PHAT_LOWER_TRI = [
-    [  5],
-    [ -6,  9],
-    [ -2, -3, 11],
-    [ -5, -7,  2, 12],
-    [  1, -8, -2, -7,  7],
-    [ -3, -2,  2,  0, -5,  9],
-    [ -5, -6,  0,  6, -7,  1, 12],
-    [  1, -5, -1, -2, -2, -2, -3,  9],
-    [ -3, -4,  4, -1, -7,  2, -1, -4, 11],
-    [  0, -6, -3, -5, -3, -3, -5, -2, -5,  5],
-    [ -1, -6, -3, -5, -2, -3, -5, -2, -4,  2,  4],
-    [ -7, -1, -2, -5,-10, -1, -4, -5, -5, -7, -7,  5],
-    [ -1, -6, -2, -5, -2, -1, -5, -1, -4,  3,  2, -6,  6],
-    [ -1, -7, -1, -5,  0, -2, -5, -2, -2,  0,  1, -7,  0,  6],
-    [ -3, -7, -4, -5, -8, -3, -5, -3, -6, -4, -5, -4, -5, -5, 13],
-    [  2, -6,  1, -4,  1, -1, -3,  1, -2, -2, -2, -5, -2, -2, -3,  6],
-    [  0, -6, -1, -5, -1, -3, -5, -1, -4, -1, -1, -6,  0, -2, -4,  1,  3],
-    [ -4, -7, -5, -7, -4,  1, -7, -5, -3, -4, -3, -8, -4,  0, -6, -5, -7, 11],
-    [ -3, -6,  2, -4, -1,  0, -2, -3,  3, -3, -2, -4, -2,  4, -5, -2, -3,  1, 11],
-    [  1, -7, -3, -5, -2, -3, -5, -2, -5,  3,  1, -8,  1, -1, -4, -2,  0, -4, -3,  4],
-    ]
-
-    n = len(PHAT_ALPHABET)
-    mat = np.zeros((n, n), dtype=int)
-    # fill lower triangle + diagonal
-    for i, row in enumerate(_PHAT_LOWER_TRI):
-        mat[i, :i+1] = row
-    # symmetrize
-    mat = mat + mat.T - np.diag(np.diag(mat))
-
-    return substitution_matrices.Array(alphabet=PHAT_ALPHABET, data=mat)
 
 
 @register_metric(name='phat_score', provides=['phat_score'], requires={'resm'}, tags={'sequence'})
@@ -327,8 +330,8 @@ def calculate_phat_score(context: Context) -> pd.DataFrame:
     PHAT75_73 = make_phat75_73()
 
     def get_phat_score(row):
-        wt = convert_amino_acid(row['resn_mut'])
-        mut = convert_amino_acid(row['resm'])
+        wt = convert_amino_acid_3to1(row['resn_mut'])
+        mut = convert_amino_acid_3to1(row['resm'])
         if wt not in PHAT75_73.alphabet or mut not in PHAT75_73.alphabet:
             return np.inf
         return PHAT75_73[wt][mut]

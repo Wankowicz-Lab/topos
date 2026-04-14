@@ -8,14 +8,54 @@ alignment, and merging mutation data with structural context.
 import logging
 import warnings
 from pathlib import Path
-from typing import Union
+from typing import Tuple, Union
 
 import pandas as pd
 from Bio.Align import PairwiseAligner
 
-from src.sequence.utils import convert_amino_acid
+from src.sequence.utils import (
+    VALID_1_CODES,
+    VALID_RESM_3_CODES,
+    VALID_RESN_3_CODES,
+    convert_amino_acid_1to3,
+    convert_amino_acid_3to1,
+    invalid_codes,
+)
 
 logger = logging.getLogger(__name__)
+
+# User-facing labels for alignment warnings (merged columns use resn_df1 / resn_df2 before rename).
+_LABEL_MUTATION = "mutation sequence"
+_LABEL_STRUCTURAL = "structural sequence"
+_MUTATION_INPUT_README_SECTION = "README.md#mutation-input-requirements"
+VALID_MUTATION_TYPES = frozenset({"missense", "synonymous", "stop", "deletion", "insertion"})
+
+
+def _format_residue_ranges(positions: pd.Series) -> str:
+    """
+    Format residue indices as compact ranges, e.g. ``1-3, 5, 10-12``.
+
+    Non-finite values are dropped. Empty input returns an em dash placeholder.
+    """
+    vals = pd.to_numeric(positions, errors="coerce").dropna()
+    if vals.empty:
+        return "—"
+    ints = sorted({int(x) for x in vals})
+    if not ints:
+        return "—"
+    ranges: list[tuple[int, int]] = []
+    start = prev = ints[0]
+    for x in ints[1:]:
+        if x == prev + 1:
+            prev = x
+        else:
+            ranges.append((start, prev))
+            start = prev = x
+    ranges.append((start, prev))
+    parts: list[str] = []
+    for a, b in ranges:
+        parts.append(str(a) if a == b else f"{a}-{b}")
+    return ", ".join(parts)
 
 
 def load_mutation_scores(
@@ -56,10 +96,6 @@ def load_mutation_scores(
         If required columns are missing or if the residue column contains
         codes that are neither 1-letter nor 3-letter amino acid codes.
 
-    Warns
-    -----
-    UserWarning
-        If mutation types contain unexpected values.
     """
     logger.info("Loading mutation scores")
     df = pd.read_csv(path)
@@ -85,28 +121,63 @@ def load_mutation_scores(
         score_col_name: "effect"
     })
 
-    # make sure that residue and mutation columns are valid
-    residue_lens = df['resn'].str.len().unique()
-    if len(residue_lens) != 1 or residue_lens[0] not in (1, 3):
-        raise ValueError("Residue column must contain either 1-letter or 3-letter amino acid codes.")
+    df["resn"] = df["resn"].astype(str).str.strip().str.upper()
+    df["resm"] = df["resm"].astype(str).str.strip().str.upper()
+    df["type"] = df["type"].astype(str).str.strip().str.lower()
 
-    # mutation column may contain a range of possible lengths because of stops and indels
-    mutation_lens = df['resm'].str.len().unique()
+    # Wildtype residues must use a single code system because they define the sequence.
+    residue_lens = set(df["resn"].str.len().unique())
+    if residue_lens == {1}:
+        invalid_resn = invalid_codes(set(df["resn"].unique()), VALID_1_CODES)
+        if invalid_resn:
+            raise ValueError(
+                f"Wildtype residue column contains invalid 1-letter codes: {sorted(invalid_resn)}. "
+                f"See {_MUTATION_INPUT_README_SECTION}."
+            )
+        df["resn"] = df["resn"].map(convert_amino_acid_1to3)
+    elif residue_lens == {3}:
+        invalid_resn = invalid_codes(set(df["resn"].unique()), VALID_RESN_3_CODES)
+        if invalid_resn:
+            raise ValueError(
+                f"Wildtype residue column contains invalid 3-letter codes: {sorted(invalid_resn)}. "
+                f"See {_MUTATION_INPUT_README_SECTION}."
+            )
+    else:
+        raise ValueError(
+            "Wildtype residue column must contain only valid 1-letter or only valid 3-letter amino acid codes. "
+            f"See {_MUTATION_INPUT_README_SECTION}."
+        )
 
-    # convert to 3-letter codes if necessary
-    if residue_lens[0] == 1:
-        df['resn'] = df['resn'].apply(convert_amino_acid)
+    mutant_lens = set(df["resm"].str.len().unique())
+    if not mutant_lens.issubset({1, 3, 4}):
+        invalid_resm = sorted(code for code in df["resm"].unique() if len(code) not in {1, 3, 4})
+        raise ValueError(
+            f"Mutant residue column contains unsupported tokens: {invalid_resm}. "
+            f"See {_MUTATION_INPUT_README_SECTION}."
+        )
 
-    if 1 in mutation_lens:
-        df['resm'] = df['resm'].apply(convert_amino_acid)
+    invalid_resm_1 = invalid_codes({code for code in df["resm"].unique() if len(code) == 1}, VALID_1_CODES)
+    invalid_resm_3 = invalid_codes({code for code in df["resm"].unique() if len(code) == 3}, VALID_RESM_3_CODES)
+    invalid_resm_4 = invalid_codes({code for code in df["resm"].unique() if len(code) == 4}, VALID_RESM_3_CODES)
+    invalid_resm = sorted(invalid_resm_1 | invalid_resm_3 | invalid_resm_4)
+    if invalid_resm:
+        raise ValueError(
+            f"Mutant residue column contains invalid codes: {invalid_resm}. "
+            f"See {_MUTATION_INPUT_README_SECTION}."
+        )
 
-    # check that mutation types are named in a standard way
-    valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins', 'stop'}
-    found_types = set(df['type'].unique())
-    if not found_types.issubset(valid_types):
-        invalid_types = found_types - valid_types
-        warnings.warn(f"Mutation types contain unexpected values. Expected types include {valid_types}. "
-                      f"Found invalid types: {invalid_types}.")
+    df["resm"] = df["resm"].map(
+        lambda code: convert_amino_acid_1to3(code) if len(code) == 1 else code
+    )
+
+    found_types = set(df["type"].unique())
+    invalid_types = found_types - VALID_MUTATION_TYPES
+    if invalid_types:
+        raise ValueError(
+            f"Mutation type column contains invalid values: {sorted(invalid_types)}. "
+            f"Expected one of {sorted(VALID_MUTATION_TYPES)}. "
+            f"See {_MUTATION_INPUT_README_SECTION}."
+        )
 
     return df
 
@@ -207,7 +278,8 @@ def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -
     Parameters
     ----------
     merged : pd.DataFrame
-        Merged DataFrame containing combined sequence information from both sequences.
+        Merged DataFrame with columns resn_df1/resi_df1 (mutation sequence) and
+        resn_df2/resi_df2 (structural sequence).
     alignment_cutoff : float
         Quality cutoff for the alignment. If the proportion of alignment is below this cutoff,
         a warning is issued.
@@ -242,31 +314,56 @@ def evaluate_sequence_alignment(merged: pd.DataFrame, alignment_cutoff: float) -
     error_mask = mismatch_mask | indel_mask
     error_mask = error_mask[~pd.Series(termini_mask)]
 
+    readme_hint = (
+        " See the README section \"Sequence alignment\" for how warnings map to "
+        "runner.context.extras['sequence_alignment_merged']."
+    )
+
     if (error_mask.sum() / len(error_mask)) > 1 - alignment_cutoff:
-        warnings.warn(f"Alignment quality below cutoff of {alignment_cutoff:.2f}. "
-                      f"Found {(error_mask.sum() / len(error_mask)) * 100:.2f}% errors "
-                      f"({error_mask.sum()} out of {len(error_mask)} residues) "
-                      f"excluding terminal gaps.")
+        warnings.warn(
+            f"Alignment quality below cutoff of {alignment_cutoff:.2f}. "
+            f"Found {(error_mask.sum() / len(error_mask)) * 100:.2f}% errors "
+            f"({error_mask.sum()} out of {len(error_mask)} alignment positions) "
+            f"excluding terminal gaps.{readme_hint}"
+        )
 
     if mismatches := mismatch_mask.sum():
-        warnings.warn(f"Found {mismatches} mismatches out of {total_residues} residues "
-              f"({(mismatches / total_residues) * 100:.2f}%) \n"
-              f" Mismatches found at the following positions in df1: {merged.loc[mismatch_mask, 'resi_df1'].tolist()}.")
+        mut_pos = _format_residue_ranges(merged.loc[mismatch_mask, "resi_df1"])
+        struct_pos = _format_residue_ranges(merged.loc[mismatch_mask, "resi_df2"])
+        warnings.warn(
+            f"Found {mismatches} mismatches out of {total_residues} alignment positions "
+            f"({(mismatches / total_residues) * 100:.2f}%).\n"
+            f"  {_LABEL_MUTATION.capitalize()} residue positions: {mut_pos}\n"
+            f"  {_LABEL_STRUCTURAL.capitalize()} residue positions: {struct_pos}"
+        )
 
     if indels := indel_mask.sum():
-        warnings.warn(f"Found {indels} residues with indels out of {total_residues} residues "
-              f"({(indels / total_residues) * 100:.2f}%) \n"
-              f" Indels found at the following positions in df1 {merged.loc[indel_mask, 'resi_df1'].tolist()}"
-                      f" and df2 {merged.loc[indel_mask, 'resi_df2'].tolist()}.")
+        mut_pos = _format_residue_ranges(merged.loc[indel_mask, "resi_df1"])
+        struct_pos = _format_residue_ranges(merged.loc[indel_mask, "resi_df2"])
+        warnings.warn(
+            f"Found {indels} alignment positions with internal indels out of {total_residues} "
+            f"({(indels / total_residues) * 100:.2f}%).\n"
+            f"  {_LABEL_MUTATION.capitalize()} residue positions: {mut_pos}\n"
+            f"  {_LABEL_STRUCTURAL.capitalize()} residue positions: {struct_pos}"
+        )
 
     if sum(termini_mask):
-        warnings.warn(f"Found gaps at the termini of the sequence alignment, "
-                       f" at positions {merged.loc[termini_mask, 'resi_df1'].tolist()} in df1 "
-                       f" and {merged.loc[termini_mask, 'resi_df2'].tolist()} in df2.")
+        tm = pd.Series(termini_mask)
+        mut_pos = _format_residue_ranges(merged.loc[tm, "resi_df1"])
+        struct_pos = _format_residue_ranges(merged.loc[tm, "resi_df2"])
+        warnings.warn(
+            f"Found gaps at the termini of the sequence alignment.\n"
+            f"  {_LABEL_MUTATION.capitalize()} residue positions: {mut_pos}\n"
+            f"  {_LABEL_STRUCTURAL.capitalize()} residue positions: {struct_pos}"
+        )
 
 
-def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataFrame,
-                          chain: str, alignment_cutoff: float) -> pd.DataFrame:
+def merge_mutation_scores(
+    mutation_scores: pd.DataFrame,
+    residue_table: pd.DataFrame,
+    chain: str,
+    alignment_cutoff: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Merge mutation scores with structural context based on residue positions.
 
@@ -285,10 +382,10 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
 
     Returns
     -------
-    pd.DataFrame
-        Merged DataFrame with mutation scores and structural features. Contains
-        columns for chain, resi_mut, resn_mut, resm, resi_struct, resn_struct,
-        type, effect, mut_info, and struct_info.
+    tuple[pd.DataFrame, pd.DataFrame]
+        ``(residue_table, alignment_merged)`` where ``residue_table`` is the merged
+        output used by the pipeline, and ``alignment_merged`` is the aligned mutation/
+        structure wildtype mapping for the selected chain before mutation-row expansion.
     """
     aligner = PairwiseAligner()
 
@@ -299,13 +396,18 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     # Subset residue table to the specified chain
     residue_table_chain = residue_table[residue_table['chain'] == chain]
 
-    # Subset mutation scores to only the wildtype sequence
-    mutation_scores_subset = mutation_scores[['resi', 'resn']].drop_duplicates()
+    # Subset mutation scores to only the wildtype sequence (N-to-C order, not CSV row order)
+    mutation_scores_subset = (
+        mutation_scores[['resi', 'resn']]
+        .drop_duplicates()
+        .sort_values(['resi', 'resn'], kind='mergesort')
+        .reset_index(drop=True)
+    )
 
     # Prepare sequences for alignment, a single string of single-letter amino acids
-    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
+    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid_3to1(aa, force_convert=True))
     mut_seq = "".join(mut_seq_short.tolist())
-    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
+    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid_3to1(aa, force_convert=True))
     res_seq = "".join(res_seq_short.tolist())
 
     # Perform alignment
@@ -322,8 +424,17 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     evaluate_sequence_alignment(merged=merged_df, alignment_cutoff=alignment_cutoff)
 
     # Add chain information and rename columns
-    merged_df['chain'] = chain
-    merged_df.rename(columns={'resn_df1': 'resn_mut', 'resi_df1': 'resi_mut', 'resn_df2': 'resn_struct', 'resi_df2': 'resi_struct'}, inplace=True)
+    merged_df["chain"] = chain
+    merged_df.rename(
+        columns={
+            "resn_df1": "resn_mut",
+            "resi_df1": "resi_mut",
+            "resn_df2": "resn_struct",
+            "resi_df2": "resi_struct",
+        },
+        inplace=True,
+    )
+    alignment_merged = merged_df.copy()
 
     # Add mutation information into merged_df
     merged_df = merged_df.merge(mutation_scores, how='left', left_on=['resi_mut', 'resn_mut'], right_on=['resi', 'resn'])
@@ -344,4 +455,4 @@ def merge_mutation_scores(mutation_scores: pd.DataFrame, residue_table: pd.DataF
     keep_cols = ['chain', 'resi_mut', 'resn_mut', 'resm', 'resi_struct', 'resn_struct', 'ss_domains', 'ss_group', 'type', 'effect', 'mut_info', 'struct_info', 'align_pos']
     residue_table = residue_table[keep_cols]
 
-    return residue_table
+    return residue_table, alignment_merged
