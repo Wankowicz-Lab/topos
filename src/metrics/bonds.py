@@ -902,7 +902,7 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
     """
     array = context.array
     
-    # Non-sovlent atoms
+    # Non-solvent atoms
     solvent_mask = np.isin(array.res_name, list(SOLVENT_RESIDUES))
     array = array[~solvent_mask]
     
