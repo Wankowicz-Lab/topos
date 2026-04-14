@@ -330,7 +330,7 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
                     'partner_resn': his_resn,
                     'partner_residue_key': res_key(his_chain, his_resi, his_resn),
                     'bond_type': 'ionic',
-                    'extras': {},
+                    'extras': '',
                 })
                 results.append({
                     'chain': his_chain,
@@ -342,7 +342,7 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
                     'partner_resn': acidic_resn,
                     'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
                     'bond_type': 'ionic',
-                    'extras': {},
+                    'extras': '',
                 })
  
     standard_columns = [
@@ -714,13 +714,13 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0, angle_cutoff
                 'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': res_key(cat_ch, cat_ri, cat_rn),
                 'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn, 'partner_residue_key': res_key(aro_ch, aro_ri, aro_rn),
                 'bond_type': 'cation_pi',
-                'extras': {'role': 'cation'}
+                'extras': 'cation'
             })
             results.append({
                 'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn, 'residue_key': res_key(aro_ch, aro_ri, aro_rn),
                 'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn, 'partner_residue_key': res_key(cat_ch, cat_ri, cat_rn),
                 'bond_type': 'cation_pi',
-                'extras': {'role': 'aromatic'}
+                'extras': 'aromatic'
             })
     
     standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
@@ -748,6 +748,7 @@ def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataF
     """
     array = context.array
     cation_pi = identify_cation_pi(array, cutoff)
+
     cation_pi = classify_bond_types(cation_pi, array)
     metadata = get_metadata_cols(array)
     metadata['cation_pi_count'] = 0
