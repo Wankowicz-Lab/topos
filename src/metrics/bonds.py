@@ -786,7 +786,7 @@ def identify_vdw_contacts(array: struc.AtomArray, cutoff_factor: float = 1.0) ->
         DataFrame with van der Waals contacts with columns:
         chain, resi_struct, resn_struct, partner_chain, partner_resi, partner_resn, bond_type, extras
     """
-     # Non-sovlent atoms
+    # Non-solvent atoms
     solvent_mask = np.isin(array.res_name, list(SOLVENT_RESIDUES))
     array = array[~solvent_mask]
     
