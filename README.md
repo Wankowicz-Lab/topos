@@ -269,6 +269,8 @@ It records:
 | `mutation_col_name` | `str` | `"mutation"` | Column name for mutant residues |
 | `mutation_type_col_name` | `str` | `"type"` | Column name for mutation type |
 | `mutation_score_col_name` | `str` | `"effect"` | Column name for mutation effect scores |
+| `mutation_category_central_interval` | `float` | `0.90` | Central probability mass for equal-tail intervals in `mutation_category`; must be between 0 and 1 |
+| `mutation_category_logs_base` | `str` | — | Optional directory under which a `logs/` folder is created for mutation_category diagnostic PNGs. Defaults to `output_dir` when set |
 
 ### Sequence feature parameters
 
@@ -342,6 +344,9 @@ It records:
 | `effect_variance` | Variance of effect scores at this position |
 | `effect_variance_rank` | Rank of effect variance among all positions |
 | `effect_ranking` | Rank of this specific mutation's effect score |
+| `mutation_category` | `LOF`, `neutral`, or `GOF` from a 2-component Gaussian mixture on synonymous effects (or stop-based reference when synonymous is unavailable or rejected) |
+| `total_lof` | Count of mutations at this position classified as `LOF` |
+| `total_gof` | Count of mutations at this position classified as `GOF` |
 | `blosum90` | BLOSUM90 log-odds score for this substitution |
 | `phat_score` | PHAT substitution matrix score |
 | `wildtype_aa_group` | Amino acid physicochemical group of the wildtype residue |
@@ -353,6 +358,8 @@ It records:
 | `kidera_f{1-10}_wt` | Kidera factor for wildtype residue |
 | `kidera_f{1-10}_mut` | Kidera factor for mutant residue |
 | `kidera_f{1-10}_diff` | Difference (mut − wt) for this Kidera factor |
+
+`mutation_category` fits a **2-component Gaussian mixture** to synonymous effect scores when that reference passes sanity checks (sample size, spread vs the overall distribution, etc.). Classification uses **equal-tail quantiles** of the mixture (same central mass as `mutation_category_central_interval`). Poorly separated mixtures emit warnings but still produce labels. If synonymous cannot be used, **stop** effects are fit the same way: when the mixture is well separated, the **lower-mean** component defines the reference interval; otherwise the **combined** mixture is used. For stop-based reference, **LOF** means effect at or below the upper bound of the central mass, **neutral** means above; there is no **GOF** on that path. When `output_dir` or `mutation_category_logs_base` is set, a diagnostic plot is written to ``logs/<prefix>_<name>_mutation_category_gmm_fit.png`` (name from `name` / `pdb_id` and `output_prefix`).
 
 ### Secondary structure domain metrics (averaged per domain)
 
