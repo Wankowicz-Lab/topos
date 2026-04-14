@@ -18,8 +18,10 @@ from scipy.stats import norm
 # Reference sanity (empirically reasonable defaults; revisit with large DMS panels if needed)
 MIN_REFERENCE_SAMPLE_COUNT = 5
 MIN_REFERENCE_UNIQUE_VALUES = 3
-MIN_REFERENCE_STD = 1e-6
 MIN_SYNONYMOUS_STD_FRACTION = 0.05
+
+# Floor for Gaussian scales in EM / PDFs only (not a reference rejection rule)
+_EPS_SIGMA = 1e-12
 
 SEPARATION_RATIO_THRESHOLD = 1.5
 MIN_COMPONENT_WEIGHT = 0.1
@@ -37,7 +39,7 @@ def tail_quantile_probs(central_interval: float) -> tuple[float, float]:
 
 def fit_gaussian_mixture(
     values: np.ndarray,
-    min_std: float = MIN_REFERENCE_STD,
+    sigma_floor: float = _EPS_SIGMA,
     n_iter: int = N_MIXTURE_EM_ITER,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """2-component diagonal Gaussian EM (same structure as the exploratory script)."""
@@ -47,14 +49,14 @@ def fit_gaussian_mixture(
         [float(np.quantile(sorted_values, 0.25)), float(np.quantile(sorted_values, 0.75))],
         dtype=float,
     )
-    std = max(float(np.std(values, ddof=1)), min_std)
+    std = max(float(np.std(values, ddof=1)), sigma_floor)
     sigmas = np.array([std, std], dtype=float)
     weights = np.array([0.5, 0.5], dtype=float)
 
     for _ in range(n_iter):
         pdfs = np.vstack(
             [
-                weights[k] * norm.pdf(values, loc=means[k], scale=max(sigmas[k], min_std))
+                weights[k] * norm.pdf(values, loc=means[k], scale=max(sigmas[k], sigma_floor))
                 for k in range(2)
             ]
         ).T
@@ -65,7 +67,7 @@ def fit_gaussian_mixture(
         weights = nk / len(values)
         means = (resp * values[:, None]).sum(axis=0) / np.clip(nk, 1e-12, None)
         variances = (resp * (values[:, None] - means) ** 2).sum(axis=0) / np.clip(nk, 1e-12, None)
-        sigmas = np.sqrt(np.clip(variances, min_std**2, None))
+        sigmas = np.sqrt(np.clip(variances, sigma_floor**2, None))
 
     return weights, means, sigmas
 
@@ -76,7 +78,7 @@ def mixture_sample_interval(
     sigmas: np.ndarray,
     central_interval: float,
     rng: np.random.Generator,
-    min_std: float = MIN_REFERENCE_STD,
+    sigma_floor: float = _EPS_SIGMA,
 ) -> tuple[float, float]:
     """Equal-tail interval under the mixture (sample-based)."""
     p_lo, p_hi = tail_quantile_probs(central_interval)
@@ -86,27 +88,27 @@ def mixture_sample_interval(
         if draws[k] == 0:
             continue
         chunks.append(
-            rng.normal(loc=means[k], scale=max(sigmas[k], min_std), size=int(draws[k]))
+            rng.normal(loc=means[k], scale=max(sigmas[k], sigma_floor), size=int(draws[k]))
         )
     samples = np.concatenate(chunks) if chunks else np.array([], dtype=float)
     if samples.size < 2:
-        samples = rng.normal(loc=float(means[0]), scale=max(float(sigmas[0]), min_std), size=1000)
+        samples = rng.normal(loc=float(means[0]), scale=max(float(sigmas[0]), sigma_floor), size=1000)
     lower = float(np.quantile(samples, p_lo))
     upper = float(np.quantile(samples, p_hi))
     return lower, upper
 
 
-def separation_ratio(means: np.ndarray, sigmas: np.ndarray, min_std: float = MIN_REFERENCE_STD) -> float:
-    return float(abs(means[0] - means[1]) / max(sigmas[0], sigmas[1], min_std))
+def separation_ratio(means: np.ndarray, sigmas: np.ndarray, sigma_floor: float = _EPS_SIGMA) -> float:
+    return float(abs(means[0] - means[1]) / max(sigmas[0], sigmas[1], sigma_floor))
 
 
 def is_two_component(
     weights: np.ndarray,
     means: np.ndarray,
     sigmas: np.ndarray,
-    min_std: float = MIN_REFERENCE_STD,
+    sigma_floor: float = _EPS_SIGMA,
 ) -> bool:
-    sr = separation_ratio(means, sigmas, min_std)
+    sr = separation_ratio(means, sigmas, sigma_floor)
     return bool(sr >= SEPARATION_RATIO_THRESHOLD and float(np.min(weights)) >= MIN_COMPONENT_WEIGHT)
 
 
@@ -114,10 +116,10 @@ def single_gaussian_interval_from_component(
     mean: float,
     sigma: float,
     central_interval: float,
-    min_std: float = MIN_REFERENCE_STD,
+    sigma_floor: float = _EPS_SIGMA,
 ) -> tuple[float, float]:
     p_lo, p_hi = tail_quantile_probs(central_interval)
-    scale = max(sigma, min_std)
+    scale = max(sigma, sigma_floor)
     return (
         float(norm.ppf(p_lo, loc=mean, scale=scale)),
         float(norm.ppf(p_hi, loc=mean, scale=scale)),
@@ -144,9 +146,6 @@ def _precheck_reference_array(values: np.ndarray, reference_type: str) -> Option
             f"found only {len(np.unique(values))} unique {reference_type} effect values; "
             f"need at least {MIN_REFERENCE_UNIQUE_VALUES}"
         )
-    std = float(np.std(values, ddof=1))
-    if not np.isfinite(std) or std < MIN_REFERENCE_STD:
-        return f"{reference_type} reference variance is too small to fit reliably"
     return None
 
 
@@ -331,7 +330,7 @@ def save_mutation_category_diagnostic_png(
     xmax = float(np.max(ref))
     pad = 0.05 * (xmax - xmin if xmax > xmin else 1.0)
     grid = np.linspace(xmin - pad, xmax + pad, 400)
-    density_mix = sum(w[k] * norm.pdf(grid, loc=m[k], scale=max(s[k], MIN_REFERENCE_STD)) for k in range(2))
+    density_mix = sum(w[k] * norm.pdf(grid, loc=m[k], scale=max(s[k], _EPS_SIGMA)) for k in range(2))
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.hist(ref, bins=min(40, max(10, len(ref) // 2)), density=True, color="#c0c0c0", alpha=0.85, label="data")
@@ -339,7 +338,7 @@ def save_mutation_category_diagnostic_png(
     for k in range(2):
         ax.plot(
             grid,
-            w[k] * norm.pdf(grid, loc=m[k], scale=max(s[k], MIN_REFERENCE_STD)),
+            w[k] * norm.pdf(grid, loc=m[k], scale=max(s[k], _EPS_SIGMA)),
             linestyle="--",
             linewidth=1.2,
             label=f"comp{k + 1}",
