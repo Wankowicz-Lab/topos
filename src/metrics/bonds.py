@@ -343,6 +343,7 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
                     'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
                     'bond_type': 'ionic',
                     'extras': {},
+                })
  
     standard_columns = [
         'chain', 'resi_struct', 'resn_struct', 'residue_key',
