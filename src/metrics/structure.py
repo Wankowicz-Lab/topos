@@ -201,12 +201,15 @@ def calculate_kyte_doolittle(context: Context) -> pd.DataFrame:
         chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
         array = array[chain_mask]
 
-    # Assign KD score per atom based on its residue name
-    atom_vals = np.array([kd_scale.get(rn.upper(), np.nan) for rn in array.res_name], dtype=float)
+    # One KD value per residue from residue name at segment starts (matches get_metadata_cols order).
+    # Avoids per-atom nanmean, which warns on all-NaN residues (e.g. unknown res names).
+    res_starts = struc.get_residue_starts(array)
+    res_names = array.res_name[res_starts]
+    kd_per_res = np.array(
+        [kd_scale.get(str(rn).strip().upper(), np.nan) for rn in res_names],
+        dtype=float,
+    )
 
-    # Collapse to per-residue (mean of identical values == the same value)
-    kd_per_res = struc.apply_residue_wise(array, atom_vals, function=np.nanmean)
-    
     # Attach to metadata DataFrame
     metadata_df = get_metadata_cols(array)
     metadata_df['kyte_doolittle'] = kd_per_res
