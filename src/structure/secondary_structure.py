@@ -7,7 +7,7 @@ from typing import Any, List
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
-from biotite.structure.io.pdb import PDBFile
+from biotite.structure.io.pdbx import CIFFile, set_structure
 
 from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
@@ -98,32 +98,25 @@ def _parse_float(raw: str) -> float:
     return float(token)
 
 
-def _write_temp_pdb(context: Context) -> Path:
-    """Write current structure to temporary PDB for mkdssp input."""
-    tmp = NamedTemporaryFile(delete=False, suffix=".pdb")
+def _write_temp_mmcif(context: Context) -> Path:
+    """Write current structure to temporary mmCIF for mkdssp input."""
+    tmp = NamedTemporaryFile(delete=False, suffix=".cif")
     tmp.close()
-    pdb_file = PDBFile()
-    pdb_file.set_structure(context.array)
-    pdb_file.write(tmp.name)
-    pdb_path = Path(tmp.name)
-
-    # mkdssp expects a valid PDB header line for PDB inputs.
-    pdb_text = pdb_path.read_text(encoding="utf-8")
-    if not pdb_text.startswith("HEADER"):
-        pdb_text = "HEADER    BIOGENESIS GENERATED\n" + pdb_text
-        pdb_path.write_text(pdb_text, encoding="utf-8")
-    return pdb_path
+    cif = CIFFile()
+    set_structure(cif, context.array)
+    cif.write(tmp.name)
+    return Path(tmp.name)
 
 
 def _annotate_with_mkdssp(context: Context) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run mkdssp and return normalized SSE annotations plus full DSSP fields."""
-    pdb_path = _write_temp_pdb(context)
+    mmcif_path = _write_temp_mmcif(context)
     dssp_tmp = NamedTemporaryFile(delete=False, suffix=".dssp")
     dssp_tmp.close()
     dssp_path = Path(dssp_tmp.name)
     rows: list[dict[str, Any]] = []
     try:
-        cmd = ["mkdssp", str(pdb_path), str(dssp_path)]
+        cmd = ["mkdssp", str(mmcif_path), str(dssp_path)]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         in_table = False
@@ -163,8 +156,8 @@ def _annotate_with_mkdssp(context: Context) -> tuple[pd.DataFrame, pd.DataFrame]
     finally:
         if dssp_path.exists():
             dssp_path.unlink()
-        if pdb_path.exists():
-            pdb_path.unlink()
+        if mmcif_path.exists():
+            mmcif_path.unlink()
 
     dssp_df = pd.DataFrame(rows)
     dssp_df["sse"] = dssp_df["dssp_sse8"].map(_to_internal_sse)
