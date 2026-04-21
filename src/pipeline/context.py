@@ -6,7 +6,6 @@ structure data, configuration, and cached computations in the analysis pipeline.
 """
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -20,8 +19,6 @@ from src.metrics.aaindex_schema import validate_aaindex_columns
 
 # Import structure-loading helpers
 from src.structure.structure_context import ensure_altloc_annotation, residue_table
-
-logger = logging.getLogger(__name__)
 
 
 class Config(BaseModel):

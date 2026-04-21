@@ -226,11 +226,18 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
     """
     seq_data = context.residue_table.loc[context.residue_table.mut_info, :].copy()
     if seq_data.empty:
+        logger.info(
+            "mutation_category: no mutation rows (mut_info); leaving mutation_category, total_lof, total_gof unset."
+        )
         return _empty_mutation_category_frame(seq_data)
 
     central_interval = MUTATION_CATEGORY_CENTRAL_INTERVAL
     fit = fit_mutation_category_reference(seq_data, central_interval)
     if fit is None:
+        logger.info(
+            "mutation_category: reference fit failed; leaving mutation_category, total_lof, total_gof unset "
+            "(see warnings above)."
+        )
         return _empty_mutation_category_frame(seq_data)
 
     effect_values = seq_data['effect']
