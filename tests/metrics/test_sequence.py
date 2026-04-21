@@ -175,13 +175,196 @@ def test_calculate_effect_ranking():
     assert effect_ranking_df['effect_ranking'].min() <= (1 / 100)
     assert effect_ranking_df['effect_ranking'].max() == 1
 
-   # verify that ranking reflects the ordering of effect values
+    # verify that ranking reflects the ordering of effect values
     min_rank_idx = effect_ranking_df['effect_ranking'].idxmin()
     max_rank_idx = effect_ranking_df['effect_ranking'].idxmax()
     min_effect_idx = effect_ranking_df['effect'].idxmin()
     max_effect_idx = effect_ranking_df['effect'].idxmax()
     assert min_rank_idx == min_effect_idx
     assert max_rank_idx == max_effect_idx
+
+
+def test_calculate_mutation_category_from_synonymous_reference():
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 11,
+        'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_mut': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resi_struct': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_struct': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resm': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU', 'ILE', 'PHE', 'TYR', 'ASN', 'GLN'],
+        'effect': [-0.2, -0.1, 0.0, 0.1, 0.2, -2.0, 1.7, 0.05, 0.2, -1.5, 2.2],
+        'type': ['synonymous'] * 5 + ['missense'] * 6,
+        'struct_info': [True] * 11,
+        'mut_info': [True] * 11,
+    })
+
+    class MockConfig:
+        mutation_category_logs_base = None
+        output_dir = None
+        output_prefix = ''
+        name = None
+        pdb_id = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    result = metrics.calculate_mutation_category(MockContext(residue_table))
+    category_map = dict(zip(result['resm'], result['mutation_category']))
+
+    assert category_map['LEU'] == 'LOF'
+    assert category_map['ILE'] == 'GOF'
+    assert category_map['PHE'] == 'neutral'
+    assert category_map['ASN'] == 'LOF'
+    assert category_map['GLN'] == 'GOF'
+
+    pos2 = result.loc[result['resi_mut'] == 2, ['total_lof', 'total_gof']].drop_duplicates()
+    pos3 = result.loc[result['resi_mut'] == 3, ['total_lof', 'total_gof']].drop_duplicates()
+    pos4 = result.loc[result['resi_mut'] == 4, ['total_lof', 'total_gof']].drop_duplicates()
+    assert pos2.iloc[0].to_dict() == {'total_lof': 1, 'total_gof': 1}
+    assert pos3.iloc[0].to_dict() == {'total_lof': 0, 'total_gof': 0}
+    assert pos4.iloc[0].to_dict() == {'total_lof': 1, 'total_gof': 1}
+
+
+def test_calculate_mutation_category_falls_back_to_stop_reference():
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 10,
+        'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4],
+        'resn_mut': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR'],
+        'resi_struct': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4],
+        'resn_struct': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR'],
+        'resm': ['*', '*', '*', '*', '*', 'LEU', 'ILE', 'PHE', 'TYR', 'ASN'],
+        'effect': [-2.2, -2.0, -1.8, -1.6, -1.4, -1.9, 0.2, -1.5, 0.6, -0.1],
+        'type': ['stop'] * 5 + ['missense'] * 5,
+        'struct_info': [True] * 10,
+        'mut_info': [True] * 10,
+    })
+
+    class MockConfig:
+        mutation_category_logs_base = None
+        output_dir = None
+        output_prefix = ''
+        name = None
+        pdb_id = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    with pytest.warns(UserWarning, match='no synonymous mutations'):
+        result = metrics.calculate_mutation_category(MockContext(residue_table))
+
+    category_map = dict(zip(result['resm'], result['mutation_category']))
+    assert category_map['LEU'] == 'LOF'
+    assert category_map['ILE'] == 'neutral'
+    assert category_map['PHE'] == 'neutral'
+    assert category_map['TYR'] == 'neutral'
+    assert category_map['ASN'] == 'neutral'
+
+    pos2 = result.loc[result['resi_mut'] == 2, ['total_lof', 'total_gof']].drop_duplicates()
+    pos3 = result.loc[result['resi_mut'] == 3, ['total_lof', 'total_gof']].drop_duplicates()
+    assert pos2.iloc[0].to_dict() == {'total_lof': 1, 'total_gof': 0}
+    assert pos3.iloc[0].to_dict() == {'total_lof': 0, 'total_gof': 0}
+
+
+def test_calculate_mutation_category_rejects_implausibly_narrow_synonymous_fit():
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 10,
+        'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4],
+        'resn_mut': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR'],
+        'resi_struct': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4],
+        'resn_struct': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR'],
+        'resm': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU', 'ILE', 'PHE', 'TYR', 'ASN'],
+        'effect': [0.00000, 0.00001, -0.00001, 0.00002, -0.00002, -2.0, 1.8, -1.4, 1.1, 0.3],
+        'type': ['synonymous'] * 5 + ['missense'] * 5,
+        'struct_info': [True] * 10,
+        'mut_info': [True] * 10,
+    })
+
+    class MockConfig:
+        mutation_category_logs_base = None
+        output_dir = None
+        output_prefix = ''
+        name = None
+        pdb_id = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    with pytest.warns(UserWarning, match='normalized to synonymous'):
+        result = metrics.calculate_mutation_category(MockContext(residue_table))
+
+    assert result['mutation_category'].isna().all()
+    assert result['total_lof'].isna().all()
+    assert result['total_gof'].isna().all()
+
+
+def test_mutation_category_diagnostic_png(tmp_path):
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 11,
+        'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_mut': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resi_struct': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_struct': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resm': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU', 'ILE', 'PHE', 'TYR', 'ASN', 'GLN'],
+        'effect': [-0.2, -0.1, 0.0, 0.1, 0.2, -2.0, 1.7, 0.05, 0.2, -1.5, 2.2],
+        'type': ['synonymous'] * 5 + ['missense'] * 6,
+        'struct_info': [True] * 11,
+        'mut_info': [True] * 11,
+    })
+
+    class MockConfig:
+        mutation_category_logs_base = None
+        output_dir = tmp_path
+        output_prefix = 'pfx'
+        name = 'MyProt'
+        pdb_id = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    metrics.calculate_mutation_category(MockContext(residue_table))
+    out = tmp_path / 'logs' / 'pfx_MyProt_mutation_category_gmm_fit.png'
+    assert out.is_file()
+
+
+def test_calculate_mutation_category_nonfinite_effect_excluded_from_position_counts():
+    """NaN effect stays unlabeled; position LOF/GOF sums must not raise on boolean NA."""
+    residue_table = pd.DataFrame({
+        'chain': ['A'] * 11,
+        'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_mut': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resi_struct': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+        'resn_struct': ['ALA'] * 5 + ['GLY', 'GLY', 'SER', 'SER', 'THR', 'THR'],
+        'resm': ['ALA', 'GLY', 'SER', 'THR', 'VAL', 'LEU', 'ILE', 'PHE', 'TYR', 'ASN', 'GLN'],
+        'effect': [-0.2, -0.1, 0.0, 0.1, 0.2, -2.0, np.nan, 0.05, 0.2, -1.5, 2.2],
+        'type': ['synonymous'] * 5 + ['missense'] * 6,
+        'struct_info': [True] * 11,
+        'mut_info': [True] * 11,
+    })
+
+    class MockConfig:
+        mutation_category_logs_base = None
+        output_dir = None
+        output_prefix = ''
+        name = None
+        pdb_id = None
+
+    class MockContext:
+        def __init__(self, residue_table):
+            self.residue_table = residue_table
+            self.config = MockConfig()
+
+    result = metrics.calculate_mutation_category(MockContext(residue_table))
+    assert pd.isna(result.loc[result['resm'] == 'ILE', 'mutation_category'].iloc[0])
+    pos2 = result.loc[result['resi_mut'] == 2, ['total_lof', 'total_gof']].drop_duplicates()
+    assert pos2.iloc[0].to_dict() == {'total_lof': 1, 'total_gof': 0}
 
 
 def test_calculate_aaindex_scores_no_muts():

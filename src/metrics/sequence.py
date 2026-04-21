@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import List, Optional
 
 import blosum as bl
@@ -7,6 +8,13 @@ import pandas as pd
 from Bio.Align import substitution_matrices
 
 from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
+from src.metrics.mutation_category_gmm import (
+    MUTATION_CATEGORY_CENTRAL_INTERVAL,
+    classify_stop,
+    classify_synonymous,
+    fit_mutation_category_reference,
+    save_mutation_category_diagnostic_png,
+)
 from src.metrics.registry import register_metric
 from src.pipeline.context import Context
 from src.sequence.utils import convert_amino_acid_3to1
@@ -15,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 # columns to keep for sequence feature calculation to enable merging back to full table
 KEEP_COLS = ['chain', 'resi_mut', 'resn_mut', 'resm']
+
+
+def _empty_mutation_category_frame(seq_data: pd.DataFrame) -> pd.DataFrame:
+    keep_cols = [col for col in KEEP_COLS if col in seq_data.columns]
+    empty = seq_data[keep_cols].copy()
+    empty['mutation_category'] = pd.Series(pd.NA, index=empty.index, dtype='object')
+    empty['total_lof'] = np.nan
+    empty['total_gof'] = np.nan
+    return empty
 
 
 def make_phat75_73():
@@ -193,6 +210,80 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / np.max(effect_ranking['effect_ranking'])
     
     return effect_ranking
+
+
+@register_metric(
+    name='mutation_category',
+    provides=['mutation_category', 'total_lof', 'total_gof'],
+    tags={'sequence'},
+)
+def calculate_mutation_category(context: Context) -> pd.DataFrame:
+    """
+    Classify mutations from a 2-component Gaussian mixture reference and count LOF/GOF per position.
+
+    Synonymous effects use a mixture-sampled equal-tail interval; stop effects use the lower-mean
+    component when well-separated, otherwise the combined mixture.
+    """
+    seq_data = context.residue_table.loc[context.residue_table.mut_info, :].copy()
+    if seq_data.empty:
+        return _empty_mutation_category_frame(seq_data)
+
+    central_interval = MUTATION_CATEGORY_CENTRAL_INTERVAL
+    fit = fit_mutation_category_reference(seq_data, central_interval)
+    if fit is None:
+        return _empty_mutation_category_frame(seq_data)
+
+    effect_values = seq_data['effect']
+    if fit.reference_type == 'synonymous':
+        mutation_category = classify_synonymous(fit.lower_bound, fit.upper_bound, effect_values)
+    else:
+        mutation_category = classify_stop(fit.upper_bound, effect_values)
+
+    keep_cols = [col for col in KEEP_COLS if col in seq_data.columns]
+    mutation_categories = seq_data[keep_cols].copy()
+    mutation_categories['mutation_category'] = mutation_category
+
+    position_cols = ['chain', 'resi_mut', 'resn_mut']
+    position_counts = seq_data[position_cols].copy()
+    position_counts['total_lof'] = mutation_category.eq('LOF').fillna(False).astype(int)
+    position_counts['total_gof'] = mutation_category.eq('GOF').fillna(False).astype(int)
+    position_counts = (
+        position_counts
+        .groupby(position_cols, dropna=False)[['total_lof', 'total_gof']]
+        .sum()
+        .reset_index()
+    )
+
+    mutation_categories = pd.merge(
+        mutation_categories,
+        position_counts,
+        on=position_cols,
+        how='left',
+    )
+
+    cfg = context.config
+    if cfg.mutation_category_logs_base is not None:
+        base = Path(cfg.mutation_category_logs_base)
+    elif cfg.output_dir is not None:
+        base = Path(cfg.output_dir)
+    else:
+        base = None
+
+    if base is not None:
+        parts = []
+        if cfg.output_prefix:
+            p = str(cfg.output_prefix).strip().strip('_')
+            if p:
+                parts.append(p)
+        if cfg.name:
+            parts.append(str(cfg.name))
+        elif cfg.pdb_id:
+            parts.append(str(cfg.pdb_id))
+        stem = '_'.join(parts) if parts else 'run'
+        out_path = base / 'logs' / f'{stem}_mutation_category_gmm_fit.png'
+        save_mutation_category_diagnostic_png(fit, central_interval, out_path)
+
+    return mutation_categories
 
 
 @register_metric(name='aaindex_scores', provides={'{accession}_{category}_wt', '{accession}_{category}_mut',

@@ -269,6 +269,7 @@ It records:
 | `mutation_col_name` | `str` | `"mutation"` | Column name for mutant residues |
 | `mutation_type_col_name` | `str` | `"type"` | Column name for mutation type |
 | `mutation_score_col_name` | `str` | `"effect"` | Column name for mutation effect scores |
+| `mutation_category_logs_base` | `str` | — | Optional directory under which a `logs/` folder is created for mutation_category diagnostic PNGs. Defaults to `output_dir` when set. Equal-tail central mass for `mutation_category` bounds is fixed in code (`MUTATION_CATEGORY_CENTRAL_INTERVAL` in `mutation_category_gmm`) |
 
 ### Sequence feature parameters
 
@@ -342,6 +343,9 @@ It records:
 | `effect_variance` | Variance of effect scores at this position |
 | `effect_variance_rank` | Rank of effect variance among all positions |
 | `effect_ranking` | Rank of this specific mutation's effect score |
+| `mutation_category` | `LOF`, `neutral`, or `GOF` based on synonymous or stop mutations |
+| `total_lof` | Count of mutations at this position classified as `LOF` |
+| `total_gof` | Count of mutations at this position classified as `GOF` |
 | `blosum90` | BLOSUM90 log-odds score for this substitution |
 | `phat_score` | PHAT substitution matrix score |
 | `wildtype_aa_group` | Amino acid physicochemical group of the wildtype residue |
