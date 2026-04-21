@@ -7,8 +7,6 @@ hydrogen bonds, and packing metrics.
 """
 from __future__ import annotations
 
-import logging
-
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
@@ -16,8 +14,6 @@ import pandas as pd
 from src.metrics.registry import register_metric
 from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols, is_backbone_atom, is_heavy, res_key
-
-logger = logging.getLogger(__name__)
 
 # Reference (max) SASA per residue type, Tien et al. 2013 PLOS ONE empirical values (Å²)
 _REF_SASA = {
