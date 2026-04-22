@@ -20,7 +20,7 @@ def test_load_mutation_scores(tmp_path):
         'resn_rename': ['ARG', 'THR', 'GLU'],
         'resi_rename': [1, 2, 3],
         'resm_rename': ['ALA', 'CYS', 'ASP'],
-        'type_rename': ['missense', 'missense', 'nonsense'],
+        'type_rename': ['missense', 'missense', 'stop'],
         'effect_rename': [0.5, -1.2, 0.3]
     })
 
@@ -44,7 +44,7 @@ def test_load_mutation_scores(tmp_path):
     test_file_invalid_path_res = os.path.join(tmp_path, 'test_mutation_scores_invalid_res.csv')
     test_df.to_csv(test_file_invalid_path_res, index=False)
 
-    with pytest.raises(ValueError, match="Residue column must contain either 1-letter or 3-letter amino acid codes."):
+    with pytest.raises(ValueError, match="Wildtype residue column must contain only valid 1-letter or only valid 3-letter amino acid codes"):
         load_mutation_scores(
             path=test_file_invalid_path_res,
             residue_col_name='resn_rename',
@@ -56,13 +56,13 @@ def test_load_mutation_scores(tmp_path):
 
 
 def test_load_mutation_scores_1letter_mutation_conversion(tmp_path):
-    """Test conversion of 1-letter mutation codes to 3-letter codes (lines 87-88)."""
+    """Test conversion of 1-letter mutation codes to 3-letter codes."""
     # Create mutation scores with 3-letter wildtype and 1-letter mutant codes
     test_df = pd.DataFrame({
         'resn_col': ['ARG', 'THR', 'GLU'],  # 3-letter wildtype codes
         'resi_col': [1, 2, 3],
         'resm_col': ['A', 'C', 'D'],  # All 1-letter mutant codes
-        'type_col': ['missense', 'missense', 'nonsense'],
+        'type_col': ['missense', 'missense', 'stop'],
         'effect_col': [0.5, -1.2, 0.3]
     })
     
@@ -83,8 +83,128 @@ def test_load_mutation_scores_1letter_mutation_conversion(tmp_path):
     assert all(len(resn) == 3 for resn in loaded_df['resn'])
     
     # Verify that 1-letter mutant codes are converted to 3-letter codes
-    # This tests lines 87-88 where convert_amino_acid is applied to mutation column
     assert loaded_df['resm'].tolist() == ['ALA', 'CYS', 'ASP']
+
+
+def test_load_mutation_scores_mixed_mutation_tokens(tmp_path):
+    """1-letter mutants should normalize without flipping 3-letter/special tokens."""
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG', 'THR', 'GLU', 'SER'],
+        'resi_col': [1, 2, 3, 4],
+        'resm_col': ['A', 'CYS', 'DEL1', '*'],
+        'type_col': ['missense', 'missense', 'deletion', 'stop'],
+        'effect_col': [0.5, -1.2, 0.3, -0.7],
+    })
+
+    test_file_path = os.path.join(tmp_path, 'test_mutation_mixed_tokens.csv')
+    test_df.to_csv(test_file_path, index=False)
+
+    loaded_df = load_mutation_scores(
+        path=test_file_path,
+        residue_col_name='resn_col',
+        residue_idx_name='resi_col',
+        mutation_col_name='resm_col',
+        mutation_type_col_name='type_col',
+        score_col_name='effect_col'
+    )
+
+    assert loaded_df['resm'].tolist() == ['ALA', 'CYS', 'DEL1', '*']
+
+
+def test_load_mutation_scores_invalid_resn_code(tmp_path):
+    """Invalid wildtype residue codes should raise a README-linked error."""
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG', 'BAD'],
+        'resi_col': [1, 2],
+        'resm_col': ['ALA', 'CYS'],
+        'type_col': ['missense', 'missense'],
+        'effect_col': [0.5, -1.2],
+    })
+
+    test_file_path = os.path.join(tmp_path, 'test_invalid_resn.csv')
+    test_df.to_csv(test_file_path, index=False)
+
+    with pytest.raises(ValueError, match=r"Wildtype residue column contains invalid 3-letter codes: \['BAD'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
+
+
+def test_load_mutation_scores_invalid_resm_code(tmp_path):
+    """Invalid mutant residue codes should raise a README-linked error."""
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG', 'THR'],
+        'resi_col': [1, 2],
+        'resm_col': ['ALA', 'STOP'],
+        'type_col': ['missense', 'stop'],
+        'effect_col': [0.5, -1.2],
+    })
+
+    test_file_path = os.path.join(tmp_path, 'test_invalid_resm.csv')
+    test_df.to_csv(test_file_path, index=False)
+
+    with pytest.raises(ValueError, match=r"Mutant residue column contains invalid codes: \['STOP'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
+
+
+def test_load_mutation_scores_invalid_type_raises_error(tmp_path):
+    """Unexpected mutation types should raise instead of warning."""
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG', 'THR'],
+        'resi_col': [1, 2],
+        'resm_col': ['ALA', 'CYS'],
+        'type_col': ['missense', 'nonsense'],
+        'effect_col': [0.5, -1.2],
+    })
+
+    test_file_path = os.path.join(tmp_path, 'test_invalid_type.csv')
+    test_df.to_csv(test_file_path, index=False)
+
+    with pytest.raises(ValueError, match=r"Mutation type column contains invalid values: \['nonsense'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
+
+
+def test_load_mutation_scores_indel_type_raises_error(tmp_path):
+    """The broad indel type alias should be rejected in favor of insertion/deletion."""
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG'],
+        'resi_col': [1],
+        'resm_col': ['DEL1'],
+        'type_col': ['indel'],
+        'effect_col': [0.5],
+    })
+
+    test_file_path = os.path.join(tmp_path, 'test_indel_type.csv')
+    test_df.to_csv(test_file_path, index=False)
+
+    with pytest.raises(ValueError, match=r"Mutation type column contains invalid values: \['indel'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
 
 
 def test_alignment_to_index_map():
@@ -213,7 +333,7 @@ def test_merge_mutation_scores(tmp_path):
         'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU', 'ASP'],
         'resi': [12, 12, 13, 13, 14, 14, 15],
         'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP', 'MET'],
-        'type': ['missense', 'missense', 'nonsense', 'missense', 'missense', 'nonsense', 'missense'],
+        'type': ['missense', 'missense', 'stop', 'missense', 'missense', 'stop', 'missense'],
         'effect': [0.5, -1.2, 0.3, -0.7, 1.0, -0.4, -0.1],
         'extra_col': [10, 20, 30, 40, 50, 60, 70]
     })
@@ -250,7 +370,7 @@ def test_merge_mutation_scores_row_order_invariant():
         'resn': ['ARG', 'ARG', 'THR', 'THR', 'GLU', 'GLU', 'ASP'],
         'resi': [12, 12, 13, 13, 14, 14, 15],
         'resm': ['ALA', 'GLY', 'VAL', 'GLU', 'CYS', 'ASP', 'MET'],
-        'type': ['missense', 'missense', 'nonsense', 'missense', 'missense', 'nonsense', 'missense'],
+        'type': ['missense', 'missense', 'stop', 'missense', 'missense', 'stop', 'missense'],
         'effect': [0.5, -1.2, 0.3, -0.7, 1.0, -0.4, -0.1],
         'extra_col': [10, 20, 30, 40, 50, 60, 70],
     })

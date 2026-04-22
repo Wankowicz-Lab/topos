@@ -137,7 +137,39 @@ def test_calculate_neighborhood_features_neighbor_averages_deterministic():
     assert result.loc[("A", 3, "GLY"), "neighborhood_sasa"] == 1.0
     assert result.loc[("A", 4, "SER"), "neighborhood_sasa"] == 6.0
 
+    
+def test_calculate_neighborhood_features_chain_neighbor_counts_deterministic():
+    """Chain-aware neighbor counts separate same-chain from cross-chain neighbors."""
+    class DummyContext:
+        def __init__(self, neighbor_map):
+            self.extras = {"residue_neighbors": neighbor_map}
 
+    features = pd.DataFrame({
+        "chain": ["A", "A", "A", "B", "B", "B"],
+        "resi_struct": [1, 2, 3, 1, 2, 2],
+        "resn_struct": ["ALA", "VAL", "LEU", "GLY", "SER", "SER"],
+        "sasa": [1.0, 2.0, 5.0, 3.0, 4.0, 8.0],
+    })
+    neighbor_map = {
+        "A:1:ALA": ["A:2:VAL", "B:1:GLY", "B:999:UNK"],
+        "A:2:VAL": ["A:1:ALA", "A:3:LEU"],
+        "A:3:LEU": ["A:2:VAL"],
+        "B:1:GLY": ["B:2:SER"],
+        "B:2:SER": ["A:2:VAL", "B:1:GLY"],
+    }
+    context = DummyContext(neighbor_map)
+
+    result = calculate_neighborhood_features(context, features)
+    result = result.set_index(["chain", "resi_struct", "resn_struct"])
+
+    assert result.loc[("A", 1, "ALA"), "n_same_chain_neighbors"] == 1
+    assert result.loc[("A", 1, "ALA"), "n_different_chain_neighbors"] == 1
+    assert result.loc[("A", 2, "VAL"), "n_same_chain_neighbors"] == 2
+    assert result.loc[("A", 2, "VAL"), "n_different_chain_neighbors"] == 0
+    assert result.loc[("B", 1, "GLY"), "n_same_chain_neighbors"] == 1
+    assert result.loc[("B", 1, "GLY"), "n_different_chain_neighbors"] == 0
+    
+    
 def test_neighbor_entropy_metrics_filters_missing_and_nonstandard_neighbors():
     """Entropy metrics ignore unresolved and non-standard neighbor residue labels."""
 

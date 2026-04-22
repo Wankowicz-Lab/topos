@@ -52,3 +52,5 @@ The goal is a **high-level summary**: what the unit does, non-obvious behavior, 
 ## When to break the rules
 
 - User-facing or I/O boundaries (e.g., API handlers, CLI entrypoints, file parsing) should use defensive checks and clear error messages; internal pipeline helpers should assume valid upstream inputs.
+
+Project skills live in `.agents/skills/`.
