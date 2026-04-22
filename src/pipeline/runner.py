@@ -233,14 +233,22 @@ class Runner:
             )
 
             md = self.context.extras["mutation_data"]
-            am = self.context.extras["sequence_alignment_merged"]
+            chain = self.context.config.mutation_data_chain
+            all_chains = sorted(self.context.residue_table["chain"].unique().tolist())
+            n_mutation_residues = md[["resi", "resn"]].drop_duplicates().shape[0]
+            structure_residue_cols = ["chain", "resi_struct", "resn_struct"]
+            structure_residue_table = self.context.residue_table[structure_residue_cols].drop_duplicates()
+            n_chain_residues = int((structure_residue_table["chain"] == chain).sum())
+            n_total_residues = structure_residue_table.shape[0]
             logger.info(
-                "Mutation data scope: %s rows in score file; alignment on chain %s; "
-                "%s alignment positions; merged residue table has %s rows with mut_info.",
-                len(md),
-                self.context.config.mutation_data_chain,
-                len(am),
-                int(self.context.residue_table["mut_info"].sum()),
+                "Using chain %s to map the mutation data onto the structures, out of possible chains %s. "
+                "The mutation data contains %s total residues, and the selected chain represents %s out of %s "
+                "total residues in the structure.",
+                chain,
+                all_chains,
+                n_mutation_residues,
+                n_chain_residues,
+                n_total_residues,
             )
 
             # Sort residue table with mutation_data_chain first
@@ -582,24 +590,22 @@ class Runner:
 
         cfg = self.context.config
         rt = self.context.residue_table
-        n_struct_full = rt[merge_cols].drop_duplicates().shape[0]
         all_chains = sorted(rt["chain"].unique().tolist())
-        n_out = self.features[merge_cols].drop_duplicates().shape[0]
         if cfg.structural_feature_chains is not None:
+            unique_residues = rt[merge_cols].drop_duplicates()
+            n_total = unique_residues.shape[0]
+            n_kept = unique_residues[
+                unique_residues["chain"].isin(cfg.structural_feature_chains)
+            ].shape[0]
+            n_filtered = n_total - n_kept
             logger.info(
-                "Structure/feature scope: structural_feature_chains=%s; feature table has %s "
-                "unique residues vs %s in full structure (chains in structure: %s).",
+                "Structural analysis will be limited to the following structural_data_chains: %s. "
+                "Available structural chains: %s. This will result in %s out of %s total residues being filtered "
+                "out of the analysis.",
                 cfg.structural_feature_chains,
-                n_out,
-                n_struct_full,
                 all_chains,
-            )
-        else:
-            logger.info(
-                "Structure/feature scope: all chains included; %s unique residues in features "
-                "(chains: %s).",
-                n_out,
-                all_chains,
+                n_filtered,
+                n_total,
             )
 
     def run_neighborhood(

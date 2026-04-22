@@ -281,7 +281,7 @@ It records:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `output_dir` | `str` | — | Directory for output files (CSV, run snapshot JSON). Created if it does not exist. If omitted, the directory containing the TOML config file is used when `config_path` is set. Mutation-category diagnostic PNGs are written under `{output_dir}/logs/` |
+| `output_dir` | `str` | — | Directory for output files (CSV, run snapshot JSON). Created if it does not exist |
 | `output_prefix` | `str` | `""` | Optional prefix prepended to output file names |
 
 

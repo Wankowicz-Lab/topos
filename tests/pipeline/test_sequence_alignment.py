@@ -44,7 +44,7 @@ def test_load_mutation_scores(tmp_path):
     test_file_invalid_path_res = os.path.join(tmp_path, 'test_mutation_scores_invalid_res.csv')
     test_df.to_csv(test_file_invalid_path_res, index=False)
 
-    with pytest.raises(ValueError, match="Residue column must contain either 1-letter or 3-letter amino acid codes"):
+    with pytest.raises(ValueError, match="Wildtype residue column must contain only valid 1-letter or only valid 3-letter amino acid codes"):
         load_mutation_scores(
             path=test_file_invalid_path_res,
             residue_col_name='resn_rename',
@@ -112,7 +112,7 @@ def test_load_mutation_scores_mixed_mutation_tokens(tmp_path):
 
 
 def test_load_mutation_scores_invalid_resn_code(tmp_path):
-    """Unexpected 3-letter wildtype tokens are preserved by the lightweight loader validation."""
+    """Invalid wildtype residue codes should raise a README-linked error."""
     test_df = pd.DataFrame({
         'resn_col': ['ARG', 'BAD'],
         'resi_col': [1, 2],
@@ -124,19 +124,19 @@ def test_load_mutation_scores_invalid_resn_code(tmp_path):
     test_file_path = os.path.join(tmp_path, 'test_invalid_resn.csv')
     test_df.to_csv(test_file_path, index=False)
 
-    loaded_df = load_mutation_scores(
-        path=test_file_path,
-        residue_col_name='resn_col',
-        residue_idx_name='resi_col',
-        mutation_col_name='resm_col',
-        mutation_type_col_name='type_col',
-        score_col_name='effect_col'
-    )
-    assert loaded_df['resn'].tolist() == ['ARG', 'BAD']
+    with pytest.raises(ValueError, match=r"Wildtype residue column contains invalid 3-letter codes: \['BAD'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
 
 
 def test_load_mutation_scores_invalid_resm_code(tmp_path):
-    """Unexpected mutant tokens are preserved by the lightweight loader validation."""
+    """Invalid mutant residue codes should raise a README-linked error."""
     test_df = pd.DataFrame({
         'resn_col': ['ARG', 'THR'],
         'resi_col': [1, 2],
@@ -148,31 +148,7 @@ def test_load_mutation_scores_invalid_resm_code(tmp_path):
     test_file_path = os.path.join(tmp_path, 'test_invalid_resm.csv')
     test_df.to_csv(test_file_path, index=False)
 
-    loaded_df = load_mutation_scores(
-        path=test_file_path,
-        residue_col_name='resn_col',
-        residue_idx_name='resi_col',
-        mutation_col_name='resm_col',
-        mutation_type_col_name='type_col',
-        score_col_name='effect_col'
-    )
-    assert loaded_df['resm'].tolist() == ['ALA', 'STOP']
-
-
-def test_load_mutation_scores_invalid_type_warns(tmp_path):
-    """Unexpected mutation types should emit a warning and still load."""
-    test_df = pd.DataFrame({
-        'resn_col': ['ARG', 'THR'],
-        'resi_col': [1, 2],
-        'resm_col': ['ALA', 'CYS'],
-        'type_col': ['missense', 'unexpected'],
-        'effect_col': [0.5, -1.2],
-    })
-
-    test_file_path = os.path.join(tmp_path, 'test_invalid_type.csv')
-    test_df.to_csv(test_file_path, index=False)
-
-    with pytest.warns(UserWarning, match=r"Mutation types contain unexpected values"):
+    with pytest.raises(ValueError, match=r"Mutant residue column contains invalid codes: \['STOP'\].*README.md#mutation-input-requirements"):
         load_mutation_scores(
             path=test_file_path,
             residue_col_name='resn_col',
@@ -183,8 +159,32 @@ def test_load_mutation_scores_invalid_type_warns(tmp_path):
         )
 
 
-def test_load_mutation_scores_indel_type_is_accepted(tmp_path):
-    """The broad indel alias is accepted by the relaxed loader validation."""
+def test_load_mutation_scores_invalid_type_raises_error(tmp_path):
+    """Unexpected mutation types should raise instead of warning."""
+    test_df = pd.DataFrame({
+        'resn_col': ['ARG', 'THR'],
+        'resi_col': [1, 2],
+        'resm_col': ['ALA', 'CYS'],
+        'type_col': ['missense', 'nonsense'],
+        'effect_col': [0.5, -1.2],
+    })
+
+    test_file_path = os.path.join(tmp_path, 'test_invalid_type.csv')
+    test_df.to_csv(test_file_path, index=False)
+
+    with pytest.raises(ValueError, match=r"Mutation type column contains invalid values: \['nonsense'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
+
+
+def test_load_mutation_scores_indel_type_raises_error(tmp_path):
+    """The broad indel type alias should be rejected in favor of insertion/deletion."""
     test_df = pd.DataFrame({
         'resn_col': ['ARG'],
         'resi_col': [1],
@@ -196,15 +196,15 @@ def test_load_mutation_scores_indel_type_is_accepted(tmp_path):
     test_file_path = os.path.join(tmp_path, 'test_indel_type.csv')
     test_df.to_csv(test_file_path, index=False)
 
-    loaded_df = load_mutation_scores(
-        path=test_file_path,
-        residue_col_name='resn_col',
-        residue_idx_name='resi_col',
-        mutation_col_name='resm_col',
-        mutation_type_col_name='type_col',
-        score_col_name='effect_col'
-    )
-    assert loaded_df['type'].tolist() == ['indel']
+    with pytest.raises(ValueError, match=r"Mutation type column contains invalid values: \['indel'\].*README.md#mutation-input-requirements"):
+        load_mutation_scores(
+            path=test_file_path,
+            residue_col_name='resn_col',
+            residue_idx_name='resi_col',
+            mutation_col_name='resm_col',
+            mutation_type_col_name='type_col',
+            score_col_name='effect_col'
+        )
 
 
 def test_alignment_to_index_map():
