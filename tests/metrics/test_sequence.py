@@ -184,7 +184,7 @@ def test_calculate_effect_ranking():
     assert max_rank_idx == max_effect_idx
 
 
-def test_calculate_mutation_category_from_synonymous_reference():
+def test_calculate_mutation_category_from_synonymous_reference(tmp_path):
     residue_table = pd.DataFrame({
         'chain': ['A'] * 11,
         'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
@@ -199,8 +199,7 @@ def test_calculate_mutation_category_from_synonymous_reference():
     })
 
     class MockConfig:
-        mutation_category_logs_base = None
-        output_dir = None
+        output_dir = None  # set on instance
         output_prefix = ''
         name = None
         pdb_id = None
@@ -209,6 +208,7 @@ def test_calculate_mutation_category_from_synonymous_reference():
         def __init__(self, residue_table):
             self.residue_table = residue_table
             self.config = MockConfig()
+            self.config.output_dir = tmp_path
 
     result = metrics.calculate_mutation_category(MockContext(residue_table))
     category_map = dict(zip(result['resm'], result['mutation_category']))
@@ -227,7 +227,7 @@ def test_calculate_mutation_category_from_synonymous_reference():
     assert pos4.iloc[0].to_dict() == {'total_lof': 1, 'total_gof': 1}
 
 
-def test_calculate_mutation_category_falls_back_to_stop_reference():
+def test_calculate_mutation_category_falls_back_to_stop_reference(tmp_path):
     residue_table = pd.DataFrame({
         'chain': ['A'] * 10,
         'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4],
@@ -242,7 +242,6 @@ def test_calculate_mutation_category_falls_back_to_stop_reference():
     })
 
     class MockConfig:
-        mutation_category_logs_base = None
         output_dir = None
         output_prefix = ''
         name = None
@@ -252,6 +251,7 @@ def test_calculate_mutation_category_falls_back_to_stop_reference():
         def __init__(self, residue_table):
             self.residue_table = residue_table
             self.config = MockConfig()
+            self.config.output_dir = tmp_path
 
     with pytest.warns(UserWarning, match='no synonymous mutations'):
         result = metrics.calculate_mutation_category(MockContext(residue_table))
@@ -269,7 +269,7 @@ def test_calculate_mutation_category_falls_back_to_stop_reference():
     assert pos3.iloc[0].to_dict() == {'total_lof': 0, 'total_gof': 0}
 
 
-def test_calculate_mutation_category_rejects_implausibly_narrow_synonymous_fit():
+def test_calculate_mutation_category_rejects_implausibly_narrow_synonymous_fit(tmp_path):
     residue_table = pd.DataFrame({
         'chain': ['A'] * 10,
         'resi_mut': [1, 1, 1, 1, 1, 2, 2, 3, 3, 4],
@@ -284,7 +284,6 @@ def test_calculate_mutation_category_rejects_implausibly_narrow_synonymous_fit()
     })
 
     class MockConfig:
-        mutation_category_logs_base = None
         output_dir = None
         output_prefix = ''
         name = None
@@ -294,6 +293,7 @@ def test_calculate_mutation_category_rejects_implausibly_narrow_synonymous_fit()
         def __init__(self, residue_table):
             self.residue_table = residue_table
             self.config = MockConfig()
+            self.config.output_dir = tmp_path
 
     with pytest.warns(UserWarning, match='normalized to synonymous'):
         result = metrics.calculate_mutation_category(MockContext(residue_table))
@@ -318,7 +318,6 @@ def test_mutation_category_diagnostic_png(tmp_path):
     })
 
     class MockConfig:
-        mutation_category_logs_base = None
         output_dir = tmp_path
         output_prefix = 'pfx'
         name = 'MyProt'
@@ -334,7 +333,7 @@ def test_mutation_category_diagnostic_png(tmp_path):
     assert out.is_file()
 
 
-def test_calculate_mutation_category_nonfinite_effect_excluded_from_position_counts():
+def test_calculate_mutation_category_nonfinite_effect_excluded_from_position_counts(tmp_path):
     """NaN effect stays unlabeled; position LOF/GOF sums must not raise on boolean NA."""
     residue_table = pd.DataFrame({
         'chain': ['A'] * 11,
@@ -350,7 +349,6 @@ def test_calculate_mutation_category_nonfinite_effect_excluded_from_position_cou
     })
 
     class MockConfig:
-        mutation_category_logs_base = None
         output_dir = None
         output_prefix = ''
         name = None
@@ -360,6 +358,7 @@ def test_calculate_mutation_category_nonfinite_effect_excluded_from_position_cou
         def __init__(self, residue_table):
             self.residue_table = residue_table
             self.config = MockConfig()
+            self.config.output_dir = tmp_path
 
     result = metrics.calculate_mutation_category(MockContext(residue_table))
     assert pd.isna(result.loc[result['resm'] == 'ILE', 'mutation_category'].iloc[0])

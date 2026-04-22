@@ -269,26 +269,19 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
     )
 
     cfg = context.config
-    if cfg.mutation_category_logs_base is not None:
-        base = Path(cfg.mutation_category_logs_base)
-    elif cfg.output_dir is not None:
-        base = Path(cfg.output_dir)
-    else:
-        base = None
-
-    if base is not None:
-        parts = []
-        if cfg.output_prefix:
-            p = str(cfg.output_prefix).strip().strip('_')
-            if p:
-                parts.append(p)
-        if cfg.name:
-            parts.append(str(cfg.name))
-        elif cfg.pdb_id:
-            parts.append(str(cfg.pdb_id))
-        stem = '_'.join(parts) if parts else 'run'
-        out_path = base / 'logs' / f'{stem}_mutation_category_gmm_fit.png'
-        save_mutation_category_diagnostic_png(fit, central_interval, out_path)
+    base = Path(cfg.output_dir)
+    parts = []
+    if cfg.output_prefix:
+        p = str(cfg.output_prefix).strip().strip('_')
+        if p:
+            parts.append(p)
+    if cfg.name:
+        parts.append(str(cfg.name))
+    elif cfg.pdb_id:
+        parts.append(str(cfg.pdb_id))
+    stem = '_'.join(parts) if parts else 'run'
+    out_path = base / 'logs' / f'{stem}_mutation_category_gmm_fit.png'
+    save_mutation_category_diagnostic_png(fit, central_interval, out_path)
 
     return mutation_categories
 

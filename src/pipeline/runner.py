@@ -80,6 +80,7 @@ class Runner:
     membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
     config_path: Optional[Path|str] = None
+    output_dir: Optional[Path] = None
 
     def __post_init__(self):
         self._run_log_handler: Optional[logging.FileHandler] = None
@@ -107,6 +108,8 @@ class Runner:
             overrides['mutation_data_path'] = self.mutation_data_path
         if self.name is not None:
             overrides['name'] = self.name
+        if self.output_dir is not None:
+            overrides['output_dir'] = Path(self.output_dir)
 
         # Set up config
         if self.config_path is None:
@@ -267,6 +270,7 @@ class Runner:
                 mutation_chain=None
             )
 
+        self._resolve_effective_output_dir()
         self._log_configuration_snapshot()
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:
@@ -325,6 +329,20 @@ class Runner:
 
         return Config(**base_dict)
 
+    def _resolve_effective_output_dir(self) -> None:
+        """Set context.config.output_dir from config, config_path.parent, or raise."""
+        cfg = self.context.config
+        if cfg.output_dir is not None:
+            cfg.output_dir = Path(cfg.output_dir).resolve()
+            return
+        if self.config_path is not None:
+            cfg.output_dir = Path(self.config_path).parent.resolve()
+            return
+        raise ValueError(
+            "Set output_dir in the configuration, pass output_dir=... to Runner, "
+            "or provide config_path so output_dir defaults to the config file's directory."
+        )
+
     def _output_stem(self, save_results_output_prefix: Optional[str] = None) -> str:
         """File name stem for saved artifacts (matches save_results prefix logic)."""
         identifier = self.context.config.pdb_id or self.context.config.name
@@ -332,14 +350,10 @@ class Runner:
             return f"{save_results_output_prefix}_{identifier}"
         return identifier
 
-    def _resolve_output_dir(self, output_dir: Optional[Path] = None) -> Optional[Path]:
+    def _resolve_output_dir(self, output_dir: Optional[Path] = None) -> Path:
         if output_dir is not None:
             return Path(output_dir)
-        if self.context.config.output_dir is not None:
-            return Path(self.context.config.output_dir)
-        if self.config_path is not None:
-            return Path(self.config_path).parent
-        return None
+        return Path(self.context.config.output_dir)
 
     def _ensure_run_log_file(
         self,
@@ -349,8 +363,6 @@ class Runner:
         if self._run_log_handler is not None:
             return
         od = self._resolve_output_dir(output_dir)
-        if od is None:
-            return
         od.mkdir(parents=True, exist_ok=True)
         stem = self._output_stem(output_prefix)
         path = od / f"{stem}_run_log.log"
@@ -380,9 +392,10 @@ class Runner:
         sfc = cfg.structural_feature_chains
         sfc_repr = "all" if sfc is None else str(sfc)
         logger.info(
-            "Pipeline configuration: structure_source=%s; altloc_policy=%s; remove_hydrogens=%s; "
+            "Pipeline configuration: output_dir=%s; structure_source=%s; altloc_policy=%s; remove_hydrogens=%s; "
             "membrane_protein=%s; ss_backend=%s; chains_in_structure=%s; structural_feature_chains=%s; "
             "mutation_data_loaded=%s; mutation_data_chain=%s",
+            cfg.output_dir,
             structure_src,
             cfg.altloc_policy,
             cfg.remove_hydrogens,
@@ -639,8 +652,8 @@ class Runner:
         Parameters
         ----------
         output_dir : Optional[Path] = None
-            Directory to save output files. If not provided, uses output_dir from config,
-            or the directory of config_path if available.
+            Directory to save output files. If not provided, uses ``context.config.output_dir``
+            (set during Runner initialization).
         output_prefix : Optional[str] = None
             Prefix for output file names.
         """
@@ -648,12 +661,9 @@ class Runner:
             raise ValueError("No features to save. Please call run() first.")
 
         if output_dir is None:
-            if self.context.config.output_dir is not None:
-                output_dir = self.context.config.output_dir
-            elif self.config_path is not None:
-                output_dir = Path(self.config_path).parent
-            else:
-                raise ValueError("If output_dir is not provided, config_path must be provided to determine output location.")
+            output_dir = self.context.config.output_dir
+        if output_dir is None:
+            raise ValueError("output_dir is not set on the Runner configuration.")
 
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
