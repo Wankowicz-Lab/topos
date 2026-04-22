@@ -207,15 +207,6 @@ def fit_mutation_category_reference(
     if syn_ok:
         weights, means, sigmas = fit_gaussian_mixture(syn)
         lower, upper = mixture_sample_interval(weights, means, sigmas, central_interval, rng)
-        warn = not is_two_component(weights, means, sigmas)
-        if warn:
-            warnings.warn(
-                "Mutation category: synonymous 2-component Gaussian mixture is poorly separated "
-                f"(separation_ratio={separation_ratio(means, sigmas):.3f}; "
-                f"threshold {SEPARATION_RATIO_THRESHOLD}). Labels are still computed from the mixture.",
-                UserWarning,
-                stacklevel=2,
-            )
         return MutationCategoryFit(
             reference_type="synonymous",
             stop_mode="mixture",
@@ -225,7 +216,7 @@ def fit_mutation_category_reference(
             means=means,
             sigmas=sigmas,
             ref_effects=syn,
-            warn_poor_separation=warn,
+            warn_poor_separation=not is_two_component(weights, means, sigmas),
         )
 
     if syn_err is not None and syn.size > 0:
