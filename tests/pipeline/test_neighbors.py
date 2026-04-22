@@ -10,13 +10,14 @@ from src.pipeline.runner import Runner
 from src.structure.utils import res_key
 
 
-def test_compute_residue_neighbors_basic():
+def test_compute_residue_neighbors_basic(tmp_path):
     """Test compute_residue_neighbors computes neighbors correctly and stores in extras."""
     myrunner = Runner(
         pdb_id="8smv",
         name="test_neighbors",
         pdb_path=None,
         membrane_protein=False,
+        output_dir=tmp_path,
     )
     mapping = compute_residue_neighbors(myrunner.context, cutoff=10.0)
 
@@ -32,13 +33,14 @@ def test_compute_residue_neighbors_basic():
     assert set(mapping.keys()) == expected_keys
 
 
-def test_compute_residue_neighbors_cutoff_effect():
+def test_compute_residue_neighbors_cutoff_effect(tmp_path):
     """Test that different cutoffs produce different neighbor sets."""
     myrunner = Runner(
         pdb_id="8smv",
         name="test_neighbors",
         pdb_path=None,
         membrane_protein=False,
+        output_dir=tmp_path,
     )
 
     mapping_small = compute_residue_neighbors(myrunner.context, cutoff=5.0)
@@ -49,13 +51,14 @@ def test_compute_residue_neighbors_cutoff_effect():
         assert len(mapping_large[residue_key]) >= len(mapping_small[residue_key])
 
 
-def test_calculate_neighborhood_features_basic():
+def test_calculate_neighborhood_features_basic(tmp_path):
     """Test calculate_neighborhood_features loops over functions and aggregates correctly."""
     myrunner = Runner(
         pdb_id="8smv",
         name="test_neighbors",
         pdb_path=None,
         membrane_protein=False,
+        output_dir=tmp_path,
     )
     myrunner.features = myrunner.run_metrics(metrics=["sasa"])
 
@@ -79,13 +82,14 @@ def test_calculate_neighborhood_features_basic():
     assert len(merged_check) == len(expected_rows)
 
 
-def test_calculate_neighborhood_features_aggregates_multiple_metrics():
+def test_calculate_neighborhood_features_aggregates_multiple_metrics(tmp_path):
     """Test that calculate_neighborhood_features aggregates multiple metric outputs."""
     myrunner = Runner(
         pdb_id="8smv",
         name="test_neighbors_multi",
         pdb_path=None,
         membrane_protein=False,
+        output_dir=tmp_path,
     )
     myrunner.features = myrunner.run_metrics(metrics=["sasa", "kyte_doolittle"])
     compute_residue_neighbors(myrunner.context, cutoff=10.0)

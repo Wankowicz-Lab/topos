@@ -13,22 +13,13 @@ from typing import Tuple, Union
 import pandas as pd
 from Bio.Align import PairwiseAligner
 
-from src.sequence.utils import (
-    VALID_1_CODES,
-    VALID_RESM_3_CODES,
-    VALID_RESN_3_CODES,
-    convert_amino_acid_1to3,
-    convert_amino_acid_3to1,
-    invalid_codes,
-)
+from src.sequence.utils import convert_amino_acid
 
 logger = logging.getLogger(__name__)
 
 # User-facing labels for alignment warnings (merged columns use resn_df1 / resn_df2 before rename).
 _LABEL_MUTATION = "mutation sequence"
 _LABEL_STRUCTURAL = "structural sequence"
-_MUTATION_INPUT_README_SECTION = "README.md#mutation-input-requirements"
-VALID_MUTATION_TYPES = frozenset({"missense", "synonymous", "stop", "deletion", "insertion"})
 
 
 def _format_residue_ranges(positions: pd.Series) -> str:
@@ -96,6 +87,10 @@ def load_mutation_scores(
         If required columns are missing or if the residue column contains
         codes that are neither 1-letter nor 3-letter amino acid codes.
 
+    Warns
+    -----
+    UserWarning
+        If mutation types contain unexpected values.
     """
     logger.info("Loading mutation scores")
     df = pd.read_csv(path)
@@ -121,63 +116,28 @@ def load_mutation_scores(
         score_col_name: "effect"
     })
 
-    df["resn"] = df["resn"].astype(str).str.strip().str.upper()
-    df["resm"] = df["resm"].astype(str).str.strip().str.upper()
-    df["type"] = df["type"].astype(str).str.strip().str.lower()
+    # make sure that residue and mutation columns are valid
+    residue_lens = df['resn'].str.len().unique()
+    if len(residue_lens) != 1 or residue_lens[0] not in (1, 3):
+        raise ValueError("Residue column must contain either 1-letter or 3-letter amino acid codes.")
 
-    # Wildtype residues must use a single code system because they define the sequence.
-    residue_lens = set(df["resn"].str.len().unique())
-    if residue_lens == {1}:
-        invalid_resn = invalid_codes(set(df["resn"].unique()), VALID_1_CODES)
-        if invalid_resn:
-            raise ValueError(
-                f"Wildtype residue column contains invalid 1-letter codes: {sorted(invalid_resn)}. "
-                f"See {_MUTATION_INPUT_README_SECTION}."
-            )
-        df["resn"] = df["resn"].map(convert_amino_acid_1to3)
-    elif residue_lens == {3}:
-        invalid_resn = invalid_codes(set(df["resn"].unique()), VALID_RESN_3_CODES)
-        if invalid_resn:
-            raise ValueError(
-                f"Wildtype residue column contains invalid 3-letter codes: {sorted(invalid_resn)}. "
-                f"See {_MUTATION_INPUT_README_SECTION}."
-            )
-    else:
-        raise ValueError(
-            "Wildtype residue column must contain only valid 1-letter or only valid 3-letter amino acid codes. "
-            f"See {_MUTATION_INPUT_README_SECTION}."
-        )
+    # mutation column may contain a range of possible lengths because of stops and indels
+    mutation_lens = df['resm'].str.len().unique()
 
-    mutant_lens = set(df["resm"].str.len().unique())
-    if not mutant_lens.issubset({1, 3, 4}):
-        invalid_resm = sorted(code for code in df["resm"].unique() if len(code) not in {1, 3, 4})
-        raise ValueError(
-            f"Mutant residue column contains unsupported tokens: {invalid_resm}. "
-            f"See {_MUTATION_INPUT_README_SECTION}."
-        )
+    # convert to 3-letter codes if necessary
+    if residue_lens[0] == 1:
+        df['resn'] = df['resn'].apply(convert_amino_acid)
 
-    invalid_resm_1 = invalid_codes({code for code in df["resm"].unique() if len(code) == 1}, VALID_1_CODES)
-    invalid_resm_3 = invalid_codes({code for code in df["resm"].unique() if len(code) == 3}, VALID_RESM_3_CODES)
-    invalid_resm_4 = invalid_codes({code for code in df["resm"].unique() if len(code) == 4}, VALID_RESM_3_CODES)
-    invalid_resm = sorted(invalid_resm_1 | invalid_resm_3 | invalid_resm_4)
-    if invalid_resm:
-        raise ValueError(
-            f"Mutant residue column contains invalid codes: {invalid_resm}. "
-            f"See {_MUTATION_INPUT_README_SECTION}."
-        )
+    if 1 in mutation_lens:
+        df['resm'] = df['resm'].apply(convert_amino_acid)
 
-    df["resm"] = df["resm"].map(
-        lambda code: convert_amino_acid_1to3(code) if len(code) == 1 else code
-    )
-
-    found_types = set(df["type"].unique())
-    invalid_types = found_types - VALID_MUTATION_TYPES
-    if invalid_types:
-        raise ValueError(
-            f"Mutation type column contains invalid values: {sorted(invalid_types)}. "
-            f"Expected one of {sorted(VALID_MUTATION_TYPES)}. "
-            f"See {_MUTATION_INPUT_README_SECTION}."
-        )
+    # check that mutation types are named in a standard way
+    valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins', 'stop'}
+    found_types = set(df['type'].unique())
+    if not found_types.issubset(valid_types):
+        invalid_types = found_types - valid_types
+        warnings.warn(f"Mutation types contain unexpected values. Expected types include {valid_types}. "
+                      f"Found invalid types: {invalid_types}.")
 
     return df
 
@@ -405,9 +365,9 @@ def merge_mutation_scores(
     )
 
     # Prepare sequences for alignment, a single string of single-letter amino acids
-    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid_3to1(aa, force_convert=True))
+    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
     mut_seq = "".join(mut_seq_short.tolist())
-    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid_3to1(aa, force_convert=True))
+    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
     res_seq = "".join(res_seq_short.tolist())
 
     # Perform alignment
