@@ -23,7 +23,6 @@ from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.pipeline.context import Config, Context
 from src.pipeline.ligands import calculate_protein_ligand_interactions
 from src.pipeline.neighbors import calculate_neighborhood_features, compute_residue_neighbors
-from src.pipeline.run_logging import attach_run_file_log, detach_run_file_log
 from src.pipeline.secondary_structure_features import calculate_secondary_structure_features
 from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
 from src.pipeline.sequence_window_features import calculate_sequence_window_features
@@ -84,9 +83,6 @@ class Runner:
     output_dir: Optional[Path] = None
 
     def __post_init__(self):
-        self._run_log_handler: Optional[logging.FileHandler] = None
-        self._run_log_path: Optional[Path] = None
-
         logger.info("Initializing pipeline")
 
         # Ensure that either pdb_id, pdb_path, or config_path is provided
@@ -344,40 +340,6 @@ class Runner:
             "or provide config_path so output_dir defaults to the config file's directory."
         )
 
-    def _output_stem(self, save_results_output_prefix: Optional[str] = None) -> str:
-        """File name stem for saved artifacts (matches save_results prefix logic)."""
-        identifier = self.context.config.pdb_id or self.context.config.name
-        if save_results_output_prefix is not None:
-            return f"{save_results_output_prefix}_{identifier}"
-        return identifier
-
-    def _resolve_output_dir(self, output_dir: Optional[Path] = None) -> Path:
-        if output_dir is not None:
-            return Path(output_dir)
-        return Path(self.context.config.output_dir)
-
-    def _ensure_run_log_file(
-        self,
-        output_dir: Optional[Path] = None,
-        output_prefix: Optional[str] = None,
-    ) -> None:
-        if self._run_log_handler is not None:
-            return
-        od = self._resolve_output_dir(output_dir)
-        od.mkdir(parents=True, exist_ok=True)
-        stem = self._output_stem(output_prefix)
-        path = od / f"{stem}_run_log.log"
-        self._run_log_handler = attach_run_file_log(path)
-        self._run_log_path = path
-        json_path = od / f"{stem}_run_log.json"
-        logger.info("Writing run transcript to %s (JSON snapshot: %s)", path, json_path)
-
-    def _detach_run_log_file(self) -> None:
-        if self._run_log_handler is None:
-            return
-        detach_run_file_log(self._run_log_handler)
-        self._run_log_handler = None
-
     def _log_configuration_snapshot(self) -> None:
         """Single INFO summary of structure source, key options, and chain/mutation settings."""
         cfg = self.context.config
@@ -515,7 +477,6 @@ class Runner:
         metrics : Optional[List[str]] = None
             List of metric names to compute.
         """
-        self._ensure_run_log_file()
 
         # Run metrics
         if metrics is None:
@@ -697,47 +658,32 @@ class Runner:
         else:
             prefix = identifier
 
-        proposed_log = output_dir / f"{prefix}_run_log.log"
-        if self._run_log_path is not None and self._run_log_path != proposed_log:
-            logger.info(
-                "Run transcript path changed from %s to %s; restarting log file for save directory.",
-                self._run_log_path,
-                proposed_log,
-            )
-            self._detach_run_log_file()
+        # Save features
+        logger.info("Saving results")
+        merged_path = output_dir / f"{prefix}_features.csv"
+        self.features.to_csv(merged_path, index=False)
 
-        self._ensure_run_log_file(output_dir=output_dir, output_prefix=output_prefix)
+        # Save metadata from residue table
+        metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info', 'ss_domains', 'ss_group'] +
+                         (['resm'] if self.context.config.mutation_data_path is not None else []))
 
-        try:
-            # Save features
-            logger.info("Saving results")
-            merged_path = output_dir / f"{prefix}_features.csv"
-            self.features.to_csv(merged_path, index=False)
+        output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
+        metadata_path = output_dir / f"{prefix}_metadata.csv"
+        output_df.to_csv(metadata_path, index=False)
 
-            # Save metadata from residue table
-            metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info', 'ss_domains', 'ss_group'] +
-                             (['resm'] if self.context.config.mutation_data_path is not None else []))
-
-            output_df = self.context.residue_table[metadata_cols].drop_duplicates().reset_index(drop=True)
-            metadata_path = output_dir / f"{prefix}_metadata.csv"
-            output_df.to_csv(metadata_path, index=False)
-
-            # Save bonds (one row per unique pair)
-            if 'bonds_df' in self.context.extras and len(self.context.extras['bonds_df']) > 0:
-                bonds = self.context.extras['bonds_df'].copy()
-                bonds['category'] = np.where(bonds['bond_type'] == 'hbond', bonds['extras'], '')
-                bonds['geometry'] = np.where(bonds['bond_type'] == 'pi_stacking', bonds['extras'], '')
-                bonds['role'] = np.where(bonds['bond_type'] == 'cation_pi', bonds['extras'], '')
-                bonds = bonds.drop(columns=['extras'])
-                bonds = bonds[bonds['residue_key'] <= bonds['partner_residue_key']].reset_index(drop=True)
-                bonds_path = output_dir / f"{prefix}_bonds.csv"
-                bonds.to_csv(bonds_path, index=False)
-                logger.info(f"Saved {len(bonds)} bond rows to {bonds_path}")
-            # Save run log JSON
-            log_path = output_dir / f"{prefix}_run_log.json"
-            self._save_run_log(log_path, merged_path, metadata_path)
-        finally:
-            self._detach_run_log_file()
+        # Save bonds (one row per unique pair)
+        if 'bonds_df' in self.context.extras and len(self.context.extras['bonds_df']) > 0:
+            bonds = self.context.extras['bonds_df'].copy()
+            bonds['category'] = np.where(bonds['bond_type'] == 'hbond', bonds['extras'], '')
+            bonds['geometry'] = np.where(bonds['bond_type'] == 'pi_stacking', bonds['extras'], '')
+            bonds['role'] = np.where(bonds['bond_type'] == 'cation_pi', bonds['extras'], '')
+            bonds = bonds.drop(columns=['extras'])
+            bonds = bonds[bonds['residue_key'] <= bonds['partner_residue_key']].reset_index(drop=True)
+            bonds_path = output_dir / f"{prefix}_bonds.csv"
+            bonds.to_csv(bonds_path, index=False)
+            logger.info(f"Saved {len(bonds)} bond rows to {bonds_path}")
+        log_path = output_dir / f"{prefix}_run_log.txt"
+        self._save_run_log(log_path, merged_path, metadata_path)
 
 
     def _save_run_log(self, log_path: Path, features_path: Path, metadata_path: Path) -> None:
@@ -753,10 +699,6 @@ class Runner:
             "output_files": {
                 "features": str(features_path),
                 "metadata": str(metadata_path),
-                "run_log_json": str(log_path),
             },
         }
-        rp = getattr(self, "_run_log_path", None)
-        if rp is not None:
-            log["output_files"]["run_log"] = str(rp)
-        log_path.write_text(json.dumps(log, indent=2, default=str))
+        log_path.with_suffix(".json").write_text(json.dumps(log, indent=2, default=str))

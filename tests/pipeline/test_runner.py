@@ -1,8 +1,6 @@
 """Tests for the pipeline runner module."""
 
-import json
 import random
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -858,13 +856,7 @@ def test_runner_save_results(tmp_path):
     assert bonds_path.exists()
 
     run_log_json_path = manual_output_dir / f"{pdb_id}_run_log.json"
-    log_text_path = manual_output_dir / f"{pdb_id}_run_log.log"
     assert run_log_json_path.exists()
-    assert log_text_path.exists()
-    assert log_text_path.stat().st_size > 0
-    meta = json.loads(run_log_json_path.read_text())
-    assert Path(meta["output_files"]["run_log"]) == log_text_path
-    assert Path(meta["output_files"]["run_log_json"]) == run_log_json_path
 
     saved_features = pd.read_csv(features_path)
     pd.testing.assert_frame_equal(saved_features, features_df)

@@ -13,7 +13,7 @@ from typing import Tuple, Union
 import pandas as pd
 from Bio.Align import PairwiseAligner
 
-from src.sequence.utils import convert_amino_acid
+from src.sequence.utils import convert_amino_acid_1to3, convert_amino_acid_3to1
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +126,12 @@ def load_mutation_scores(
 
     # convert to 3-letter codes if necessary
     if residue_lens[0] == 1:
-        df['resn'] = df['resn'].apply(convert_amino_acid)
+        df['resn'] = df['resn'].apply(convert_amino_acid_1to3)
 
     if 1 in mutation_lens:
-        df['resm'] = df['resm'].apply(convert_amino_acid)
+        df['resm'] = df['resm'].apply(
+            lambda code: convert_amino_acid_1to3(code) if len(code) == 1 else code
+        )
 
     # check that mutation types are named in a standard way
     valid_types = {'missense', 'nonsense', 'silent', 'insertion', 'deletion', 'synonymous', 'indel', 'del', 'ins', 'stop'}
@@ -365,9 +367,9 @@ def merge_mutation_scores(
     )
 
     # Prepare sequences for alignment, a single string of single-letter amino acids
-    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
+    mut_seq_short = mutation_scores_subset['resn'].apply(lambda aa: convert_amino_acid_3to1(aa, force_convert=True))
     mut_seq = "".join(mut_seq_short.tolist())
-    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid(aa, force_convert=True))
+    res_seq_short = residue_table_chain['resn'].apply(lambda aa: convert_amino_acid_3to1(aa, force_convert=True))
     res_seq = "".join(res_seq_short.tolist())
 
     # Perform alignment
