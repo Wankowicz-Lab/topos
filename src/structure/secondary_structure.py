@@ -116,7 +116,8 @@ def _annotate_with_mkdssp(context: Context) -> tuple[pd.DataFrame, pd.DataFrame]
     dssp_path = Path(dssp_tmp.name)
     rows: list[dict[str, Any]] = []
     try:
-        cmd = ["mkdssp", str(mmcif_path), str(dssp_path)]
+        # mkdssp v4 may otherwise write mmCIF; we parse classic DSSP columns below.
+        cmd = ["mkdssp", "--output-format", "dssp", str(mmcif_path), str(dssp_path)]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         in_table = False
