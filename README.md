@@ -230,7 +230,7 @@ Residue-level structural annotation table:
 | `ss_group` | Secondary structure class (`helix`, `sheet`, `coil`) |
 | `resm` | Mutant residue (only present when DMS data provided) |
 
-### Run log (`{prefix}_run_log.txt`)
+### Run snapshot JSON (`{prefix}_run_log.json`)
 It records:
 
 - **Run date and time**

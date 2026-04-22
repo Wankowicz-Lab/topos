@@ -688,7 +688,7 @@ class Runner:
             bonds_path = output_dir / f"{prefix}_bonds.csv"
             bonds.to_csv(bonds_path, index=False)
             logger.info(f"Saved {len(bonds)} bond rows to {bonds_path}")
-        log_path = output_dir / f"{prefix}_run_log.txt"
+        log_path = output_dir / f"{prefix}_run_log.json"
         self._save_run_log(log_path, merged_path, metadata_path)
 
 
@@ -707,4 +707,4 @@ class Runner:
                 "metadata": str(metadata_path),
             },
         }
-        log_path.with_suffix(".json").write_text(json.dumps(log, indent=2, default=str))
+        log_path.write_text(json.dumps(log, indent=2, default=str))
