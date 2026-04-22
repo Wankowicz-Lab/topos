@@ -83,7 +83,7 @@ class Runner:
     config_path: Optional[Path|str] = None
 
     def __post_init__(self):
-        self._run_log_handler: Optional[logging.Handler] = None
+        self._run_log_handler: Optional[logging.FileHandler] = None
         self._run_log_path: Optional[Path] = None
 
         logger.info("Initializing pipeline")
