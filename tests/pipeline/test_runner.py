@@ -696,6 +696,67 @@ def test_runner_run(tmp_path):
     assert returned_features[all_graph_cols].notna().any().any(), "graph_all_* columns are all null."
 
 
+def test_runner_run_adds_sequence_window_features(tmp_path):
+    residue_table = _make_residue_table(
+        num_chains=1,
+        num_residues=6,
+        start_resis=1,
+        make_muts=True,
+    )
+    mut_dataset = residue_table[["resn_mut", "resi_mut", "resm", "effect", "type"]].rename(
+        columns={
+            "resn_mut": "wildtype",
+            "resi_mut": "position",
+            "resm": "mutation",
+        }
+    )
+    mut_data_path = tmp_path / "mut_data.csv"
+    mut_dataset.to_csv(mut_data_path, index=False)
+
+    residues = residue_table[["resn_mut", "resi_mut"]].drop_duplicates()["resn_mut"]
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues.tolist()})
+
+    config_path = tmp_path / "config.toml"
+    _make_config_file(config_path, mutation_data_path=mut_data_path, mutation_data_chain="A")
+
+    myrunner = runner.Runner(
+        pdb_id="TEST",
+        name="test_sequence_window_run",
+        pdb_path=mmcif_path,
+        membrane_protein=False,
+        mutation_data_path=mut_data_path,
+        config_path=config_path,
+    )
+    myrunner.context.extras["bonds_df"] = pd.DataFrame(
+        columns=[
+            "chain",
+            "resi_struct",
+            "resn_struct",
+            "partner_chain",
+            "partner_resi",
+            "partner_resn",
+            "partner_residue_key",
+            "bond_type",
+            "protein_protein",
+            "extras",
+        ]
+    )
+
+    myrunner.run(metrics=["effect_ranking", "blosum_score", "aa_groupings"])
+
+    assert "sequence_window_effect" in myrunner.features.columns
+    assert "sequence_window_effect_ranking" in myrunner.features.columns
+    assert "sequence_window_blosum90" in myrunner.features.columns
+    assert "sequence_window_mut_aa_group" not in myrunner.features.columns
+    assert myrunner.features["sequence_window_effect"].notna().any()
+
+    residue_level = myrunner.features[
+        ["chain", "resi_mut", "resn_mut", "sequence_window_effect"]
+    ].drop_duplicates()
+    assert len(residue_level) == residue_table["resi_mut"].nunique()
+
+
 def test_run_neighborhood_requires_run_first(tmp_path):
     """run_neighborhood must be called after run(); it raises if self.features is missing."""
     config_path = tmp_path / 'config.toml'

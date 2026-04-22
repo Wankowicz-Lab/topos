@@ -25,6 +25,7 @@ from src.pipeline.ligands import calculate_protein_ligand_interactions
 from src.pipeline.neighbors import calculate_neighborhood_features, compute_residue_neighbors
 from src.pipeline.secondary_structure_features import calculate_secondary_structure_features
 from src.pipeline.sequence_alignment import load_mutation_scores, merge_mutation_scores
+from src.pipeline.sequence_window_features import calculate_sequence_window_features
 from src.structure.secondary_structure import (
     define_membrane_secondary_structure,
     define_soluble_secondary_structure,
@@ -381,12 +382,19 @@ class Runner:
         """
         
         result_frames = []
+        sequence_metric_columns: list[str] = []
         
         for m in metrics:
             meta, func = _REGISTRY[m]
 
             logger.info(f"Calculating metric: {m}")
             df = func(self.context)
+            if "sequence" in meta.tags:
+                sequence_metric_columns.extend(
+                    column
+                    for column in df.columns
+                    if column not in {"chain", "resi_struct", "resn_struct", "resi_mut", "resn_mut", "resm"}
+                )
 
             result_frames.append(df)
         
@@ -394,6 +402,7 @@ class Runner:
         logger.info("Merging features")
         features = self._merge_features(result_frames, mutations=mutations)
         features['name'] = self.context.config.name
+        self._sequence_metric_columns = list(dict.fromkeys(sequence_metric_columns))
         return features
     
     
@@ -424,6 +433,20 @@ class Runner:
 
         # Run metrics
         self.features = self.run_metrics(metrics=metrics, mutations=mutations)
+        sequence_window_features = calculate_sequence_window_features(
+            self.context,
+            self.features,
+            seq_metric_columns=getattr(self, "_sequence_metric_columns", []),
+            window_size=5,
+        )
+        if not sequence_window_features.empty:
+            self.features = pd.merge(
+                self.features,
+                sequence_window_features,
+                on=["chain", "resi_mut", "resn_mut"],
+                how="left",
+                validate="many_to_one",
+            )
 
         merge_cols = ['chain', 'resi_struct', 'resn_struct']
 
