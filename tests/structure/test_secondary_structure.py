@@ -1,5 +1,3 @@
-import subprocess
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,7 +5,6 @@ from biotite.structure.io.pdbx import CIFFile
 
 from src.pipeline.context import Config, Context
 from src.structure.secondary_structure import (
-    _annotate_with_mkdssp,
     _write_temp_mmcif,
     define_membrane_secondary_structure,
     define_soluble_secondary_structure,
