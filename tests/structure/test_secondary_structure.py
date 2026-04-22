@@ -1,9 +1,13 @@
+import subprocess
+
 import numpy as np
 import pandas as pd
 import pytest
+from biotite.structure.io.pdbx import CIFFile
 
 from src.pipeline.context import Config, Context
 from src.structure.secondary_structure import (
+    _annotate_with_mkdssp,
     _write_temp_mmcif,
     define_membrane_secondary_structure,
     define_soluble_secondary_structure,
@@ -102,6 +106,84 @@ def test_write_temp_mmcif_accepts_long_residue_names():
         assert "atom_site" in body
     finally:
         path.unlink(missing_ok=True)
+
+
+def test_write_temp_mmcif_includes_polymer_metadata_categories():
+    arr = _make_chain(["ALA", "GLY"], chain_id="A")
+    context = Context(array=arr, config=Config())
+    path = _write_temp_mmcif(context)
+    try:
+        cif = CIFFile.read(str(path))
+        block = next(iter(cif.values()))
+        assert "entry" in block
+        assert "entity" in block
+        assert "entity_poly" in block
+        assert "entity_poly_seq" in block
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_annotate_with_mkdssp_parses_hash_header_without_leading_spaces(monkeypatch):
+    arr = _make_chain(["ALA"], chain_id="A")
+    context = Context(array=arr, config=Config())
+
+    fake_output = (
+        "header\n"
+        "#  RESIDUE AA STRUCTURE BP1 BP2  ACC\n"
+        "    1    1 A A              0   0   40      0, 0.0     3,-1.9     0, 0.0     5,-0.1   0.000 360.0 360.0 360.0 157.0\n"
+    )
+
+    def _fake_run(cmd, check, capture_output, text, timeout):
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        assert timeout == 30
+        dssp_path = cmd[-1]
+        with open(dssp_path, "w", encoding="utf-8") as f:
+            f.write(fake_output)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    ss_df, dssp_df = _annotate_with_mkdssp(context)
+
+    assert len(dssp_df) == 1
+    assert dssp_df["resi"].tolist() == [1]
+    assert dssp_df["dssp_sse8"].tolist() == ["C"]
+    assert ss_df["sse"].tolist() == ["c"]
+
+
+def test_annotate_with_mkdssp_empty_output_defaults_to_coil(monkeypatch):
+    arr = _make_chain(["ALA", "GLY"], chain_id="A")
+    context = Context(array=arr, config=Config())
+
+    def _fake_run(cmd, check, capture_output, text, timeout):
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        assert timeout == 30
+        dssp_path = cmd[-1]
+        with open(dssp_path, "w", encoding="utf-8") as f:
+            f.write("header\n")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    ss_df, dssp_df = _annotate_with_mkdssp(context)
+
+    assert dssp_df.empty
+    assert "dssp_sse8" in dssp_df.columns
+    assert ss_df["sse"].tolist() == ["c", "c"]
+
+
+def test_annotate_with_mkdssp_timeout_raises_runtime_error(monkeypatch):
+    arr = _make_chain(["ALA"], chain_id="A")
+    context = Context(array=arr, config=Config())
+
+    def _fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="mkdssp", timeout=30)
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    with pytest.raises(RuntimeError, match="mkdssp timed out"):
+        _annotate_with_mkdssp(context)
 
 
 def test_define_membrane_secondary_structure():
