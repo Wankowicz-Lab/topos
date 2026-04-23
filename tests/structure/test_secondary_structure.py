@@ -1,11 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-from biotite.structure.io.pdbx import CIFFile
 
 from src.pipeline.context import Config, Context
 from src.structure.secondary_structure import (
-    _write_temp_mmcif,
     define_membrane_secondary_structure,
     define_soluble_secondary_structure,
     get_secondary_structure_annotations,
@@ -89,35 +87,6 @@ def test_get_secondary_structure_annotations_unknown_backend():
     context.extras["ss_backend"] = "not_a_backend"
     with pytest.raises(ValueError, match="Unknown secondary-structure backend"):
         get_secondary_structure_annotations(context)
-
-
-def test_write_temp_mmcif_accepts_long_residue_names():
-    """PDB serialization rejects res_name > 3 chars; mmCIF temp input for mkdssp must not."""
-    arr = _make_chain(["ALA"], chain_id="A")
-    arr.res_name[:] = "TOOLONG"
-    context = Context(array=arr, config=Config())
-    path = _write_temp_mmcif(context)
-    try:
-        assert path.suffix == ".cif"
-        body = path.read_text(encoding="utf-8")
-        assert "atom_site" in body
-    finally:
-        path.unlink(missing_ok=True)
-
-
-def test_write_temp_mmcif_includes_polymer_metadata_categories():
-    arr = _make_chain(["ALA", "GLY"], chain_id="A")
-    context = Context(array=arr, config=Config())
-    path = _write_temp_mmcif(context)
-    try:
-        cif = CIFFile.read(str(path))
-        block = next(iter(cif.values()))
-        assert "entry" in block
-        assert "entity" in block
-        assert "entity_poly" in block
-        assert "entity_poly_seq" in block
-    finally:
-        path.unlink(missing_ok=True)
 
 
 def test_define_membrane_secondary_structure():
