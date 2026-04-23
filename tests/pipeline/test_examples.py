@@ -30,6 +30,9 @@ def test_b2ar_example(tmp_path):
     assert 'sasa' in saved_features.columns
     assert 'blosum90' in saved_features.columns
     assert len(saved_features) > 2000
+    observed_ss_domains = set(saved_features['ss_domains'].dropna().unique())
+    expected_tmd_domains = {f'TMD_{i}' for i in range(1, 8)}
+    assert expected_tmd_domains.issubset(observed_ss_domains)
 
     saved_metadata = pd.read_csv(output_dir / "4LDE_metadata.csv")
     assert 'resi_struct' in saved_metadata.columns

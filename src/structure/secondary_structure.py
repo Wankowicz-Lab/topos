@@ -7,7 +7,7 @@ from typing import Any, List
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
-from biotite.structure.io.pdbx import CIFCategory, CIFColumn, CIFFile, set_structure
+from biotite.structure.io.pdb import PDBFile
 
 from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
@@ -98,139 +98,79 @@ def _parse_float(raw: str) -> float:
     return float(token)
 
 
-def _write_temp_mmcif(context: Context) -> Path:
-    """Write current structure to temporary mmCIF for mkdssp input."""
-    tmp = NamedTemporaryFile(delete=False, suffix=".cif")
+def _write_temp_pdb(context: Context) -> Path:
+    """Write current structure to temporary PDB for mkdssp input."""
+    tmp = NamedTemporaryFile(delete=False, suffix=".pdb")
     tmp.close()
-    cif = CIFFile()
-    set_structure(cif, context.array)
-    block = next(iter(cif.values()))
+    array = context.array.copy()
+    if np.any(np.char.str_len(array.res_name) > 3):
+        # PDB format limits residue names to 3 characters.
+        array.res_name = np.array([name[:3] for name in array.res_name], dtype=array.res_name.dtype)
+    pdb_file = PDBFile()
+    pdb_file.set_structure(array)
+    pdb_file.write(tmp.name)
+    pdb_path = Path(tmp.name)
 
-    aa = context.aa
-    if len(aa) > 0:
-        residue_starts = struc.get_residue_starts(aa)
-        chain_ids = [str(aa.chain_id[i]).strip() for i in residue_starts]
-        res_names = [str(aa.res_name[i]).strip() for i in residue_starts]
-        unique_chain_ids = list(dict.fromkeys(chain_ids))
-        entity_ids = {chain_id: str(i + 1) for i, chain_id in enumerate(unique_chain_ids)}
-
-        block["entry"] = CIFCategory({
-            "id": CIFColumn(["BIOGENESIS_TEMP"]),
-        })
-        block["entity"] = CIFCategory({
-            "id": CIFColumn([entity_ids[chain_id] for chain_id in unique_chain_ids]),
-            "type": CIFColumn(["polymer"] * len(unique_chain_ids)),
-        })
-        block["entity_poly"] = CIFCategory({
-            "entity_id": CIFColumn([entity_ids[chain_id] for chain_id in unique_chain_ids]),
-            "type": CIFColumn(["polypeptide(L)"] * len(unique_chain_ids)),
-        })
-
-        seq_entity_ids: list[str] = []
-        seq_nums: list[str] = []
-        seq_monomers: list[str] = []
-        seq_hetero: list[str] = []
-        chain_seq_pos = {chain_id: 0 for chain_id in unique_chain_ids}
-        for chain_id, res_name in zip(chain_ids, res_names):
-            chain_seq_pos[chain_id] += 1
-            seq_entity_ids.append(entity_ids[chain_id])
-            seq_nums.append(str(chain_seq_pos[chain_id]))
-            seq_monomers.append(res_name)
-            seq_hetero.append("n")
-
-        block["entity_poly_seq"] = CIFCategory({
-            "entity_id": CIFColumn(seq_entity_ids),
-            "num": CIFColumn(seq_nums),
-            "mon_id": CIFColumn(seq_monomers),
-            "hetero": CIFColumn(seq_hetero),
-        })
-
-    cif.write(tmp.name)
-    return Path(tmp.name)
+    # mkdssp expects a valid PDB header line for PDB inputs.
+    pdb_text = pdb_path.read_text(encoding="utf-8")
+    if not pdb_text.startswith("HEADER"):
+        pdb_text = "HEADER    BIOGENESIS GENERATED\n" + pdb_text
+        pdb_path.write_text(pdb_text, encoding="utf-8")
+    return pdb_path
 
 
 def _annotate_with_mkdssp(context: Context) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run mkdssp and return normalized SSE annotations plus full DSSP fields."""
-    mmcif_path = _write_temp_mmcif(context)
+    pdb_path = _write_temp_pdb(context)
     dssp_tmp = NamedTemporaryFile(delete=False, suffix=".dssp")
     dssp_tmp.close()
     dssp_path = Path(dssp_tmp.name)
-    dssp_cols = [
-        "chain",
-        "resi",
-        "resn_dssp",
-        "dssp_sse8",
-        "dssp_acc",
-        "dssp_nh_o_1_relidx",
-        "dssp_nh_o_1_energy",
-        "dssp_o_nh_1_relidx",
-        "dssp_o_nh_1_energy",
-        "dssp_nh_o_2_relidx",
-        "dssp_nh_o_2_energy",
-        "dssp_o_nh_2_relidx",
-        "dssp_o_nh_2_energy",
-        "dssp_tco",
-        "dssp_kappa",
-        "dssp_alpha",
-        "dssp_phi",
-        "dssp_psi",
-    ]
     rows: list[dict[str, Any]] = []
     try:
-        # mkdssp v4 may otherwise write mmCIF; we parse classic DSSP columns below.
-        cmd = ["mkdssp", "--output-format", "dssp", str(mmcif_path), str(dssp_path)]
-        try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=30)
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError("mkdssp timed out while assigning secondary structure.") from e
+        cmd = ["mkdssp", str(pdb_path), str(dssp_path)]
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         in_table = False
         for line in dssp_path.read_text(encoding="utf-8", errors="replace").splitlines():
-            if line.lstrip().startswith("#"):
+            if line.startswith("  #"):
                 in_table = True
                 continue
-            if not in_table:
-                continue
-            # Different mkdssp builds vary in fixed-width row length; pad to parse
-            # a stable prefix instead of skipping short-but-valid residue lines.
-            row = line.ljust(136)
-            resi_token = row[5:10].strip()
-            if not resi_token or not resi_token.lstrip("-").isdigit():
+            if not in_table or len(line) < 115:
                 continue
 
-            aa = row[13].strip()
+            aa = line[13].strip()
             if aa == "!" or not aa:
                 continue
             if len(aa) == 1 and aa.islower():
                 aa = "C"
 
             rows.append({
-                "chain": row[11].strip(),
-                "resi": _parse_int(row[5:10]),
+                "chain": line[11].strip(),
+                "resi": _parse_int(line[5:10]),
                 "resn_dssp": aa,
-                "dssp_sse8": row[16].strip() or "C",
-                "dssp_acc": _parse_int(row[34:38]),
-                "dssp_nh_o_1_relidx": _parse_int(row[38:45]),
-                "dssp_nh_o_1_energy": _parse_float(row[46:50]),
-                "dssp_o_nh_1_relidx": _parse_int(row[50:56]),
-                "dssp_o_nh_1_energy": _parse_float(row[57:61]),
-                "dssp_nh_o_2_relidx": _parse_int(row[61:67]),
-                "dssp_nh_o_2_energy": _parse_float(row[68:72]),
-                "dssp_o_nh_2_relidx": _parse_int(row[72:78]),
-                "dssp_o_nh_2_energy": _parse_float(row[79:83]),
-                "dssp_tco": _parse_float(row[85:91]),
-                "dssp_kappa": _parse_float(row[91:97]),
-                "dssp_alpha": _parse_float(row[97:103]),
-                "dssp_phi": _parse_float(row[103:109]),
-                "dssp_psi": _parse_float(row[109:115]),
+                "dssp_sse8": line[16].strip() or "C",
+                "dssp_acc": _parse_int(line[34:38]),
+                "dssp_nh_o_1_relidx": _parse_int(line[38:45]),
+                "dssp_nh_o_1_energy": _parse_float(line[46:50]),
+                "dssp_o_nh_1_relidx": _parse_int(line[50:56]),
+                "dssp_o_nh_1_energy": _parse_float(line[57:61]),
+                "dssp_nh_o_2_relidx": _parse_int(line[61:67]),
+                "dssp_nh_o_2_energy": _parse_float(line[68:72]),
+                "dssp_o_nh_2_relidx": _parse_int(line[72:78]),
+                "dssp_o_nh_2_energy": _parse_float(line[79:83]),
+                "dssp_tco": _parse_float(line[85:91]),
+                "dssp_kappa": _parse_float(line[91:97]),
+                "dssp_alpha": _parse_float(line[97:103]),
+                "dssp_phi": _parse_float(line[103:109]),
+                "dssp_psi": _parse_float(line[109:115]),
             })
     finally:
         if dssp_path.exists():
             dssp_path.unlink()
-        if mmcif_path.exists():
-            mmcif_path.unlink()
+        if pdb_path.exists():
+            pdb_path.unlink()
 
-    dssp_df = pd.DataFrame(rows, columns=dssp_cols)
+    dssp_df = pd.DataFrame(rows)
     dssp_df["sse"] = dssp_df["dssp_sse8"].map(_to_internal_sse)
 
     # Build canonical residue keys from the structure first, then merge DSSP onto them.
