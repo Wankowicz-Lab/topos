@@ -102,8 +102,12 @@ def _write_temp_pdb(context: Context) -> Path:
     """Write current structure to temporary PDB for mkdssp input."""
     tmp = NamedTemporaryFile(delete=False, suffix=".pdb")
     tmp.close()
+    array = context.array.copy()
+    if np.any(np.char.str_len(array.res_name) > 3):
+        # PDB format limits residue names to 3 characters.
+        array.res_name = np.array([name[:3] for name in array.res_name], dtype=array.res_name.dtype)
     pdb_file = PDBFile()
-    pdb_file.set_structure(context.array)
+    pdb_file.set_structure(array)
     pdb_file.write(tmp.name)
     pdb_path = Path(tmp.name)
 
