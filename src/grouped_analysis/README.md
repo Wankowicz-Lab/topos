@@ -1,15 +1,5 @@
-This folder contains scripts for analyzing groups of PDBs. All PDBs need outputs from running all metrics or individual metrics. 
+This folder contains scripts for analyzing groups of PDBs. We expect there to be a PDB alongside the corresponding metrics CSV for each PDB. The analysis is built for PDBs with highly similar sequences. Up to three missense mutations are allowed. 
+
+To group comparison PDBs (Unbound v. Bound or WT v. Mutant), fill out the config file with comparisons. Results will include global distributions or differences in counts across all metrics and areas where differences are greatest. 
 
 
-They also require a content or cluster file with how PDBs should be compared. For only descriptive information, including a cluster file with one Cluster defined. 
-
-##TO DO-> FIX THIS
-
-
-Currently, these scripts are only built for PDBs with identical sequences. 
-
-Protein-Ligand Interactions Optimal Transport Clustering 
-
-Analyze Packing
-
-Analyze Hydrogen Bond
