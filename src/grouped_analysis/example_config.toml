@@ -1,0 +1,118 @@
+# Fill in one [[structures]] block per PDB, then list
+# the comparisons you want in [[pairs]].
+#
+# Run:
+#   python run_analysis.py --config example_config.toml
+#   python pairwise_rmsd.py  --config example_config.toml
+#
+# ============================================================
+
+
+# Directory produced by the biogenesis pipeline.
+metrics_output_dir = "/path/to/output/files"
+
+# Where to write analysis outputs (created if missing).
+output_dir = "results/biogenesis_grouped/"
+
+# Å radius around a mutation residue or ligand used to define the
+# "local" zone for proximity-based difference tables.
+proximity_angstroms = 8.0
+
+
+# ============================================================
+# Structures
+# ============================================================
+# Required keys: label, pdb_id
+# Optional keys: state, genotype, chain, pdb_path, ligand, mutations
+#
+#   state    : "apo" | "bound"  (default "apo")
+#   genotype : "wt"  | "mutant" (default "wt")
+#   chain    : chain ID(s) to analyse (default "A")
+#   pdb_path : local .pdb / .cif path; omit to fetch from RCSB
+#   ligand   : HET residue name string OR {name="XYZ", chain="A"} table
+#   mutations: list of {resi=N, wt_aa="X", mut_aa="Y"} tables
+#              (single-letter amino acid codes)
+# ============================================================
+
+[[structures]]
+label    = "WT_apo_1KE4"
+pdb_id   = "1KE4"
+state    = "apo"
+genotype = "wt"
+chain    = "A"
+
+# ── Point mutants (apo) ──────────────────────────────────────
+[[structures]]
+label    = "S64D_1L0D"
+pdb_id   = "1L0D"
+state    = "apo"
+genotype = "mutant"
+chain    = "A"
+
+[[structures.mutations]]
+resi   = 64
+wt_aa  = "S"
+mut_aa = "D"
+
+
+[[structures]]
+label    = "K67Q_1L0E"
+pdb_id   = "1L0E"
+state    = "apo"
+genotype = "mutant"
+chain    = "A"
+
+[[structures.mutations]]
+resi   = 67
+wt_aa  = "K"
+mut_aa = "Q"
+
+
+[[structures]]
+label    = "S64G_1L0G"
+pdb_id   = "1L0G"
+state    = "apo"
+genotype = "mutant"
+chain    = "A"
+
+[[structures.mutations]]
+resi   = 64
+wt_aa  = "S"
+mut_aa = "G"
+
+# ── Ligand-bound WT ─────────────────────────────────────────
+[[structures]]
+label    = "WT_bound_BZB_1C3B"
+pdb_id   = "1C3B"
+state    = "bound"
+genotype = "wt"
+chain    = "A"
+ligand   = {name = "BZB", chain = "A"}
+
+
+# ============================================================
+# Comparison Pairs
+# ============================================================
+# Each pair compares one "comparison" structure against a "reference".
+# Omit all [[pairs]] blocks to auto-pair every structure against the
+# first wt/apo entry.
+# ============================================================
+
+[[pairs]]
+reference   = "WT_apo_1KE4"
+comparison  = "S64D_1L0D"
+description = "WT apo vs S64D point mutant"
+
+[[pairs]]
+reference   = "WT_apo_1KE4"
+comparison  = "K67Q_1L0E"
+description = "WT apo vs K67Q point mutant"
+
+[[pairs]]
+reference   = "WT_apo_1KE4"
+comparison  = "S64G_1L0G"
+description = "WT apo vs S64G point mutant"
+
+[[pairs]]
+reference   = "WT_apo_1KE4"
+comparison  = "WT_bound_BZB_1C3B"
