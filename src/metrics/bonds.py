@@ -701,19 +701,13 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0, angle_cutoff
             
             if d2 > cutoff2:
                 continue
-
-            # Check that the cation is above/below the ring face
             dist = np.sqrt(d2)
-            if dist == 0:
-                # The face-orientation angle is undefined when the cation
-                # lies exactly at the ring centroid, so skip this degenerate
-                # geometry to avoid dividing by zero.
-                continue
+            if dist > 1e-8:
             cos_angle = abs(np.dot(vec, aro_normal)) / dist
             angle = np.arccos(np.clip(cos_angle, 0.0, 1.0))
-            
             if angle > angle_cutoff_rad:
                 continue
+
                 
             results.append({
                 'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': res_key(cat_ch, cat_ri, cat_rn),
