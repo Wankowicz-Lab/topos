@@ -230,7 +230,7 @@ Residue-level structural annotation table:
 | `ss_group` | Secondary structure class (`helix`, `sheet`, `coil`) |
 | `resm` | Mutant residue (only present when DMS data provided) |
 
-### Run log (`{prefix}_run_log.txt`)
+### Run snapshot JSON (`{prefix}_run_log.json`)
 It records:
 
 - **Run date and time**
@@ -269,7 +269,6 @@ It records:
 | `mutation_col_name` | `str` | `"mutation"` | Column name for mutant residues |
 | `mutation_type_col_name` | `str` | `"type"` | Column name for mutation type |
 | `mutation_score_col_name` | `str` | `"effect"` | Column name for mutation effect scores |
-| `mutation_category_logs_base` | `str` | — | Optional directory under which a `logs/` folder is created for mutation_category diagnostic PNGs. Defaults to `output_dir` when set. Equal-tail central mass for `mutation_category` bounds is fixed in code (`MUTATION_CATEGORY_CENTRAL_INTERVAL` in `mutation_category_gmm`) |
 
 ### Sequence feature parameters
 
@@ -282,7 +281,7 @@ It records:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `output_dir` | `str` | — | Directory for output files. Created if it does not exist |
+| `output_dir` | `str` | — | Directory for output files (CSV, run snapshot JSON). Created if it does not exist |
 | `output_prefix` | `str` | `""` | Optional prefix prepended to output file names |
 
 

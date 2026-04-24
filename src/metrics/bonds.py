@@ -1,5 +1,3 @@
-import logging
-
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
@@ -14,8 +12,6 @@ from src.structure.utils import (
     is_heavy,
     res_key,
 )
-
-logger = logging.getLogger(__name__)
 
 ## INTERACTION DEFINITIONS
 

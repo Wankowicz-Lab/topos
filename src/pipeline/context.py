@@ -6,7 +6,6 @@ structure data, configuration, and cached computations in the analysis pipeline.
 """
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -20,8 +19,6 @@ from src.metrics.aaindex_schema import validate_aaindex_columns
 
 # Import structure-loading helpers
 from src.structure.structure_context import ensure_altloc_annotation, residue_table
-
-logger = logging.getLogger(__name__)
 
 
 class Config(BaseModel):
@@ -64,8 +61,6 @@ class Config(BaseModel):
         Column name for mutation types in mutation data (default: "type").
     mutation_score_col_name : str
         Column name for mutation effect scores in mutation data (default: "effect").
-    mutation_category_logs_base : Optional[Path]
-        Parent directory for ``logs/`` mutation_category diagnostic figures; defaults to ``output_dir``.
     aaindex_path : Path
         Path to amino acid index database (default: 'data/aaindex_parsed_small.csv').
     kidera_path: Path
@@ -101,7 +96,6 @@ class Config(BaseModel):
     mutation_col_name: str = "mutation"
     mutation_type_col_name: str = "type"
     mutation_score_col_name: str = "effect"
-    mutation_category_logs_base: Optional[Path] = None
 
     # sequence features
     aaindex_path: Path = Path("data/aaindex_parsed_small.csv")

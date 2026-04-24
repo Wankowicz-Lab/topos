@@ -72,6 +72,7 @@ def test_runner_initialization_from_config(tmp_path):
     assert base_runner.context.config.pdb_id == '8smv'
     assert base_runner.context.config.mutation_data_path is None
     assert base_runner.context.config.name == 'test_protein'
+    assert base_runner.context.config.output_dir == config_path.parent.resolve()
 
     with pytest.raises(ValueError, match="Either pdb_id, pdb_path, or config_path must be provided."):
         _ = runner.Runner()
@@ -123,7 +124,8 @@ def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
             pdb_id=pdb_id,
             name='test_membrane_protein',
             pdb_path=mmcif_path,
-            membrane_protein=True
+            membrane_protein=True,
+            output_dir=tmp_path,
         )
 
 
@@ -236,7 +238,8 @@ def test_runner_sets_pydssp_backend_when_mkdssp_missing(tmp_path, monkeypatch):
             pdb_id='test',
             pdb_path=mmcif_path,
             name='test_backend',
-            membrane_protein=False
+            membrane_protein=False,
+            output_dir=tmp_path,
         )
 
     assert myrunner.context.extras["ss_backend"] == "pydssp"
@@ -390,7 +393,7 @@ def test_runner_initialization_from_uniprot_config(tmp_path):
 
 
 
-def test_runner__merge_features():
+def test_runner__merge_features(tmp_path):
     pdb_id = '8smv'
 
     myrunner = runner.Runner(
@@ -398,7 +401,8 @@ def test_runner__merge_features():
         name='test_merge_features',
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None
+        mutation_data_path=None,
+        output_dir=tmp_path,
     )
 
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=False)
@@ -452,7 +456,7 @@ def test_runner__merge_features():
     assert merged_df.loc[~df3_mask, 'feature3'].isnull().all()
 
 
-def test_runner__merge_features_with_muts():
+def test_runner__merge_features_with_muts(tmp_path):
     pdb_id = '8smv'
 
     myrunner = runner.Runner(
@@ -460,7 +464,8 @@ def test_runner__merge_features_with_muts():
         name='test_merge_features_with_muts',
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None
+        mutation_data_path=None,
+        output_dir=tmp_path,
     )
 
     residue_table = _make_residue_table(num_residues=6, num_chains=2, start_resis=[1,8], make_muts=[True, False])
@@ -631,7 +636,8 @@ def test_runner_run_metric_no_mutations(tmp_path):
         name='test_no_mutations',
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None
+        mutation_data_path=None,
+        output_dir=tmp_path,
     )
 
     # run multiple metrics
@@ -650,7 +656,8 @@ def test_runner_run(tmp_path):
         name='test_run',
         pdb_path=None,
         membrane_protein=False,
-        mutation_data_path=None
+        mutation_data_path=None,
+        output_dir=tmp_path,
     )
 
     # run multiple metrics
@@ -818,7 +825,9 @@ def test_runner_save_results(tmp_path):
     save_runner = runner.Runner(
         pdb_id=pdb_id,
         name='test_save_results',
-        membrane_protein=True)
+        membrane_protein=True,
+        output_dir=tmp_path / 'init_output_dir',
+    )
     save_runner.features = features_df
     save_runner.context.residue_table = residue_table
     save_runner.context.extras['bonds_df'] = pd.DataFrame({
@@ -846,6 +855,9 @@ def test_runner_save_results(tmp_path):
     assert metadata_path.exists()
     assert bonds_path.exists()
 
+    run_log_json_path = manual_output_dir / f"{pdb_id}_run_log.json"
+    assert run_log_json_path.exists()
+
     saved_features = pd.read_csv(features_path)
     pd.testing.assert_frame_equal(saved_features, features_df)
 
@@ -868,20 +880,11 @@ def test_runner_save_results(tmp_path):
     assert features_path.exists()
     assert metadata_path.exists()
 
-    with pytest.raises(ValueError, match="If output_dir is not provided, config_path must be provided to determine output location."):
+    save_runner.context.config.output_dir = None
+    with pytest.raises(ValueError, match="output_dir is not set on the Runner configuration"):
         save_runner.save_results(output_dir=None)
 
-    # Now test with config_path provided
-    config_path = tmp_path / 'input_dir/config.toml'
-    save_runner.config_path = config_path
-    save_runner.save_results(output_dir=None)
-
-    features_path = config_path.parent / f"{pdb_id}_features.csv"
-    metadata_path = config_path.parent / f"{pdb_id}_metadata.csv"
-    assert features_path.exists()
-    assert metadata_path.exists()
-
-    # Now test with output_dir provided in config
+    # save_results(output_dir=None) uses context.config.output_dir
     output_dir_in_config = tmp_path / 'config_output'
     save_runner.context.config.output_dir = output_dir_in_config
     save_runner.save_results(output_dir=None)
@@ -890,6 +893,19 @@ def test_runner_save_results(tmp_path):
     metadata_path = output_dir_in_config / f"{pdb_id}_metadata.csv"
     assert features_path.exists()
     assert metadata_path.exists()
+
+
+def test_runner_raises_when_output_dir_unresolvable(tmp_path):
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+    with pytest.raises(ValueError, match="Set output_dir"):
+        runner.Runner(
+            pdb_id='test',
+            pdb_path=mmcif_path,
+            name='test_no_output_dir',
+            membrane_protein=False,
+        )
 
 
 def test_structural_feature_chains_validation(tmp_path):

@@ -80,6 +80,7 @@ class Runner:
     membrane_protein: Optional[bool] = None
     mutation_data_path: Optional[Path] = None
     config_path: Optional[Path|str] = None
+    output_dir: Optional[Path] = None
 
     def __post_init__(self):
         logger.info("Initializing pipeline")
@@ -104,6 +105,8 @@ class Runner:
             overrides['mutation_data_path'] = self.mutation_data_path
         if self.name is not None:
             overrides['name'] = self.name
+        if self.output_dir is not None:
+            overrides['output_dir'] = Path(self.output_dir)
 
         # Set up config
         if self.config_path is None:
@@ -175,6 +178,11 @@ class Runner:
             self.context.extras["ss_backend"] = "mkdssp"
             self.context.extras["mkdssp_path"] = mkdssp_path
 
+        if self.context.extras.get("ss_backend") == "pydssp":
+            logger.info(
+                "Secondary structure uses pydssp (mkdssp not in PATH); DSSP-tagged metrics will be excluded in run()."
+            )
+
         ss_df = get_secondary_structure_annotations(self.context)
 
         if self.context.config.membrane_protein:
@@ -223,7 +231,26 @@ class Runner:
                 chain=self.context.config.mutation_data_chain,
                 alignment_cutoff=self.context.config.alignment_cutoff
             )
-            
+
+            md = self.context.extras["mutation_data"]
+            chain = self.context.config.mutation_data_chain
+            all_chains = sorted(self.context.residue_table["chain"].unique().tolist())
+            n_mutation_residues = md[["resi", "resn"]].drop_duplicates().shape[0]
+            structure_residue_cols = ["chain", "resi_struct", "resn_struct"]
+            structure_residue_table = self.context.residue_table[structure_residue_cols].drop_duplicates()
+            n_chain_residues = int((structure_residue_table["chain"] == chain).sum())
+            n_total_residues = structure_residue_table.shape[0]
+            logger.info(
+                "Using chain %s to map the mutation data onto the structures, out of possible chains %s. "
+                "The mutation data contains %s total residues, and the selected chain represents %s out of %s "
+                "total residues in the structure.",
+                chain,
+                all_chains,
+                n_mutation_residues,
+                n_chain_residues,
+                n_total_residues,
+            )
+
             # Sort residue table with mutation_data_chain first
             self.context.residue_table = _sort_residue_table(
                 self.context.residue_table,
@@ -248,7 +275,8 @@ class Runner:
                 mutation_chain=None
             )
 
-
+        self._resolve_effective_output_dir()
+        self._log_configuration_snapshot()
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:
         """Merge configuration overrides with base configuration.
@@ -306,6 +334,49 @@ class Runner:
 
         return Config(**base_dict)
 
+    def _resolve_effective_output_dir(self) -> None:
+        """Set context.config.output_dir from config, config_path.parent, or raise."""
+        cfg = self.context.config
+        if cfg.output_dir is not None:
+            cfg.output_dir = Path(cfg.output_dir).resolve()
+            return
+        if self.config_path is not None:
+            cfg.output_dir = Path(self.config_path).parent.resolve()
+            return
+        raise ValueError(
+            "Set output_dir in the configuration, pass output_dir=... to Runner, "
+            "or provide config_path so output_dir defaults to the config file's directory."
+        )
+
+    def _log_configuration_snapshot(self) -> None:
+        """Single INFO summary of structure source, key options, and chain/mutation settings."""
+        cfg = self.context.config
+        if cfg.pdb_path is not None:
+            structure_src = f"file:{cfg.pdb_path}"
+        elif cfg.pdb_id is not None:
+            structure_src = f"RCSB:{cfg.pdb_id}"
+        elif cfg.uniprot_id is not None:
+            structure_src = f"AlphaFold:{cfg.uniprot_id}"
+        else:
+            structure_src = "unknown"
+        chains = sorted(self.context.residue_table["chain"].unique().tolist())
+        sfc = cfg.structural_feature_chains
+        sfc_repr = "all" if sfc is None else str(sfc)
+        logger.info(
+            "Pipeline configuration: output_dir=%s; structure_source=%s; altloc_policy=%s; remove_hydrogens=%s; "
+            "membrane_protein=%s; ss_backend=%s; chains_in_structure=%s; structural_feature_chains=%s; "
+            "mutation_data_loaded=%s; mutation_data_chain=%s",
+            cfg.output_dir,
+            structure_src,
+            cfg.altloc_policy,
+            cfg.remove_hydrogens,
+            cfg.membrane_protein,
+            self.context.extras.get("ss_backend"),
+            chains,
+            sfc_repr,
+            cfg.mutation_data_path is not None,
+            cfg.mutation_data_chain,
+        )
 
     def _merge_features(self, dfs: List[pd.DataFrame], mutations) -> pd.DataFrame:
         """Merge feature DataFrames on chain and appropriate resi/resn/resm columns.
@@ -418,16 +489,30 @@ class Runner:
         # Run metrics
         if metrics is None:
             metrics = list(_REGISTRY.keys())
-        
+
         # Configure metrics based on presence of mutation data
         mutations = self.context.config.mutation_data_path is not None
         if not mutations:
-            exclude_metrics = metrics_with_tag('sequence')
-            metrics = [m for m in metrics if m not in exclude_metrics]
+            seq_tagged = set(metrics_with_tag("sequence"))
+            removed_seq = sorted(m for m in metrics if m in seq_tagged)
+            metrics = [m for m in metrics if m not in seq_tagged]
+            if removed_seq:
+                logger.info(
+                    "Skipping sequence-tagged metrics (no mutation data): %s",
+                    ", ".join(removed_seq),
+                )
         if self.context.extras.get("ss_backend") != "mkdssp":
-            exclude_metrics = metrics_with_tag("dssp")
-            metrics = [m for m in metrics if m not in exclude_metrics]
-        
+            dssp_tagged = set(metrics_with_tag("dssp"))
+            before = set(metrics)
+            metrics = [m for m in metrics if m not in dssp_tagged]
+            removed_dssp = sorted(before - set(metrics))
+            if removed_dssp:
+                logger.info(
+                    "Skipping DSSP-tagged metrics (ss_backend=%s): %s",
+                    self.context.extras.get("ss_backend"),
+                    ", ".join(removed_dssp),
+                )
+
         # Track which metrics were run for log output
         self._metrics_run: List[str] = list(metrics)
 
@@ -485,6 +570,10 @@ class Runner:
             else:
                 bonds_df = self.context.extras['bonds_df'][self.context.extras['bonds_df']['bond_type'] == bond_type]
             if len(bonds_df) == 0:
+                logger.info(
+                    "Skipping graph metrics for bond_type=%s: no bonds in filtered set.",
+                    bond_type,
+                )
                 continue
             bonds_df = bonds_df.loc[bonds_df.protein_protein, :]
             graph_metrics = calculate_graph_metrics(bonds_df, self.context.residue_table)
@@ -497,6 +586,26 @@ class Runner:
                 on=merge_cols,
                 how='left',
                 validate='many_to_one',
+            )
+
+        cfg = self.context.config
+        rt = self.context.residue_table
+        all_chains = sorted(rt["chain"].unique().tolist())
+        if cfg.structural_feature_chains is not None:
+            unique_residues = rt[merge_cols].drop_duplicates()
+            n_total = unique_residues.shape[0]
+            n_kept = unique_residues[
+                unique_residues["chain"].isin(cfg.structural_feature_chains)
+            ].shape[0]
+            n_filtered = n_total - n_kept
+            logger.info(
+                "Structural analysis will be limited to the following structural_data_chains: %s. "
+                "Available structural chains: %s. This will result in %s out of %s total residues being filtered "
+                "out of the analysis.",
+                cfg.structural_feature_chains,
+                all_chains,
+                n_filtered,
+                n_total,
             )
 
     def run_neighborhood(
@@ -533,8 +642,8 @@ class Runner:
         Parameters
         ----------
         output_dir : Optional[Path] = None
-            Directory to save output files. If not provided, uses output_dir from config,
-            or the directory of config_path if available.
+            Directory to save output files. If not provided, uses ``context.config.output_dir``
+            (set during Runner initialization).
         output_prefix : Optional[str] = None
             Prefix for output file names.
         """
@@ -542,17 +651,13 @@ class Runner:
             raise ValueError("No features to save. Please call run() first.")
 
         if output_dir is None:
-            if self.context.config.output_dir is not None:
-                output_dir = self.context.config.output_dir
-            elif self.config_path is not None:
-                output_dir = Path(self.config_path).parent
-            else:
-                raise ValueError("If output_dir is not provided, config_path must be provided to determine output location.")
+            output_dir = self.context.config.output_dir
+        if output_dir is None:
+            raise ValueError("output_dir is not set on the Runner configuration.")
 
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate prefix using pdb_id if available, otherwise fall back to name
         identifier = self.context.config.pdb_id or self.context.config.name
         if output_prefix is not None:
             prefix = output_prefix + "_" + identifier
@@ -583,8 +688,7 @@ class Runner:
             bonds_path = output_dir / f"{prefix}_bonds.csv"
             bonds.to_csv(bonds_path, index=False)
             logger.info(f"Saved {len(bonds)} bond rows to {bonds_path}")
-        # Save run log
-        log_path = output_dir / f"{prefix}_run_log.txt"
+        log_path = output_dir / f"{prefix}_run_log.json"
         self._save_run_log(log_path, merged_path, metadata_path)
 
 
@@ -603,4 +707,4 @@ class Runner:
                 "metadata": str(metadata_path),
             },
         }
-        log_path.with_suffix(".json").write_text(json.dumps(log, indent=2, default=str))
+        log_path.write_text(json.dumps(log, indent=2, default=str))
