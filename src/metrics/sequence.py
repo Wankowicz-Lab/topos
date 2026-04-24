@@ -113,7 +113,7 @@ def calculate_avg_effect_quartiles(context: Context, percentiles: Optional[List[
     if len(seq_data.chain.unique()) > 1:
         raise ValueError("calculate_avg_effect_quartiles only supports single chain mutation data.")
 
-    # Mean effect per position from non-synonymous mutations only (always recomputed from ``effect``).
+    # Mean effect per position from non-synonymous mutations.
     pos_counts = seq_data[['resi_mut', 'effect', 'type']]
     pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi_mut', 'effect']]
     pos_scores = pos_counts.groupby('resi_mut')['effect'].mean().reset_index()

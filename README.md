@@ -337,7 +337,7 @@ It records:
 | Column | Description |
 |--------|-------------|
 | `effect` | Raw DMS effect score for this mutation |
-| `avg_effect` | Mean `effect` across non-synonymous mutations at this position (always recomputed) |
+| `avg_effect` | Mean `effect` across non-synonymous mutations at this position  |
 | `avg_effect_quartile` | Quartile label (`Q1`–`Q4`) from the distribution of `avg_effect` across positions |
 | `effect_variance` | Variance of effect scores at this position |
 | `effect_variance_rank` | Rank of effect variance among all positions |
