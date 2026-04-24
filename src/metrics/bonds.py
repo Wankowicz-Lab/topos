@@ -703,10 +703,10 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0, angle_cutoff
                 continue
             dist = np.sqrt(d2)
             if dist > 1e-8:
-            cos_angle = abs(np.dot(vec, aro_normal)) / dist
-            angle = np.arccos(np.clip(cos_angle, 0.0, 1.0))
-            if angle > angle_cutoff_rad:
-                continue
+                cos_angle = abs(np.dot(vec, aro_normal)) / dist
+                angle = np.arccos(np.clip(cos_angle, 0.0, 1.0))
+                if angle > angle_cutoff_rad:
+                    continue
 
                 
             results.append({
