@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Map any numeric column from a metrics CSV to B-factors in a PDB file.
+Map any numeric column from a metrics CSV to B-factors in a PDB file for visualization in Pymol (https://pymolwiki.org/Spectrum). This works best for continuous values (i.e., SASA or packing).
 
 Usage
 -----
 python map_metric_to_bfactor.py \
     --pdb input.pdb \
     --metrics metrics.csv \
-    --column OP_Diff \
+    --column SASA \
     [--chain_col chain] \
     [--resi_col resi] \
     [--output output.pdb]
@@ -32,13 +32,13 @@ def parse_args():
     ap.add_argument("--chain_col", default="chain", help="Column name for chain ID (default: chain)")
     ap.add_argument("--resi_col",  default="resi",  help="Column name for residue number (default: resi)")
     ap.add_argument("--output",   default=None,
-                    help="Output PDB filename. Defaults to <stem>_<column>.pdb")
+                    help="Output PDB filename. Defaults to <input>_<column>.pdb")
     return ap.parse_args()
 
 
 def derive_output_name(pdb_path: Path, column: str) -> Path:
     safe_col = column.replace(" ", "_").replace("/", "_").replace("\\", "_")
-    return pdb_path.parent / f"{pdb_path.stem}_{safe_col}.pdb"
+    return f"{pdb_path.stem}_{safe_col}.pdb"
 
 
 def load_metrics(
