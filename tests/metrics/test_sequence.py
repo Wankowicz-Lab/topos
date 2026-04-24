@@ -15,9 +15,7 @@ np.random.seed(42)
 random.seed(42)
 
 
-def test_calculate_position_effect_quartiles_with_pos_effect():
-
-    # create test residue table with pos_effect column
+def test_calculate_avg_effect_quartiles_basic():
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
 
     # remove mutation data for last residue to test handling of missing data
@@ -26,53 +24,46 @@ def test_calculate_position_effect_quartiles_with_pos_effect():
                             'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'mut_info': [False]})
     residue_table = pd.concat([residue_table, new_row], ignore_index=True)
 
-    # compute position effects
-    pos_effects = residue_table.groupby('resi_mut')['effect'].mean().reset_index()
-    pos_effects.rename(columns={'effect': 'pos_effect'}, inplace=True)
-    residue_table = pd.merge(residue_table, pos_effects, on='resi_mut', how='left')
-
-    # create mock context
     class MockContext:
         def __init__(self, residue_table):
             self.residue_table = residue_table
+
     context = MockContext(residue_table)
 
-    # calculate quartiles
-    quartile_df = metrics.calculate_position_effect_quartiles(context)
+    quartile_df = metrics.calculate_avg_effect_quartiles(context)
 
-    # check that quartile labels are correct
-    assert 'effect_quartile' in quartile_df.columns
-    assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
+    assert 'avg_effect_quartile' in quartile_df.columns
+    assert 'avg_effect' in quartile_df.columns
+    assert set(quartile_df['avg_effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
     assert 10 not in quartile_df.resi_mut.values
 
 
-def test_calculate_position_effect_quartiles_without_pos_effect():
-    # create test residue table without pos_effect column
+def test_calculate_avg_effect_quartiles_ignores_stale_pos_effect_column():
+    """Precomputed ``pos_effect`` on the residue table must not replace recomputed ``avg_effect``."""
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
+    residue_table['pos_effect'] = 999.0
 
-    # remove mutation data for last residue to test handling of missing data
-    residue_table = residue_table[residue_table['resi_mut'] != 10]
-    new_row = pd.DataFrame({'chain': ['A'], 'resi_mut': [10], 'resn_mut': ['ALA'], 'resi_struct': [10], 'resn_struct': ['ALA'], 'resm': [np.nan],
-                            'effect': [np.nan], 'type': [np.nan], 'struct_info': [True], 'mut_info': [False]})
-    residue_table = pd.concat([residue_table, new_row], ignore_index=True)
-
-    # create mock context
     class MockContext:
         def __init__(self, residue_table):
             self.residue_table = residue_table
 
     context = MockContext(residue_table)
+    out = metrics.calculate_avg_effect_quartiles(context)
 
-    # calculate quartiles
-    quartile_df = metrics.calculate_position_effect_quartiles(context)
+    mut = residue_table.loc[residue_table.mut_info]
+    non_syn = mut.loc[mut['type'] != 'synonymous']
+    expected_by_pos = non_syn.groupby('resi_mut', sort=False)['effect'].mean()
 
-    # check that quartile labels are correct
-    assert 'effect_quartile' in quartile_df.columns
-    assert set(quartile_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
-    assert 10 not in quartile_df.resi_mut.values
+    for resi in out['resi_mut'].unique():
+        got = out.loc[out['resi_mut'] == resi, 'avg_effect'].dropna().unique()
+        if resi not in expected_by_pos.index:
+            assert len(got) == 0
+            continue
+        assert len(got) == 1
+        assert got[0] == expected_by_pos[resi]
 
 
-def test_calculate_position_effect_quartiles_custom_percentiles():
+def test_calculate_avg_effect_quartiles_custom_percentiles():
     """Test that custom percentiles produce different quartile assignments than defaults."""
     # create test residue table
     residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
@@ -84,23 +75,23 @@ def test_calculate_position_effect_quartiles_custom_percentiles():
     context = MockContext(residue_table)
 
     # Get results with default percentiles
-    default_df = metrics.calculate_position_effect_quartiles(context)
+    default_df = metrics.calculate_avg_effect_quartiles(context)
 
     # Use extreme custom percentiles - with [90, 95, 99], most values fall below the 90th percentile, ending up in Q1
     custom_percentiles = [90, 95, 99]
-    custom_df = metrics.calculate_position_effect_quartiles(context, percentiles=custom_percentiles)
+    custom_df = metrics.calculate_avg_effect_quartiles(context, percentiles=custom_percentiles)
 
-    assert 'effect_quartile' in custom_df.columns
-    assert set(custom_df['effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
+    assert 'avg_effect_quartile' in custom_df.columns
+    assert set(custom_df['avg_effect_quartile'].dropna().unique()).issubset({'Q1', 'Q2', 'Q3', 'Q4'})
 
     # With extreme percentiles, the distribution should be different from default
-    default_q1_count = (default_df['effect_quartile'] == 'Q1').sum()
-    custom_q1_count = (custom_df['effect_quartile'] == 'Q1').sum()
+    default_q1_count = (default_df['avg_effect_quartile'] == 'Q1').sum()
+    custom_q1_count = (custom_df['avg_effect_quartile'] == 'Q1').sum()
     # With [90, 95, 99] cutoffs, most values should fall into Q1
     assert custom_q1_count > default_q1_count
 
 
-def test_calculate_position_effect_quartiles_multichain_error():
+def test_calculate_avg_effect_quartiles_multichain_error():
     """Test that ValueError is raised when residue table contains data from more than one chain."""
     # Create test residue table with multiple chains
     residue_table = _make_residue_table(num_residues=5, num_chains=2, make_muts=True)
@@ -112,8 +103,8 @@ def test_calculate_position_effect_quartiles_multichain_error():
     context = MockContext(residue_table)
 
     # Verify that ValueError is raised with appropriate message
-    with pytest.raises(ValueError, match="calculate_position_effect_quartiles only supports single chain mutation data"):
-        metrics.calculate_position_effect_quartiles(context)
+    with pytest.raises(ValueError, match="calculate_avg_effect_quartiles only supports single chain mutation data"):
+        metrics.calculate_avg_effect_quartiles(context)
 
 
 def test_calculate_effect_variance():

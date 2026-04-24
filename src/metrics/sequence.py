@@ -80,11 +80,11 @@ def make_phat75_73():
 
     return substitution_matrices.Array(alphabet=PHAT_ALPHABET, data=mat)
 
-@register_metric(name='position_effect_quartiles', provides=['effect_quartile', 'pos_effect'],
+@register_metric(name='avg_effect_quartiles', provides=['avg_effect_quartile', 'avg_effect'],
                  requires={'resm'}, tags={'sequence'})
-def calculate_position_effect_quartiles(context: Context, percentiles: Optional[List[float]] = None) -> pd.DataFrame:
+def calculate_avg_effect_quartiles(context: Context, percentiles: Optional[List[float]] = None) -> pd.DataFrame:
     """
-    Calculate quartiles of position effect scores.
+    Mean mutation effect per position (non-synonymous) and quartile labels from that distribution.
 
     Parameters
     ----------
@@ -96,14 +96,14 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
     Returns
     -------
     pd.DataFrame
-        DataFrame with 'effect_quartile', 'pos_effect' along with residue metadata.
+        DataFrame with ``avg_effect_quartile``, ``avg_effect`` along with residue metadata.
 
     Raises
     ------
     ValueError
         If the residue table contains data from more than one chain.
     """
-    
+
     if percentiles is None:
         percentiles = [25, 50, 75]
     # subset to only include positions with mutation data
@@ -111,33 +111,22 @@ def calculate_position_effect_quartiles(context: Context, percentiles: Optional[
 
     # ensure that only a single chain is provided
     if len(seq_data.chain.unique()) > 1:
-        raise ValueError("calculate_position_effect_quartiles only supports single chain mutation data.")
+        raise ValueError("calculate_avg_effect_quartiles only supports single chain mutation data.")
 
-    # Determine if position effects are already calculated or need to be computed from data
-    if 'pos_effect' in seq_data.columns:
-        # exclude synonymous mutations, which have undefined position effects, and subset
-        pos_scores = seq_data[['resi_mut', 'pos_effect', 'type']]
-        pos_scores = pos_scores.loc[pos_scores.type != 'synonymous', ['resi_mut', 'pos_effect']]
-        pos_scores = pos_scores.drop_duplicates()
+    # Mean effect per position from non-synonymous mutations only (always recomputed from ``effect``).
+    pos_counts = seq_data[['resi_mut', 'effect', 'type']]
+    pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi_mut', 'effect']]
+    pos_scores = pos_counts.groupby('resi_mut')['effect'].mean().reset_index()
+    pos_scores.rename(columns={'effect': 'avg_effect'}, inplace=True)
 
-    else:
-        # compute position effects from individual mutation effects, removing synonymous mutations
-        pos_counts = seq_data[['resi_mut', 'effect', 'type']]
-        pos_counts = pos_counts.loc[pos_counts.type != 'synonymous', ['resi_mut', 'effect']]
-        pos_scores = pos_counts.groupby('resi_mut')['effect'].mean().reset_index()
-        pos_scores.rename(columns={'effect': 'pos_effect'}, inplace=True)
+    cutoffs = np.percentile(pos_scores.avg_effect.dropna(), percentiles)
 
-    # define cutoffs for position effects
-    cutoffs = np.percentile(pos_scores.pos_effect.dropna(), percentiles)
-
-    # label positions based on quartiles
-    pos_scores['effect_quartile'] = pd.cut(
-        pos_scores['pos_effect'],
+    pos_scores['avg_effect_quartile'] = pd.cut(
+        pos_scores['avg_effect'],
         bins=[-np.inf, cutoffs[0], cutoffs[1], cutoffs[2], np.inf],
         labels=['Q1', 'Q2', 'Q3', 'Q4']
     )
 
-    # map quartile labels and raw effect scores back to original residues
     pos_scores = pd.merge(seq_data[KEEP_COLS], pos_scores, on='resi_mut', how='left')
 
     return pos_scores

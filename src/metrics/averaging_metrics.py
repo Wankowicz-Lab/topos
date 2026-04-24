@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # Feature columns eligible for both ss-domain and neighborhood averaging.
 METRICS_TO_AVERAGE: list[str] = [
-    "pos_effect",
+    "avg_effect",
     "effect_variance",
     "effect_variance_rank",
     "effect",

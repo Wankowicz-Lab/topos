@@ -26,7 +26,7 @@ def test_calculate_sequence_window_features_collapses_and_rolls():
             "effect": [2.0, 4.0, 4.0, 6.0, 6.0, 8.0, np.nan, np.nan, 10.0, 12.0, 12.0, 14.0],
             "blosum90": [1.0, 3.0, 2.0, 4.0, 3.0, 5.0, np.nan, np.nan, 5.0, 7.0, 6.0, 8.0],
             "AA1_hydrophobicity_mut": [10.0, 14.0, 20.0, 24.0, 30.0, 34.0, np.nan, np.nan, 50.0, 54.0, 60.0, 64.0],
-            "effect_quartile": ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3", None, None, "Q4", "Q4", "Q4", "Q4"],
+            "avg_effect_quartile": ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3", None, None, "Q4", "Q4", "Q4", "Q4"],
             "mut_aa_group": ["A", "B", "A", "B", "A", "B", None, None, "A", "B", "A", "B"],
         }
     )
@@ -38,7 +38,7 @@ def test_calculate_sequence_window_features_collapses_and_rolls():
             "effect",
             "blosum90",
             "AA1_hydrophobicity_mut",
-            "effect_quartile",
+            "avg_effect_quartile",
             "mut_aa_group",
         ],
         window_size=5,
@@ -46,7 +46,7 @@ def test_calculate_sequence_window_features_collapses_and_rolls():
 
     assert len(result) == 5
     assert ("A", 4, "ASP") not in result.index
-    assert "sequence_window_effect_quartile" not in result.columns
+    assert "sequence_window_avg_effect_quartile" not in result.columns
     assert "sequence_window_mut_aa_group" not in result.columns
     assert "sequence_window_AA1_hydrophobicity_mut" in result.columns
 
@@ -74,14 +74,14 @@ def test_calculate_sequence_window_features_returns_empty_without_numeric_metric
             "chain": ["A"],
             "resi_mut": [1],
             "resn_mut": ["ALA"],
-            "effect_quartile": ["Q1"],
+            "avg_effect_quartile": ["Q1"],
         }
     )
 
     result = calculate_sequence_window_features(
         DummyContext(residue_table),
         features,
-        seq_metric_columns=["effect_quartile"],
+        seq_metric_columns=["avg_effect_quartile"],
         window_size=5,
     )
 
