@@ -31,8 +31,12 @@ SALT_BRIDGE_ATOMS = {
     'LYS': ['NZ'],
     'ARG': ['NH1', 'NH2', 'NE'],
     'HIS': ['ND1', 'NE2'],
-    'SER': ['OG'],
-    'TYR': ['OH']
+}
+
+IONIC_BOND_ATOMS = {
+    'HIS': ['ND1', 'NE2'],
+    'ASP': ['OD1', 'OD2'],
+    'GLU': ['OE1', 'OE2'],
 }
 
 AROMATIC_RING_ATOMS = {
@@ -44,6 +48,8 @@ AROMATIC_RING_ATOMS = {
 VDW_RADII = {
     'C': 1.70, 'N': 1.55, 'O': 1.52, 'S': 1.80, 'H': 1.20,
 }
+
+SOLVENT_RESIDUES = {'HOH', 'WAT', 'DOD', 'TIP', 'TIP3', 'SPC'}
 
 def get_residue_atoms(array: struc.AtomArray, chain: str, resi: int, atom_names: list) -> np.ndarray:
     """Get coordinates of specific atoms in a residue."""
@@ -275,55 +281,76 @@ def identify_ionic_bonds(array: struc.AtomArray, cutoff: float = 4.0) -> pd.Data
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
     resnames = array.res_name[res_starts]
-    
+ 
     results = []
-    
+ 
+    # HIS residues as the conditionally-charged partner
+    his_indices = [i for i, rn in enumerate(resnames) if rn == 'HIS']
     acidic_indices = [i for i, rn in enumerate(resnames) if rn in ACIDIC_RESIDUES]
-    ionic_indices = [i for i, rn in enumerate(resnames) if rn in PROTONATION_STATE_RESIDUES]
-    
+ 
     cutoff2 = cutoff * cutoff
-    
-    # Iterate over ionic residues
-    for ionic_idx in ionic_indices:
-        ionic_chain, ionic_resi, ionic_resn = chains[ionic_idx], res_ids[ionic_idx], resnames[ionic_idx]
-        ionic_atoms = get_residue_atoms(array, ionic_chain, ionic_resi, SALT_BRIDGE_ATOMS[ionic_resn])
-        if len(ionic_atoms) == 0:
+ 
+    for his_idx in his_indices:
+        his_chain = chains[his_idx]
+        his_resi = res_ids[his_idx]
+        his_resn = resnames[his_idx]
+        his_atoms = get_residue_atoms(
+            array, his_chain, his_resi, IONIC_BOND_ATOMS['HIS']
+        )
+        if len(his_atoms) == 0:
             continue
-            
-        # Iterate over acidic residues
+ 
         for acidic_idx in acidic_indices:
-            acidic_chain, acidic_resi, acidic_resn = chains[acidic_idx], res_ids[acidic_idx], resnames[acidic_idx]
-            acidic_atoms = get_residue_atoms(array, acidic_chain, acidic_resi, SALT_BRIDGE_ATOMS[acidic_resn])
+            acidic_chain = chains[acidic_idx]
+            acidic_resi = res_ids[acidic_idx]
+            acidic_resn = resnames[acidic_idx]
+ 
+            # Exclude sequence-adjacent residues on the same chain
+            if his_chain == acidic_chain and abs(int(his_resi) - int(acidic_resi)) <= 1:
+                continue
+ 
+            acidic_atoms = get_residue_atoms(
+                array, acidic_chain, acidic_resi, IONIC_BOND_ATOMS[acidic_resn]
+            )
             if len(acidic_atoms) == 0:
                 continue
-            
-            # Exclude adjacent residues if part of the same chain
-            if ionic_chain == acidic_chain:
-                if abs(ionic_resi - acidic_resi) == 1:
-                    continue
-            
-            # Calculate distance between ionic and acidic atoms
-            diff = ionic_atoms[:, None, :] - acidic_atoms[None, :, :]
+ 
+            # Minimum distance between the two atom sets
+            diff = his_atoms[:, None, :] - acidic_atoms[None, :, :]
             d2 = np.einsum("ijk,ijk->ij", diff, diff)
-            
-            # If distance is less than cutoff, add to results (acidic first, then ionic, matching salt_bridge order)
+ 
             if d2.min() <= cutoff2:
                 results.append({
-                    'chain': acidic_chain, 'resi_struct': int(acidic_resi), 'resn_struct': acidic_resn, 'residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
-                    'partner_chain': ionic_chain, 'partner_resi': int(ionic_resi), 'partner_resn': ionic_resn, 'partner_residue_key': res_key(ionic_chain, ionic_resi, ionic_resn),
+                    'chain': acidic_chain,
+                    'resi_struct': int(acidic_resi),
+                    'resn_struct': acidic_resn,
+                    'residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
+                    'partner_chain': his_chain,
+                    'partner_resi': int(his_resi),
+                    'partner_resn': his_resn,
+                    'partner_residue_key': res_key(his_chain, his_resi, his_resn),
                     'bond_type': 'ionic',
-                    'extras': ''
+                    'extras': '',
                 })
                 results.append({
-                    'chain': ionic_chain, 'resi_struct': int(ionic_resi), 'resn_struct': ionic_resn, 'residue_key': res_key(ionic_chain, ionic_resi, ionic_resn),
-                    'partner_chain': acidic_chain, 'partner_resi': int(acidic_resi), 'partner_resn': acidic_resn, 'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
+                    'chain': his_chain,
+                    'resi_struct': int(his_resi),
+                    'resn_struct': his_resn,
+                    'residue_key': res_key(his_chain, his_resi, his_resn),
+                    'partner_chain': acidic_chain,
+                    'partner_resi': int(acidic_resi),
+                    'partner_resn': acidic_resn,
+                    'partner_residue_key': res_key(acidic_chain, acidic_resi, acidic_resn),
                     'bond_type': 'ionic',
-                    'extras': ''
+                    'extras': '',
                 })
-    
-    # Define standard columns
-    standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
-    
+ 
+    standard_columns = [
+        'chain', 'resi_struct', 'resn_struct', 'residue_key',
+        'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key',
+        'bond_type', 'extras',
+    ]
+ 
     if results:
         return pd.DataFrame(results)
     else:
@@ -618,7 +645,7 @@ def calculate_pi_stacking_count(context: Context, distance_cutoff: float = 5.5) 
     return metadata
 
 
-def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFrame:
+def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0, angle_cutoff: float = 30.0) -> pd.DataFrame:
     """Identify cation-pi interactions in a protein structure.
 
     Parameters
@@ -627,6 +654,10 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
         Biotite AtomArray containing protein structure data.
     cutoff: float
         Cutoff distance for cation-pi interactions.
+    angle_cutoff: float
+        Maximum angle (degrees) between the ring normal and the
+        cation-centroid vector. Ensures the cation is above/below
+        the ring face rather than in-plane.
 
     Returns
     -------
@@ -636,7 +667,6 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
         (extras contains role token)
     """
 
-    # Get residue starts and metadata
     res_starts = struc.get_residue_starts(array)
     chains = array.chain_id[res_starts]
     res_ids = array.res_id[res_starts]
@@ -644,10 +674,8 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
     
     results = []
     
-    # Get cation atoms
     cation_atoms = {'LYS': ['NZ'], 'ARG': ['CZ']}
     
-    # Iterate over cationic residues to get cation coordinates
     cation_data = []
     for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames)):
         if rn in CATIONIC_RESIDUES:
@@ -655,44 +683,51 @@ def identify_cation_pi(array: struc.AtomArray, cutoff: float = 6.0) -> pd.DataFr
             if len(atoms) > 0:
                 cation_data.append((i, ch, ri, rn, atoms[0]))
     
-    # Iterate over aromatic residues to get ring center coordinates
     aromatic_data = []
     for i, (ch, ri, rn) in enumerate(zip(chains, res_ids, resnames)):
         if rn in AROMATIC_RESIDUES:
             center = get_ring_center(array, ch, ri, rn)
-            if center is not None:
-                aromatic_data.append((i, ch, ri, rn, center))
+            normal = get_ring_normal(array, ch, ri, rn)
+            if center is not None and normal is not None:
+                aromatic_data.append((i, ch, ri, rn, center, normal))
     
-    # Calculate cutoff distance
     cutoff2 = cutoff * cutoff
+    angle_cutoff_rad = np.radians(angle_cutoff)
     
-    # Iterate over cationic residues to identify cation-pi interactions
     for cat_idx, cat_ch, cat_ri, cat_rn, cat_coord in cation_data:
-        for aro_idx, aro_ch, aro_ri, aro_rn, aro_center in aromatic_data:
-            d2 = np.sum((cat_coord - aro_center)**2)
+        for aro_idx, aro_ch, aro_ri, aro_rn, aro_center, aro_normal in aromatic_data:
+            vec = cat_coord - aro_center
+            d2 = np.dot(vec, vec)
             
-            if d2 <= cutoff2:
-                results.append({
-                    'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': res_key(cat_ch, cat_ri, cat_rn),
-                    'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn, 'partner_residue_key': res_key(aro_ch, aro_ri, aro_rn),
-                    'bond_type': 'cation_pi',
-                    'extras': 'cation'
-                })
-                results.append({
-                    'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn, 'residue_key': res_key(aro_ch, aro_ri, aro_rn),
-                    'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn, 'partner_residue_key': res_key(cat_ch, cat_ri, cat_rn),
-                    'bond_type': 'cation_pi',
-                    'extras': 'aromatic'
-                })
+            if d2 > cutoff2:
+                continue
+            dist = np.sqrt(d2)
+            if dist > 1e-8:
+                cos_angle = abs(np.dot(vec, aro_normal)) / dist
+                angle = np.arccos(np.clip(cos_angle, 0.0, 1.0))
+                if angle > angle_cutoff_rad:
+                    continue
+
+                
+            results.append({
+                'chain': cat_ch, 'resi_struct': int(cat_ri), 'resn_struct': cat_rn, 'residue_key': res_key(cat_ch, cat_ri, cat_rn),
+                'partner_chain': aro_ch, 'partner_resi': int(aro_ri), 'partner_resn': aro_rn, 'partner_residue_key': res_key(aro_ch, aro_ri, aro_rn),
+                'bond_type': 'cation_pi',
+                'extras': 'cation'
+            })
+            results.append({
+                'chain': aro_ch, 'resi_struct': int(aro_ri), 'resn_struct': aro_rn, 'residue_key': res_key(aro_ch, aro_ri, aro_rn),
+                'partner_chain': cat_ch, 'partner_resi': int(cat_ri), 'partner_resn': cat_rn, 'partner_residue_key': res_key(cat_ch, cat_ri, cat_rn),
+                'bond_type': 'cation_pi',
+                'extras': 'aromatic'
+            })
     
-    # Define standard columns
     standard_columns = ['chain', 'resi_struct', 'resn_struct', 'residue_key', 'partner_chain', 'partner_resi', 'partner_resn', 'partner_residue_key', 'bond_type', 'extras']
     
     if results:
         return pd.DataFrame(results)
     else:
         return pd.DataFrame(columns=standard_columns)
-
 
 @register_metric(name='cation_pi_count', provides=['cation_pi_count'], tags={'bonds'})
 def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataFrame:
@@ -712,6 +747,7 @@ def calculate_cation_pi_count(context: Context, cutoff: float = 6.0) -> pd.DataF
     """
     array = context.array
     cation_pi = identify_cation_pi(array, cutoff)
+
     cation_pi = classify_bond_types(cation_pi, array)
     metadata = get_metadata_cols(array)
     metadata['cation_pi_count'] = 0
@@ -744,6 +780,9 @@ def identify_vdw_contacts(array: struc.AtomArray, cutoff_factor: float = 1.0) ->
         DataFrame with van der Waals contacts with columns:
         chain, resi_struct, resn_struct, partner_chain, partner_resi, partner_resn, bond_type, extras
     """
+    # Non-solvent atoms
+    solvent_mask = np.isin(array.res_name, list(SOLVENT_RESIDUES))
+    array = array[~solvent_mask]
     
     # Get heavy atoms
     heavy_mask = np.array([is_heavy(n) for n in array.atom_name], dtype=bool)
@@ -856,6 +895,11 @@ def calculate_hbond_metrics(context: Context) -> pd.DataFrame:
         DataFrame with 'bb_hbond_count', 'sc_hbond_count', 'total_hbond_count' along with residue metadata.
     """
     array = context.array
+    
+    # Non-solvent atoms
+    solvent_mask = np.isin(array.res_name, list(SOLVENT_RESIDUES))
+    array = array[~solvent_mask]
+    
     if context.config.structural_feature_chains is not None:
         chain_mask = np.isin(array.chain_id, context.config.structural_feature_chains)
         array = array[chain_mask]

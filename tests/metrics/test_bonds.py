@@ -120,30 +120,30 @@ def test_identify_ionic_bonds():
     # ASP: N, CA, C, O, CB, CG, OD1, OD2 (8 atoms)
     asp_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
                   [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [5.0, 0.0, 0.0], [1.5, 1.5, -0.5]]  # CB, CG, OD1, OD2
-    # TYR: N, CA, C, O, CB, CG, CD1, CD2, CE1, CE2, CZ, OH (12 atoms)
-    tyr_coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0],
-                  [1.5, 1.0, 0.0], [1.5, 1.5, 0.0], [1.5, 2.0, 0.0], [1.5, 2.5, 0.0],
-                  [1.5, 3.0, 0.0], [1.5, 3.5, 0.0], [1.5, 4.0, 0.0], [1.5, 4.5, 0.0]]  # CB, CG, CD1, CD2, CE1, CE2, CZ, OH
-                 
+    # HIS: N, CA, C, O, CB, CG, ND1, CD2, CE1, NE2 (10 atoms)
+    his_coords = [[0.0, 0.0, 5.0], [1.0, 0.0, 5.0], [2.0, 0.0, 5.0], [3.0, 0.0, 5.0],
+                  [1.5, 1.0, 5.0], [1.5, 1.5, 5.0], [5.0, 0.5, 0.0], [1.5, 2.5, 5.0],
+                  [1.5, 3.0, 5.0], [5.0, -0.5, 0.0]]  # CB, CG, ND1, CD2, CE1, NE2
+
     asp = _make_residue('ASP', res_id=1, chain_id='A', coords=asp_coords)
-    tyr = _make_residue('TYR', res_id=3, chain_id='A', coords=tyr_coords)
-    arr = struc.concatenate([asp, tyr])
-    
+    his = _make_residue('HIS', res_id=3, chain_id='A', coords=his_coords)
+    arr = struc.concatenate([asp, his])
+
     result = bonds.identify_ionic_bonds(arr, cutoff=4.0)
-    
+
     assert len(result) == 2
-    
+
     # Check that expected residues are found
     assert result.iloc[0]['chain'] == 'A'
     assert result.iloc[0]['resi_struct'] == 1
     assert result.iloc[0]['resn_struct'] == 'ASP'
     assert result.iloc[0]['partner_chain'] == 'A'
     assert result.iloc[0]['partner_resi'] == 3
-    assert result.iloc[0]['partner_resn'] == 'TYR'
+    assert result.iloc[0]['partner_resn'] == 'HIS'
     assert result.iloc[0]['bond_type'] == 'ionic'
     assert result.iloc[1]['chain'] == 'A'
     assert result.iloc[1]['resi_struct'] == 3
-    assert result.iloc[1]['resn_struct'] == 'TYR'
+    assert result.iloc[1]['resn_struct'] == 'HIS'
     assert result.iloc[1]['partner_chain'] == 'A'
     assert result.iloc[1]['partner_resi'] == 1
     assert result.iloc[1]['partner_resn'] == 'ASP'
@@ -400,7 +400,7 @@ def test_identify_cation_pi():
     phe = _make_residue('PHE', res_id=2, chain_id='A', coords=phe_coords)
     arr = struc.concatenate([lys, phe])
     
-    result = bonds.identify_cation_pi(arr, cutoff=6.0)
+    result = bonds.identify_cation_pi(arr, cutoff=6.0, angle_cutoff=30.0)
     
     assert len(result) == 2
     
