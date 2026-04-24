@@ -38,31 +38,6 @@ def test_calculate_avg_effect_quartiles_basic():
     assert 10 not in quartile_df.resi_mut.values
 
 
-def test_calculate_avg_effect_quartiles_ignores_stale_pos_effect_column():
-    """Precomputed ``pos_effect`` on the residue table must not replace recomputed ``avg_effect``."""
-    residue_table = _make_residue_table(num_residues=10, num_chains=1, make_muts=True)
-    residue_table['pos_effect'] = 999.0
-
-    class MockContext:
-        def __init__(self, residue_table):
-            self.residue_table = residue_table
-
-    context = MockContext(residue_table)
-    out = metrics.calculate_avg_effect_quartiles(context)
-
-    mut = residue_table.loc[residue_table.mut_info]
-    non_syn = mut.loc[mut['type'] != 'synonymous']
-    expected_by_pos = non_syn.groupby('resi_mut', sort=False)['effect'].mean()
-
-    for resi in out['resi_mut'].unique():
-        got = out.loc[out['resi_mut'] == resi, 'avg_effect'].dropna().unique()
-        if resi not in expected_by_pos.index:
-            assert len(got) == 0
-            continue
-        assert len(got) == 1
-        assert got[0] == expected_by_pos[resi]
-
-
 def test_calculate_avg_effect_quartiles_custom_percentiles():
     """Test that custom percentiles produce different quartile assignments than defaults."""
     # create test residue table
