@@ -396,7 +396,16 @@ class Runner:
         """
         # Get all unique rows to merge on
 
-        potential_cols = ['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'align_pos']
+        potential_cols = [
+            'chain',
+            'resi_struct',
+            'resn_struct',
+            'resi_mut',
+            'resn_mut',
+            'type',
+            'ss_group',
+            'align_pos',
+        ]
         keep_cols = [col for col in potential_cols if col in self.context.residue_table.columns]
 
         # Add mutation columns if mutations are present

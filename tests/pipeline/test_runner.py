@@ -609,7 +609,18 @@ def test_runner_run_metric(tmp_path):
         returned_features = myrunner.run_metrics(metrics=[metric], mutations=True)
 
         returned_cols = returned_features.columns.tolist()
-        expected_cols = ['chain', 'resi_mut', 'resn_mut', 'resi_struct', 'resn_struct', 'resm', 'name']
+        expected_cols = [
+            'chain',
+            'resi_mut',
+            'resn_mut',
+            'resi_struct',
+            'resn_struct',
+            'resm',
+            'type',
+            'name',
+        ]
+        if 'ss_group' in myrunner.context.residue_table.columns:
+            expected_cols.append('ss_group')
 
         if metric == 'aaindex_scores':
             for _, r in aaindex_data.iterrows():

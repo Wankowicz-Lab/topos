@@ -19,6 +19,13 @@ from src.pipeline.context import Context
 from src.structure.utils import res_key
 
 STRUCT_COLS = ["chain", "resi_struct", "resn_struct"]
+NONSYN_NEIGHBOR_COLUMNS = {
+    "avg_effect",
+    "effect_variance",
+    "effect_variance_rank",
+    "effect",
+    "effect_ranking",
+}
 
 
 def count_ala_neighbors(
@@ -154,10 +161,18 @@ def average_neighbor_metrics(
     present_metrics = [c for c in METRICS_TO_AVERAGE if c in features.columns]
     
     # Collapse mutation-level rows to one residue-level row by averaging each metric per residue.
+    selection_cols = STRUCT_COLS + present_metrics + (["type"] if "type" in features.columns else [])
     residue_level = features.loc[
         features["resi_struct"].notna(),
-        STRUCT_COLS + present_metrics,
+        selection_cols,
     ].copy()
+
+    if "type" in residue_level.columns:
+        synonymous_mask = residue_level["type"].eq("synonymous")
+        for metric in present_metrics:
+            if metric in NONSYN_NEIGHBOR_COLUMNS:
+                residue_level.loc[synonymous_mask, metric] = float("nan")
+        residue_level = residue_level.drop(columns=["type"])
     residue_level = residue_level.groupby(STRUCT_COLS, as_index=False).agg(
         {metric: "mean" for metric in present_metrics}
     )
