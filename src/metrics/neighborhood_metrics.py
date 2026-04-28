@@ -161,17 +161,18 @@ def average_neighbor_metrics(
     present_metrics = [c for c in METRICS_TO_AVERAGE if c in features.columns]
     
     # Collapse mutation-level rows to one residue-level row by averaging each metric per residue.
-    selection_cols = STRUCT_COLS + present_metrics + ["type"]
+    selection_cols = STRUCT_COLS + present_metrics + (["type"] if "type" in features.columns else [])
     residue_level = features.loc[
         features["resi_struct"].notna(),
         selection_cols,
     ].copy()
 
-    synonymous_mask = residue_level["type"].eq("synonymous")
-    for metric in present_metrics:
-        if metric in NONSYN_NEIGHBOR_COLUMNS:
-            residue_level.loc[synonymous_mask, metric] = float("nan")
-    residue_level = residue_level.drop(columns=["type"])
+    if "type" in residue_level.columns:
+        synonymous_mask = residue_level["type"].eq("synonymous")
+        for metric in present_metrics:
+            if metric in NONSYN_NEIGHBOR_COLUMNS:
+                residue_level.loc[synonymous_mask, metric] = float("nan")
+        residue_level = residue_level.drop(columns=["type"])
     residue_level = residue_level.groupby(STRUCT_COLS, as_index=False).agg(
         {metric: "mean" for metric in present_metrics}
     )

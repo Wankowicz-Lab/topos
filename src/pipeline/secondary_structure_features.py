@@ -28,11 +28,12 @@ def calculate_secondary_structure_features(
     merged = pd.merge(features, rt_subset, on=merge_cols, how="left")
     merged = merged.dropna(subset=["ss_domains"])
 
-    # Exclude synonymous rows from calculations
-    synonymous_mask = merged["type"].eq("synonymous")
-    for column in NONSYN_DOMAIN_COLUMNS:
-        if column in merged.columns:
-            merged.loc[synonymous_mask, column] = float("nan")
+    # Exclude synonymous rows from calculations when mutation type context is present.
+    if "type" in merged.columns:
+        synonymous_mask = merged["type"].eq("synonymous")
+        for column in NONSYN_DOMAIN_COLUMNS:
+            if column in merged.columns:
+                merged.loc[synonymous_mask, column] = float("nan")
 
     cols_to_avg = [column for column in metrics_to_avg if column in merged.columns]
 
