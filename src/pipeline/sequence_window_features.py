@@ -8,6 +8,13 @@ from pandas.api.types import is_bool_dtype, is_numeric_dtype
 from src.pipeline.context import Context
 
 SEQUENCE_MERGE_COLS = ["chain", "resi_mut", "resn_mut"]
+NONSYN_WINDOW_COLUMNS = {
+    "avg_effect",
+    "effect_variance",
+    "effect_variance_rank",
+    "effect",
+    "effect_ranking",
+}
 
 
 def calculate_sequence_window_features(
@@ -70,6 +77,20 @@ def calculate_sequence_window_features(
         how="left",
         validate="many_to_one",
     )
+    # Exclude synonymous rows from calculations
+    type_lookup = features[SEQUENCE_MERGE_COLS + ["type"]].drop_duplicates(SEQUENCE_MERGE_COLS)
+    residue_level = pd.merge(
+        residue_level,
+        type_lookup,
+        on=SEQUENCE_MERGE_COLS,
+        how="left",
+        validate="many_to_one",
+    )
+    synonymous_mask = residue_level["type"].eq("synonymous")
+    for column in numeric_cols:
+        if column in NONSYN_WINDOW_COLUMNS:
+            residue_level.loc[synonymous_mask, column] = float("nan")
+    residue_level = residue_level.drop(columns=["type"])
     # Residue-level inputs for the window come from the mean across mutation rows.
     residue_level = residue_level.groupby(
         SEQUENCE_MERGE_COLS + ["align_pos"],

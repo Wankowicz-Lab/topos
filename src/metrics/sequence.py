@@ -25,6 +25,16 @@ logger = logging.getLogger(__name__)
 KEEP_COLS = ['chain', 'resi_mut', 'resn_mut', 'resm']
 
 
+def _mutation_rows(context: Context) -> pd.DataFrame:
+    """Rows carrying mutation context from the merged residue table."""
+    return context.residue_table.loc[context.residue_table.mut_info, :].copy()
+
+
+def _exclude_synonymous(rows: pd.DataFrame) -> pd.DataFrame:
+    """Exclude synonymous rows when mutation type is available."""
+    return rows.loc[rows['type'] != 'synonymous', :].copy()
+
+
 def _empty_mutation_category_frame(seq_data: pd.DataFrame) -> pd.DataFrame:
     keep_cols = [col for col in KEEP_COLS if col in seq_data.columns]
     empty = seq_data[keep_cols].copy()
@@ -107,7 +117,7 @@ def calculate_avg_effect_quartiles(context: Context, percentiles: Optional[List[
     if percentiles is None:
         percentiles = [25, 50, 75]
     # subset to only include positions with mutation data
-    seq_data = context.residue_table.loc[context.residue_table.mut_info, :]
+    seq_data = _mutation_rows(context)
 
     # ensure that only a single chain is provided
     if len(seq_data.chain.unique()) > 1:
@@ -149,7 +159,7 @@ def calculate_effect_variance(context: Context) -> pd.DataFrame:
     """
     
     # Calculate SEM for each position from rows that actually have mutation context.
-    seq_data = context.residue_table.loc[context.residue_table.mut_info, :].copy()
+    seq_data = _exclude_synonymous(_mutation_rows(context))
     position_cols = ['chain', 'resi_mut', 'resn_mut']
     effect_variance = (
         seq_data
@@ -191,14 +201,16 @@ def calculate_effect_ranking(context: Context) -> pd.DataFrame:
     """
     
     # Calculate ranking for each position
-    effect_ranking = context.residue_table.loc[context.residue_table.mut_info, :]
+    all_mutations = _mutation_rows(context)
+    nonsyn = _exclude_synonymous(all_mutations)
     keep_cols = [col for col in KEEP_COLS if col in context.residue_table.columns]
-    effect_ranking = effect_ranking[keep_cols + ['effect']]
 
-    effect_ranking['effect_ranking'] = effect_ranking['effect'].rank(method='min')
-    effect_ranking['effect_ranking'] = effect_ranking['effect_ranking'] / np.max(effect_ranking['effect_ranking'])
-    
-    return effect_ranking
+    ranked = nonsyn[keep_cols + ['effect']].copy()
+    ranked['effect_ranking'] = ranked['effect'].rank(method='min')
+    ranked['effect_ranking'] = ranked['effect_ranking'] / np.max(ranked['effect_ranking'])
+
+    # Preserve all mutation rows; synonymous rows remain NaN for effect/effect_ranking.
+    return pd.merge(all_mutations[keep_cols], ranked, on=keep_cols, how='left')
 
 
 @register_metric(
@@ -213,7 +225,7 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
     Synonymous effects use a mixture-sampled equal-tail interval; stop effects use the lower-mean
     component when well-separated, otherwise the combined mixture.
     """
-    seq_data = context.residue_table.loc[context.residue_table.mut_info, :].copy()
+    seq_data = _mutation_rows(context)
 
     central_interval = MUTATION_CATEGORY_CENTRAL_INTERVAL
     fit = fit_mutation_category_reference(seq_data, central_interval)
@@ -235,9 +247,12 @@ def calculate_mutation_category(context: Context) -> pd.DataFrame:
     mutation_categories['mutation_category'] = mutation_category
 
     position_cols = ['chain', 'resi_mut', 'resn_mut']
-    position_counts = seq_data[position_cols].copy()
-    position_counts['total_lof'] = mutation_category.eq('LOF').fillna(False).astype(int)
-    position_counts['total_gof'] = mutation_category.eq('GOF').fillna(False).astype(int)
+    count_rows = seq_data[position_cols + ['type']].copy()
+    count_mask = count_rows['type'] != 'synonymous'
+    
+    position_counts = count_rows[position_cols].copy()
+    position_counts['total_lof'] = (mutation_category.eq('LOF') & count_mask).fillna(False).astype(int)
+    position_counts['total_gof'] = (mutation_category.eq('GOF') & count_mask).fillna(False).astype(int)
     position_counts = (
         position_counts
         .groupby(position_cols, dropna=False)[['total_lof', 'total_gof']]

@@ -6,6 +6,14 @@ from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
 from src.metrics.secondary_structure import ss_domain_lengths, ss_domain_log2_aa_group_ratios
 from src.pipeline.context import Context
 
+NONSYN_DOMAIN_COLUMNS = {
+    "avg_effect",
+    "effect_variance",
+    "effect_variance_rank",
+    "effect",
+    "effect_ranking",
+}
+
 
 def calculate_secondary_structure_features(
     context: Context,
@@ -19,6 +27,12 @@ def calculate_secondary_structure_features(
     rt_subset = context.residue_table[merge_cols + ["ss_domains"]].drop_duplicates(merge_cols)
     merged = pd.merge(features, rt_subset, on=merge_cols, how="left")
     merged = merged.dropna(subset=["ss_domains"])
+
+    # Exclude synonymous rows from calculations
+    synonymous_mask = merged["type"].eq("synonymous")
+    for column in NONSYN_DOMAIN_COLUMNS:
+        if column in merged.columns:
+            merged.loc[synonymous_mask, column] = float("nan")
 
     cols_to_avg = [column for column in metrics_to_avg if column in merged.columns]
 
