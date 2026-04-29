@@ -25,7 +25,6 @@ def test_calculate_sequence_window_features_collapses_and_rolls():
             "resn_mut": ["ALA", "ALA", "ARG", "ARG", "CYS", "CYS", "ASP", "ASP", "GLU", "GLU", "PHE", "PHE"],
             "effect": [2.0, 4.0, 4.0, 6.0, 6.0, 8.0, np.nan, np.nan, 10.0, 12.0, 12.0, 14.0],
             "blosum90": [1.0, 3.0, 2.0, 4.0, 3.0, 5.0, np.nan, np.nan, 5.0, 7.0, 6.0, 8.0],
-            "AA1_hydrophobicity_mut": [10.0, 14.0, 20.0, 24.0, 30.0, 34.0, np.nan, np.nan, 50.0, 54.0, 60.0, 64.0],
             "avg_effect_quartile": ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3", None, None, "Q4", "Q4", "Q4", "Q4"],
             "mut_aa_group": ["A", "B", "A", "B", "A", "B", None, None, "A", "B", "A", "B"],
         }
@@ -37,7 +36,6 @@ def test_calculate_sequence_window_features_collapses_and_rolls():
         seq_metric_columns=[
             "effect",
             "blosum90",
-            "AA1_hydrophobicity_mut",
             "avg_effect_quartile",
             "mut_aa_group",
         ],
@@ -48,16 +46,11 @@ def test_calculate_sequence_window_features_collapses_and_rolls():
     assert ("A", 4, "ASP") not in result.index
     assert "sequence_window_avg_effect_quartile" not in result.columns
     assert "sequence_window_mut_aa_group" not in result.columns
-    assert "sequence_window_AA1_hydrophobicity_mut" in result.columns
 
     assert np.isclose(result.loc[("A", 1, "ALA"), "sequence_window_effect"], 5.0)
     assert np.isclose(result.loc[("A", 3, "CYS"), "sequence_window_effect"], 7.8)
     assert np.isclose(result.loc[("A", 5, "GLU"), "sequence_window_effect"], 9.0)
     assert np.isclose(result.loc[("A", 3, "CYS"), "sequence_window_blosum90"], 4.4)
-    assert np.isclose(
-        result.loc[("A", 3, "CYS"), "sequence_window_AA1_hydrophobicity_mut"],
-        36.0,
-    )
 
 
 def test_calculate_sequence_window_features_returns_empty_without_numeric_metrics():

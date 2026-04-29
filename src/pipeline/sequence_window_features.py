@@ -5,16 +5,10 @@ from typing import Iterable
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
 
+from src.metrics.averaging_metrics import column_needs_synonym_mask, spatial_pool_metric_columns
 from src.pipeline.context import Context
 
 SEQUENCE_MERGE_COLS = ["chain", "resi_mut", "resn_mut"]
-NONSYN_WINDOW_COLUMNS = {
-    "avg_effect",
-    "effect_variance",
-    "effect_variance_rank",
-    "effect",
-    "effect_ranking",
-}
 
 
 def calculate_sequence_window_features(
@@ -24,6 +18,9 @@ def calculate_sequence_window_features(
     window_size: int = 5,
 ) -> pd.DataFrame:
     """Average numeric sequence-derived features across a centered sequence window.
+
+    Only columns both sequence-tagged and in ``spatial_pool_metric_columns(features)``
+    (neighbor / SS-domain pooling eligibility) enter the rolling step.
 
     Parameters
     ----------
@@ -53,18 +50,20 @@ def calculate_sequence_window_features(
     numeric sequence metric value.
     """
     seq_metric_columns = list(dict.fromkeys(seq_metric_columns))
-    # Limit the rolling step to realized numeric sequence metrics and skip labels.
+    eligible = set(spatial_pool_metric_columns(features))
+    # Numeric sequence outputs that are also spatial-pooling-eligible; skip labels/bool.
     numeric_cols = [
         column
         for column in seq_metric_columns
         if column in features.columns
+        and column in eligible
         and is_numeric_dtype(features[column])
         and not is_bool_dtype(features[column])
     ]
     if not numeric_cols:
         return pd.DataFrame(columns=SEQUENCE_MERGE_COLS)
 
-    # Align sequence metrics to a unique residue ordering before collapsing mutation rows.
+    # Order rows by aligned sequence position within each chain.
     align_pos = (
         context.residue_table[SEQUENCE_MERGE_COLS + ["align_pos"]]
         .drop_duplicates(SEQUENCE_MERGE_COLS)
@@ -78,26 +77,26 @@ def calculate_sequence_window_features(
         how="left",
         validate="many_to_one",
     )
-    # Exclude synonymous rows from calculations when mutation type context is present.
+    # Mutation-derived metrics: nan out synonymous rows before averaging across variants.
     if "type" in mutation_level.columns:
         synonymous_mask = mutation_level["type"].eq("synonymous")
         for column in numeric_cols:
-            if column in NONSYN_WINDOW_COLUMNS:
+            if column_needs_synonym_mask(column):
                 mutation_level.loc[synonymous_mask, column] = float("nan")
         mutation_level = mutation_level.drop(columns=["type"])
-    # Residue-level inputs for the window come from the mean across mutation rows.
+    # One residue-level value per (chain, resi_mut, resn_mut, align_pos): mean across resm variants.
     residue_level = mutation_level.groupby(
         SEQUENCE_MERGE_COLS + ["align_pos"],
         as_index=False,
     ).agg({column: "mean" for column in numeric_cols})
 
-    # Exclude residues with no numeric sequence metrics from the rolling series.
+    # Omit residues that have no numeric sequence metric left after synonym handling.
     residue_level = residue_level.loc[residue_level[numeric_cols].notna().any(axis=1), :]
     if residue_level.empty:
         return pd.DataFrame(columns=SEQUENCE_MERGE_COLS)
 
-    # Apply the centered rolling mean independently within each chain.
     residue_level = residue_level.sort_values(["chain", "align_pos"], kind="mergesort").reset_index(drop=True)
+    # Centered window along alignment order within each chain.
     for column in numeric_cols:
         residue_level[f"sequence_window_{column}"] = (
             residue_level.groupby("chain")[column]
