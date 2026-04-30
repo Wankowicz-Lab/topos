@@ -13,19 +13,16 @@ from collections import Counter
 
 import pandas as pd
 
-from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
+from src.metrics.averaging_metrics import (
+    assert_poolable_numeric_columns,
+    column_needs_synonym_mask,
+    spatial_pool_metric_columns,
+)
 from src.metrics.secondary_structure import AA_TO_GROUP
 from src.pipeline.context import Context
 from src.structure.utils import res_key
 
 STRUCT_COLS = ["chain", "resi_struct", "resn_struct"]
-NONSYN_NEIGHBOR_COLUMNS = {
-    "avg_effect",
-    "effect_variance",
-    "effect_variance_rank",
-    "effect",
-    "effect_ranking",
-}
 
 
 def count_ala_neighbors(
@@ -143,7 +140,7 @@ def average_neighbor_metrics(
     """Average selected feature columns across each residue's 3D neighborhood.
 
     Uses context.extras['residue_neighbors'] (residue_key -> [neighbor keys]).
-    Only columns listed in METRICS_TO_AVERAGE and present in features are averaged.
+    Columns are chosen via ``spatial_pool_metric_columns(features)``; non-numeric dtypes raise.
     Output columns are prefixed with ``neighborhood_``.
 
     Parameters
@@ -158,8 +155,9 @@ def average_neighbor_metrics(
         Columns: chain, resi_struct, resn_struct, and neighborhood_<metric> columns.
     """
     neighbor_map = context.extras["residue_neighbors"]
-    present_metrics = [c for c in METRICS_TO_AVERAGE if c in features.columns]
-    
+    present_metrics = spatial_pool_metric_columns(features)
+    assert_poolable_numeric_columns(present_metrics, features)
+
     # Collapse mutation-level rows to one residue-level row by averaging each metric per residue.
     selection_cols = STRUCT_COLS + present_metrics + (["type"] if "type" in features.columns else [])
     residue_level = features.loc[
@@ -170,7 +168,7 @@ def average_neighbor_metrics(
     if "type" in residue_level.columns:
         synonymous_mask = residue_level["type"].eq("synonymous")
         for metric in present_metrics:
-            if metric in NONSYN_NEIGHBOR_COLUMNS:
+            if column_needs_synonym_mask(metric):
                 residue_level.loc[synonymous_mask, metric] = float("nan")
         residue_level = residue_level.drop(columns=["type"])
     residue_level = residue_level.groupby(STRUCT_COLS, as_index=False).agg(

@@ -17,7 +17,6 @@ import src.metrics.bonds  # noqa: F401
 import src.metrics.sequence  # noqa: F401
 import src.metrics.structure  # noqa: F401
 from src.databases import pdbtm
-from src.metrics.averaging_metrics import METRICS_TO_AVERAGE
 from src.metrics.graph_metrics import calculate_graph_metrics
 from src.metrics.registry import _REGISTRY, metrics_with_tag
 from src.pipeline.context import Config, Context
@@ -548,7 +547,6 @@ class Runner:
         secondary_structure_features = calculate_secondary_structure_features(
             self.context,
             self.features,
-            ss_metrics=METRICS_TO_AVERAGE,
         )
         self.features = pd.merge(
             self.features,

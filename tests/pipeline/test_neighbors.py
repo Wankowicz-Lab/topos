@@ -4,7 +4,10 @@ import warnings
 import pandas as pd
 import pytest
 
-from src.metrics.neighborhood_metrics import neighbor_sequence_range_metrics
+from src.metrics.neighborhood_metrics import (
+    average_neighbor_metrics,
+    neighbor_sequence_range_metrics,
+)
 from src.pipeline.neighbors import calculate_neighborhood_features, compute_residue_neighbors
 from src.pipeline.runner import Runner
 from src.structure.utils import res_key
@@ -142,6 +145,25 @@ def test_calculate_neighborhood_features_neighbor_averages_deterministic():
     assert result.loc[("A", 4, "SER"), "neighborhood_sasa"] == 6.0
 
     
+def test_average_neighbor_metrics_raises_on_non_numeric_pool_column():
+    """Non-numeric poolable columns raise at neighborhood averaging (guard for new metrics)."""
+
+    class DummyCtx:
+        extras = {"residue_neighbors": {}}
+
+    features = pd.DataFrame(
+        {
+            "chain": ["A"],
+            "resi_struct": [1],
+            "resn_struct": ["ALA"],
+            "sasa": [100.0],
+            "unvalidated_new_metric": ["not_numeric"],
+        }
+    )
+    with pytest.raises(ValueError, match="Neighborhood averaging requires poolable numeric"):
+        average_neighbor_metrics(DummyCtx(), features)
+
+
 def test_calculate_neighborhood_features_chain_neighbor_counts_deterministic():
     """Chain-aware neighbor counts separate same-chain from cross-chain neighbors."""
     class DummyContext:

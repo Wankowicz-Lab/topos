@@ -62,7 +62,7 @@ def test_calculate_secondary_structure_features_columns_exist(tmp_path):
     residue_table, features = _make_synthetic_ss_fixture()
     myrunner.context.residue_table = residue_table
 
-    out = calculate_secondary_structure_features(myrunner.context, features, ss_metrics=["metric_a"])
+    out = calculate_secondary_structure_features(myrunner.context, features)
 
     assert len(out) == len(residue_table)
     assert "ss_domains" in out.columns
@@ -94,7 +94,7 @@ def test_calculate_secondary_structure_features_na_in_metric(tmp_path):
     residue_table, features = _make_synthetic_ss_fixture(metric_with_nan=True)
     myrunner.context.residue_table = residue_table
 
-    out = calculate_secondary_structure_features(myrunner.context, features, ss_metrics=["metric_a"])
+    out = calculate_secondary_structure_features(myrunner.context, features)
     assert len(out) == len(residue_table)
     assert "ss_domain_metric_a" in out.columns
     assert "ss_domain_length" in out.columns
@@ -109,7 +109,7 @@ def test_calculate_secondary_structure_features_na_ss_domains_excluded(tmp_path)
     residue_table, features = _make_synthetic_ss_fixture(include_na_ss=True)
     myrunner.context.residue_table = residue_table
 
-    out = calculate_secondary_structure_features(myrunner.context, features, ss_metrics=["metric_a"])
+    out = calculate_secondary_structure_features(myrunner.context, features)
     assert len(out) == len(residue_table) - 1
     assert "ss_domains" in out.columns
     assert "ss_domain_length" in out.columns
@@ -128,7 +128,7 @@ def test_calculate_secondary_structure_features_averages_mutation_rows_per_resid
     features = pd.concat([features, dup_row], ignore_index=True)
 
     myrunner.context.residue_table = residue_table
-    out = calculate_secondary_structure_features(myrunner.context, features, ss_metrics=["metric_a"])
+    out = calculate_secondary_structure_features(myrunner.context, features)
     alpha = out[out["ss_domains"] == "alpha-helix_1"]
 
     assert np.isclose(alpha["ss_domain_metric_a"].iloc[0], 3.5)
