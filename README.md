@@ -370,12 +370,6 @@ structure domain.  Additional domain-level columns:
 
 Amino acid groups: `Nonpolar_Aliphatic`, `Aromatic`, `Polar_Uncharged`, `Positively_Charged`, `Negatively_Charged`, `Special`.
 
-### Neighborhood metrics
-
-| Column | Description |
-|--------|-------------|
-| `n_ala_neighbors` | Number of alanine residues within the 5 Å neighbor shell |
-
 ### Ligand interaction metrics
 
 One column per detected ligand:

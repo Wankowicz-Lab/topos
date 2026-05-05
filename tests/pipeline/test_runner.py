@@ -786,7 +786,7 @@ def test_run_neighborhood_requires_run_first(tmp_path):
 
 
 def test_run_neighborhood_fills_extras_and_merges(tmp_path):
-    """run_neighborhood fills context.extras['residue_neighbors'] and merges n_ala_neighbors into self.features."""
+    """run_neighborhood fills context.extras['residue_neighbors'] and merges neighborhood columns into self.features."""
     config_path = tmp_path / 'config.toml'
     _make_config_file(config_path)
 
@@ -804,11 +804,10 @@ def test_run_neighborhood_fills_extras_and_merges(tmp_path):
         assert isinstance(neighbors, list)
         assert residue_key not in neighbors, "neighbors must not include self"
 
-    # n_ala_neighbors from count_ala_neighbors is merged into self.features
-    assert 'n_ala_neighbors' in myrunner.features.columns
+    assert 'n_same_chain_neighbors' in myrunner.features.columns
     assert 'neighborhood_sasa' in myrunner.features.columns
     assert 'neighborhood_kyte_doolittle' in myrunner.features.columns
-    assert myrunner.features['n_ala_neighbors'].shape[0] == myrunner.features.shape[0]
+    assert myrunner.features['n_same_chain_neighbors'].shape[0] == myrunner.features.shape[0]
 
 
 def test_runner_save_results(tmp_path):
