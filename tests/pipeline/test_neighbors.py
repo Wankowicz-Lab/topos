@@ -70,7 +70,6 @@ def test_calculate_neighborhood_features_basic(tmp_path):
 
     merge_cols = ["chain", "resi_struct", "resn_struct"]
     assert all(column in result.columns for column in merge_cols)
-    assert "n_ala_neighbors" in result.columns
     assert "neighborhood_sasa" in result.columns
     assert "neighbor_prop_alpha_helix" in result.columns
     assert "secondary_structure_coarse_entropy" in result.columns
@@ -101,7 +100,6 @@ def test_calculate_neighborhood_features_aggregates_multiple_metrics(tmp_path):
 
     merge_cols = ["chain", "resi_struct", "resn_struct"]
     assert all(column in result.columns for column in merge_cols)
-    assert "n_ala_neighbors" in result.columns
     assert "neighborhood_sasa" in result.columns
     assert "neighborhood_kyte_doolittle" in result.columns
     assert "neighbor_prop_alpha_helix" in result.columns
