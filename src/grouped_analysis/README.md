@@ -1,6 +1,10 @@
-This folder contains scripts for analyzing groups of PDBs. We expect there to be a PDB alongside the corresponding metrics CSV for each PDB. The analysis is built for PDBs with highly similar sequences. Up to three missense mutations are allowed. 
+This folder contains scripts for analyzing groups of PDBs. We expect a PDB to be available alongside the corresponding metrics CSV for each PDB. The analysis is built for PDBs with highly similar sequences. Up to three missense mutations are allowed. 
 
-To group comparison PDBs (Unbound v. Bound or WT v. Mutant), fill out the config file with comparisons. Results will include global distributions or differences in counts across all metrics and areas where differences are greatest. 
+To group comparison PDBs (Unbound v. Bound or WT v. Mutant), fill out the config file with comparisons. 
+
+Results will include global distributions or differences in counts across all metrics and identify areas where differences are greatest. 
+
+Figures scripts will let you map any metric to B-factors in a PDB for easy visualization. 
 
 
 ## Scripts
@@ -9,7 +13,7 @@ To group comparison PDBs (Unbound v. Bound or WT v. Mutant), fill out the config
 |---|---|
 | `run_analysis.py` | **Main analysis script.** Runs global stats, histograms, and local difference tables for all pairs defined in a config. |
 | `pairwise_rmsd.py` | Pairwise Cα RMSD for all structures in the config. |
-| `figures/map_metric_to_b_factor.py` | Map any metric column to B-factors in a PDB for PyMOL visualization. |
+| `figures/map_metric_to_b_factor.py` | Map any metric column to B-factors in a PDB for visualization. |
 
 
 ## Quick Start
