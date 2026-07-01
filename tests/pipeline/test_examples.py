@@ -1,8 +1,10 @@
 import pandas as pd
+import pytest
 
 from src.pipeline.runner import Runner
 
 
+@pytest.mark.integration
 def test_b2ar_example(tmp_path):
     b2ar_dir = 'examples/B2AR_DMS_example'
     runner = Runner(
