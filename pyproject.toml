@@ -66,11 +66,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["E402"]
 
-[tool.pytest.ini_options]
-markers = [
-    "integration: end-to-end pipeline tests (memory-heavy; run without coverage in CI)",
-]
-
 [tool.mypy]
 python_version = "3.11"
 modules = [
