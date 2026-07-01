@@ -1,4 +1,3 @@
-import logging
 import subprocess
 from itertools import groupby
 from pathlib import Path
@@ -12,11 +11,6 @@ from biotite.structure.io.pdb import PDBFile
 
 from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
-
-logger = logging.getLogger(__name__)
-
-# Fall back to pydssp before CI runners OOM-kill a hung mkdssp subprocess.
-MKDSSP_TIMEOUT_S = 30
 
 
 def make_contiguous_group_labels(lst: List[str]) -> List[str]:
@@ -66,14 +60,8 @@ def get_secondary_structure_annotations(context: Context) -> pd.DataFrame:
     """
     backend = context.extras.get("ss_backend", "pydssp")
     if backend == "mkdssp":
-        try:
-            ss_df, dssp_df = _annotate_with_mkdssp(context)
-            context.extras["dssp_output"] = dssp_df
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            logger.warning("mkdssp failed (%s); falling back to pydssp", exc)
-            context.extras["ss_backend"] = "pydssp"
-            ss_df = _annotate_with_pydssp(context)
-            context.extras.pop("dssp_output", None)
+        ss_df, dssp_df = _annotate_with_mkdssp(context)
+        context.extras["dssp_output"] = dssp_df
     elif backend == "pydssp":
         ss_df = _annotate_with_pydssp(context)
         context.extras.pop("dssp_output", None)
@@ -131,10 +119,7 @@ def _write_temp_pdb(context: Context) -> Path:
     return pdb_path
 
 
-def _annotate_with_mkdssp(
-    context: Context,
-    timeout: float = MKDSSP_TIMEOUT_S,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _annotate_with_mkdssp(context: Context) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run mkdssp and return normalized SSE annotations plus full DSSP fields."""
     pdb_path = _write_temp_pdb(context)
     dssp_tmp = NamedTemporaryFile(delete=False, suffix=".dssp")
@@ -143,7 +128,7 @@ def _annotate_with_mkdssp(
     rows: list[dict[str, Any]] = []
     try:
         cmd = ["mkdssp", str(pdb_path), str(dssp_path)]
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=timeout)
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         in_table = False
         for line in dssp_path.read_text(encoding="utf-8", errors="replace").splitlines():
