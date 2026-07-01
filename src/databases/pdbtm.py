@@ -10,6 +10,38 @@ logger = logging.getLogger(__name__)
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
+PDBTM_REGION_MAPPING = {
+    "H": "transmembrane_helix",
+    "B": "transmembrane_beta_strand",
+    "L": "reentrant_loop",
+    "F": "interfacial_helix",
+    "N": "beta_barrel_interior",
+    "1": "side1",
+    "2": "side2",
+    "3": "intermembrane_space",
+    "P": "false_positive_membrane_region",
+    "R": "false_negative_membrane_region",
+    "C": "transmembrane_coil",
+    "I": "beta_barrel_interior",
+    "U": "unknown",
+}
+
+# PDBTM region types treated as membrane-embedded for secondary structure labeling.
+MEMBRANE_EMBEDDED_REGIONS = frozenset({"transmembrane_helix"})
+
+# PDBTM region labels mapped to coil-like ss_domains coarse buckets (side loops, unknown).
+COIL_PDBTM_REGIONS = frozenset({"side1", "side2", "unknown"})
+
+# ss_domains prefixes for other plausible PDBTM region labels (e.g. interfacial_helix_1).
+PDBTM_OTHER_SS_DOMAIN_PREFIXES = tuple(
+    sorted(
+        f"{region}_"
+        for region in set(PDBTM_REGION_MAPPING.values())
+        if region not in MEMBRANE_EMBEDDED_REGIONS
+        and region not in COIL_PDBTM_REGIONS
+    )
+)
+
 def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     """
     Parse PDBTM XML content into a list of regions and transformation matrix.
@@ -104,15 +136,15 @@ def describe_pdbtm_region(region_code: str) -> str:
     description : str
         Full-word description of the region.
     """
-    mapping = {
-        "H": "membrane_spanning",
-        "1": "cytoplasmic",
-        "2": "extracellular",
-        "U": "unknown"
-    }
-    # Return mapping if found, otherwise the initial code
-    return mapping.get(region_code.upper(), region_code)
+    code = str(region_code).strip().upper()
 
+    # Return mapped label when known; otherwise pass through the raw code.
+    try:
+        return PDBTM_REGION_MAPPING[code]
+    except KeyError:
+        logger.warning("Unrecognized PDBTM region code: %r", code)
+        return code
+    
 
 def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame, Dict[str, List[dict]]]:
     """

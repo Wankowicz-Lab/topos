@@ -41,7 +41,7 @@ The goal is a **high-level summary**: what the unit does, non-obvious behavior, 
 - **Config / field descriptions:** Prefer a **short phrase** (“Path to amino acid index database”) over duplicating full schemas next to each field. Detailed layout belongs in the README’s parameter or data sections.
 - **Comments:** Use them where the code is not self-explanatory (indexing strategy, merge keys, invariants). Do not add comments that only repeat names already in the code or that duplicate README tables.
 
-**Edits to existing functions:** Extra verbosity shows up most often here. When you change behavior, **do not** treat the docstring as the place for a full restatement of inputs/outputs or file formats “because the function changed.” Update the **minimal** text needed so the summary stays accurate; move exhaustive detail to README or keep it in code via clear names and constants.
+**Edits to existing functions:** Extra verbosity shows up most often here. When you change behavior, **do not** treat the docstring as the place for a full restatement of inputs/outputs or file formats “because the function changed.” Update the **minimal** text needed so the summary stays accurate; move exhaustive detail to README or keep it in code via clear names and constants. **Preserve existing inline comments** when refactoring; update their wording if behavior changed—do not delete them unless they are wrong.
 
 **Anti-patterns:**
 

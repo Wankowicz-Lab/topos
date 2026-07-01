@@ -6,12 +6,23 @@ from src.databases import pdbtm
 from tests.test_utils import _make_residue_table
 
 
-def test_describe_pdbtm_region():
-    inputs = ['H', '1', '2', 'U', 'not_defined']
-    expected = ['membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown', 'not_defined']
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("H", "transmembrane_helix"),
+        ("1", "side1"),
+        ("2", "side2"),
+        ("U", "unknown"),
+        ("I", "beta_barrel_interior"),
+        ("N", "beta_barrel_interior"),
+    ],
+)
+def test_describe_pdbtm_region_known_codes(code, expected):
+    assert pdbtm.describe_pdbtm_region(code) == expected
 
-    for inp, exp in zip(inputs, expected):
-        assert pdbtm.describe_pdbtm_region(inp) == exp
+
+def test_describe_pdbtm_region_unmapped_code():
+    assert pdbtm.describe_pdbtm_region("not_defined") == "NOT_DEFINED"
 
 
 def test_fetch_pdbtm_annotation():
@@ -24,7 +35,9 @@ def test_fetch_pdbtm_annotation():
     for col in expected_cols:
         assert col in df.columns
 
-    assert set(df.type.unique()).issubset({'membrane_spanning', 'cytoplasmic', 'extracellular', 'unknown'})
+    assert set(df.type.unique()).issubset(
+        {'transmembrane_helix', 'side1', 'side2', 'unknown'}
+    )
 
     assert mat.shape == (4, 4)  # Transformation matrix should be 4x4
 
@@ -97,17 +110,16 @@ def test_add_pdbtm_regions():
     residue_table.rename(columns={'resi_struct': 'resi', 'resn_struct': 'resn'}, inplace=True)
     pdbtm_regions = pd.DataFrame({
         'chain': ['A', 'A', 'B', 'B'],
-        'type': ['membrane_spanning', 'cytoplasmic', 'extracellular', 'extracellular'],
+        'type': ['transmembrane_helix', 'side1', 'side2', 'side2'],
         'pdb_beg': [1, 4, 3, 7],
         'pdb_end': [3, 5, 6, 8]
     })
 
-    expected_region = ['membrane_spanning'] * 3 + ['cytoplasmic'] * 2 + ['extracellular'] * 5
-    expected_region_detail = (['membrane_spanning_1'] * 3 + ['cytoplasmic_1'] * 2 +
-                              ['extracellular_1'] * 4 + ['extracellular_2'])
+    expected_region = ['transmembrane_helix'] * 3 + ['side1'] * 2 + ['side2'] * 5
+    expected_region_detail = (['transmembrane_helix_1'] * 3 + ['side1_1'] * 2 +
+                              ['side2_1'] * 4 + ['side2_2'])
 
     merged = pdbtm.add_pdbtm_regions(residue_table, pdbtm_regions)
 
     assert merged['pdbtm_region'].tolist() == expected_region
     assert merged['pdbtm_region_detailed'].tolist() == expected_region_detail
-

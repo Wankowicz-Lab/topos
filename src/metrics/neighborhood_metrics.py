@@ -13,6 +13,7 @@ from collections import Counter
 
 import pandas as pd
 
+from src.databases.pdbtm import COIL_PDBTM_REGIONS, PDBTM_OTHER_SS_DOMAIN_PREFIXES
 from src.metrics.averaging_metrics import (
     assert_poolable_numeric_columns,
     column_needs_synonym_mask,
@@ -23,6 +24,8 @@ from src.pipeline.context import Context
 from src.structure.utils import res_key
 
 STRUCT_COLS = ["chain", "resi_struct", "resn_struct"]
+
+_COIL_SS_DOMAIN_PREFIXES = tuple(f"{region}_" for region in sorted(COIL_PDBTM_REGIONS))
 
 
 def count_chain_neighbors(
@@ -195,7 +198,7 @@ def _residue_key_lookup(df: pd.DataFrame, value_col: str) -> dict[str, str]:
 
 
 def _secondary_structure_coarse_from_label(secondary_structure_granular: object) -> str | None:
-    """Map a full ss_domains label to helix/sheet/coil buckets."""
+    """Map a full ss_domains label to helix/sheet/coil/other buckets."""
     if pd.isna(secondary_structure_granular):
         return None
 
@@ -204,8 +207,12 @@ def _secondary_structure_coarse_from_label(secondary_structure_granular: object)
         return "alpha-helix"
     if label.startswith("beta-sheet_"):
         return "beta-sheet"
-    if label.startswith("coil_") or "_loop_" in label:
+    if label.startswith("coil_"):
         return "coil"
+    if label.startswith(_COIL_SS_DOMAIN_PREFIXES) or label in ("protein_start", "protein_end"):
+        return "coil"
+    if label.startswith(PDBTM_OTHER_SS_DOMAIN_PREFIXES):
+        return "other"
     return None
 
 
@@ -359,9 +366,10 @@ def neighbor_secondary_structure_coarse_granular_metrics(
     """Compute neighborhood secondary-structure proportions and entropy metrics.
 
     Uses context.extras['residue_neighbors'] (residue_key -> [neighbor keys]).
-    Neighbor ss_domains labels are mapped into alpha-helix, beta-sheet, and
-    coil buckets; membrane TMD labels are treated as helix-like and loop labels
-    as coil-like. Unsupported or missing ss_domains are ignored.
+    Neighbor ss_domains labels are mapped into alpha-helix, beta-sheet, coil,
+    and other buckets. Membrane TMD labels are helix-like; side1, side2, and
+    unknown labels are coil-like; other PDBTM-derived labels map to other.
+    Unrecognized labels and missing ss_domains are ignored.
 
     Parameters
     ----------
@@ -373,7 +381,7 @@ def neighbor_secondary_structure_coarse_granular_metrics(
     Returns
     -------
     pd.DataFrame
-        Columns: chain, resi_struct, resn_struct, three neighborhood proportion
+        Columns: chain, resi_struct, resn_struct, four neighborhood proportion
         columns, and two entropy columns.
     """
     neighbor_map = context.extras["residue_neighbors"]
@@ -409,14 +417,16 @@ def neighbor_secondary_structure_coarse_granular_metrics(
             prop_alpha_helix = float("nan")
             prop_beta_sheet = float("nan")
             prop_coil = float("nan")
+            prop_other = float("nan")
         else:
             prop_alpha_helix = (
-                secondary_structure_coarse_counts["alpha-helix"] / n_secondary_structure_coarse_neighbors
+                secondary_structure_coarse_counts.get("alpha-helix", 0) / n_secondary_structure_coarse_neighbors
             )
             prop_beta_sheet = (
-                secondary_structure_coarse_counts["beta-sheet"] / n_secondary_structure_coarse_neighbors
+                secondary_structure_coarse_counts.get("beta-sheet", 0) / n_secondary_structure_coarse_neighbors
             )
-            prop_coil = secondary_structure_coarse_counts["coil"] / n_secondary_structure_coarse_neighbors
+            prop_coil = secondary_structure_coarse_counts.get("coil", 0) / n_secondary_structure_coarse_neighbors
+            prop_other = secondary_structure_coarse_counts.get("other", 0) / n_secondary_structure_coarse_neighbors
 
         rows.append(
             {
@@ -426,6 +436,7 @@ def neighbor_secondary_structure_coarse_granular_metrics(
                 "neighbor_prop_alpha_helix": prop_alpha_helix,
                 "neighbor_prop_beta_sheet": prop_beta_sheet,
                 "neighbor_prop_coil": prop_coil,
+                "neighbor_prop_other": prop_other,
                 "secondary_structure_coarse_entropy": _shannon_entropy(secondary_structure_coarse_labels),
                 "secondary_structure_granular_entropy": _shannon_entropy(secondary_structure_granular_labels),
             }

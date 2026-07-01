@@ -557,8 +557,8 @@ def test_runner_run_metric(tmp_path):
         make_muts=True
     )
     # add membrane region columns so that we don't need to integrate with PDBTM to test
-    residue_table['pdbtm_region'] = 'membrane_spanning'
-    residue_table['pdbtm_region_detailed'] = 'TM1'
+    residue_table['pdbtm_region'] = 'transmembrane_helix'
+    residue_table['pdbtm_region_detailed'] = 'transmembrane_helix_1'
 
     mut_dataset = residue_table[['resn_mut', 'resi_mut', 'resm', 'effect', 'type']]
     mut_dataset = mut_dataset.rename(columns={
@@ -826,7 +826,7 @@ def test_runner_save_results(tmp_path):
     })
 
     residue_table = _make_residue_table()
-    residue_table['ss_domains'] = 'membrane_spanning'
+    residue_table['ss_domains'] = 'TMD_1'
     residue_table['ss_group'] = 'TM1'
 
     # Create runner
