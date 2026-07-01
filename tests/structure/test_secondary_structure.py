@@ -91,13 +91,13 @@ def test_get_secondary_structure_annotations_unknown_backend():
 
 def test_define_membrane_secondary_structure():
     # Create a mock residue table with the following topology:
-    # Extracellular length 4, membrane length 5, cytoplasmic length 4, membrane length 6, extracellular length 6.
-    # There is a single alphahelix in the first membrane region that overlaps with the extracellular region by 1,
+    # side2 length 4, transmembrane helix length 5, side1 length 4, transmembrane helix length 6, side2 length 6.
+    # There is a single alphahelix in the first membrane region that overlaps with the side2 region by 1,
     # and terminates 2 before the end of membrane
     # The second membrane region has a beta sheet of len 2 in the middle of alpha helices
 
-    pdbtm_region = (['extracellular'] * 4 + ['membrane_spanning'] * 5 + ['cytoplasmic'] * 4 +
-                    ['membrane_spanning'] * 6 + ['extracellular'] * 6)
+    pdbtm_region = (['side2'] * 4 + ['transmembrane_helix'] * 5 + ['side1'] * 4 +
+                    ['transmembrane_helix'] * 6 + ['side2'] * 6)
     pdbtm_region_detailed = make_contiguous_group_labels(pdbtm_region)
 
     ss_annotation = (['c'] * 3 + ['a'] * 4 + ['c'] * 6 + ['a'] * 2 + ['b'] * 2 + ['a'] * 3 + ['c'] * 5)
@@ -117,8 +117,8 @@ def test_define_membrane_secondary_structure():
         'pdbtm_region_detailed': pdbtm_region_detailed
     })
 
-    expected_annotation = (['extracellular_loop_1'] * 3 + ['TMD_1'] * 4 + ['cytoplasmic_loop_1'] * 6 +
-                           ['TMD_2'] * 7 + ['extracellular_loop_2'] * 5)
+    expected_annotation = (['side2_1'] * 3 + ['TMD_1'] * 4 + ['side1_1'] * 6 +
+                           ['TMD_2'] * 7 + ['side2_2'] * 5)
 
     output_df = define_membrane_secondary_structure(residue_table, ss_df)
 

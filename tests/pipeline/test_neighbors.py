@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from src.metrics.neighborhood_metrics import (
+    _secondary_structure_coarse_from_label,
     average_neighbor_metrics,
     neighbor_sequence_range_metrics,
 )
@@ -72,6 +73,7 @@ def test_calculate_neighborhood_features_basic(tmp_path):
     assert all(column in result.columns for column in merge_cols)
     assert "neighborhood_sasa" in result.columns
     assert "neighbor_prop_alpha_helix" in result.columns
+    assert "neighbor_prop_other" in result.columns
     assert "secondary_structure_coarse_entropy" in result.columns
     assert "secondary_structure_granular_entropy" in result.columns
     assert "prop_long_range_neighbors" in result.columns
@@ -103,6 +105,7 @@ def test_calculate_neighborhood_features_aggregates_multiple_metrics(tmp_path):
     assert "neighborhood_sasa" in result.columns
     assert "neighborhood_kyte_doolittle" in result.columns
     assert "neighbor_prop_alpha_helix" in result.columns
+    assert "neighbor_prop_other" in result.columns
     assert "secondary_structure_coarse_entropy" in result.columns
     assert "secondary_structure_granular_entropy" in result.columns
     assert "prop_long_range_neighbors" in result.columns
@@ -286,14 +289,15 @@ def test_calculate_neighborhood_features_secondary_structure_coarse_granular_met
     result = calculate_neighborhood_features(context, features)
     result = result.set_index(["chain", "resi_struct", "resn_struct"])
 
-    expected_ss_entropy = -sum(p * math.log2(p) for p in [3 / 9, 4 / 9, 2 / 9])
+    expected_ss_entropy = -sum(p * math.log2(p) for p in [3 / 10, 4 / 10, 3 / 10])
     expected_ss_domain_entropy = -sum(
-        p * math.log2(p) for p in [3 / 9, 2 / 9, 2 / 9, 1 / 9, 1 / 9]
+        p * math.log2(p) for p in [3 / 10, 2 / 10, 2 / 10, 1 / 10, 1 / 10, 1 / 10]
     )
     row = result.loc[("A", 1, "ALA")]
-    assert row["neighbor_prop_alpha_helix"] == pytest.approx(3 / 9)
-    assert row["neighbor_prop_beta_sheet"] == pytest.approx(4 / 9)
-    assert row["neighbor_prop_coil"] == pytest.approx(2 / 9)
+    assert row["neighbor_prop_alpha_helix"] == pytest.approx(3 / 10)
+    assert row["neighbor_prop_beta_sheet"] == pytest.approx(4 / 10)
+    assert row["neighbor_prop_coil"] == pytest.approx(3 / 10)
+    assert row["neighbor_prop_other"] == pytest.approx(0.0)
     assert row["secondary_structure_coarse_entropy"] == pytest.approx(expected_ss_entropy)
     assert row["secondary_structure_granular_entropy"] == pytest.approx(expected_ss_domain_entropy)
     assert row["secondary_structure_granular_entropy"] > row["secondary_structure_coarse_entropy"]
@@ -305,8 +309,18 @@ def test_calculate_neighborhood_features_secondary_structure_coarse_granular_met
     assert result.loc[("A", 3, "LEU"), "secondary_structure_granular_entropy"] == pytest.approx(0.0)
 
 
+def test_secondary_structure_coarse_from_label_pdbtm_allowlist():
+    """Plausible PDBTM ss_domains map to coarse buckets; legacy/unknown labels are ignored."""
+    assert _secondary_structure_coarse_from_label("side1_1") == "coil"
+    assert _secondary_structure_coarse_from_label("interfacial_helix_1") == "other"
+    assert _secondary_structure_coarse_from_label("reentrant_loop_2") == "other"
+    assert _secondary_structure_coarse_from_label("TMD_3") == "alpha-helix"
+    assert _secondary_structure_coarse_from_label("cytoplasmic_loop_1") is None
+    assert _secondary_structure_coarse_from_label("not_a_real_label") is None
+
+
 def test_calculate_neighborhood_features_secondary_structure_coarse_granular_metrics_membrane_mapping():
-    """Membrane TMD and loop labels map to helix/coil while unknowns are ignored."""
+    """Membrane TMD labels map to helix; side1/side2/unknown map to coil; missing ss_domains are ignored."""
 
     class DummyContext:
         def __init__(self, neighbor_map, residue_table):
@@ -323,9 +337,9 @@ def test_calculate_neighborhood_features_secondary_structure_coarse_granular_met
     residue_table["ss_domains"] = [
         "TMD_0",
         "TMD_1",
-        "extracellular_loop_1",
-        "cytoplasmic_loop_1",
-        "unknown_1",
+        "side2_1",
+        "side1_1",
+        "interfacial_helix_1",
         pd.NA,
     ]
     neighbor_map = {
@@ -341,18 +355,20 @@ def test_calculate_neighborhood_features_secondary_structure_coarse_granular_met
     result = calculate_neighborhood_features(context, features)
     result = result.set_index(["chain", "resi_struct", "resn_struct"])
 
-    expected_ss_entropy = -sum(p * math.log2(p) for p in [1 / 3, 2 / 3])
+    expected_ss_entropy = -sum(p * math.log2(p) for p in [1 / 4, 2 / 4, 1 / 4])
     row = result.loc[("A", 1, "ALA")]
-    assert row["neighbor_prop_alpha_helix"] == pytest.approx(1 / 3)
+    assert row["neighbor_prop_alpha_helix"] == pytest.approx(1 / 4)
     assert row["neighbor_prop_beta_sheet"] == pytest.approx(0.0)
-    assert row["neighbor_prop_coil"] == pytest.approx(2 / 3)
+    assert row["neighbor_prop_coil"] == pytest.approx(2 / 4)
+    assert row["neighbor_prop_other"] == pytest.approx(1 / 4)
     assert row["secondary_structure_coarse_entropy"] == pytest.approx(expected_ss_entropy)
-    assert row["secondary_structure_granular_entropy"] == pytest.approx(math.log2(3))
+    assert row["secondary_structure_granular_entropy"] == pytest.approx(math.log2(4))
 
     empty_row = result.loc[("A", 2, "VAL")]
-    assert pd.isna(empty_row["neighbor_prop_alpha_helix"])
-    assert pd.isna(empty_row["neighbor_prop_beta_sheet"])
-    assert pd.isna(empty_row["neighbor_prop_coil"])
+    assert empty_row["neighbor_prop_alpha_helix"] == pytest.approx(0.0)
+    assert empty_row["neighbor_prop_beta_sheet"] == pytest.approx(0.0)
+    assert empty_row["neighbor_prop_coil"] == pytest.approx(0.0)
+    assert empty_row["neighbor_prop_other"] == pytest.approx(1.0)
     assert empty_row["secondary_structure_coarse_entropy"] == pytest.approx(0.0)
     assert empty_row["secondary_structure_granular_entropy"] == pytest.approx(0.0)
 

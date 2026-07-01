@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from biotite.structure.io.pdb import PDBFile
 
+from src.databases.pdbtm import MEMBRANE_EMBEDDED_REGIONS
 from src.pipeline.context import Context
 from src.structure.utils import get_metadata_cols
 
@@ -267,12 +268,15 @@ def define_membrane_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.D
     residue_table['ss_domains'] = pd.NA
     residue_table = residue_table.merge(ss_df[['chain', 'resi', 'ss_group']], on=['chain', 'resi'], how='left')
 
-    membrane_spanning = residue_table.loc[residue_table['pdbtm_region'] == 'membrane_spanning', 'pdbtm_region_detailed'].unique()
+    tm_regions = residue_table.loc[
+        residue_table['pdbtm_region'].isin(MEMBRANE_EMBEDDED_REGIONS),
+        'pdbtm_region_detailed',
+    ].unique()
 
-    # Loop through each membrane spanning region
-    for region in membrane_spanning:
+    # Loop through each transmembrane helix region
+    for region in tm_regions:
         # Get all secondary structure elements that overlap with this region
-        region_count = region.split('membrane_spanning_')[-1]
+        region_count = region.rsplit('_', 1)[-1]
         mask = residue_table['pdbtm_region_detailed'] == region
         ss_in_region = residue_table.loc[mask, 'ss_group'].unique()
 
@@ -291,13 +295,15 @@ def define_membrane_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.D
                 if ss_indices[0] >= mask_indices[0] and ss_indices[-1] <= mask_indices[-1]:
                     residue_table.loc[ss_mask, 'ss_domains'] = 'TMD_' + region_count
 
-    non_membrane_mask = residue_table['pdbtm_region'].isin(['cytoplasmic', 'extracellular'])
+    non_membrane_mask = (
+        residue_table['pdbtm_region'].notna()
+        & ~residue_table['pdbtm_region'].isin(MEMBRANE_EMBEDDED_REGIONS)
+    )
     non_membrane = residue_table.loc[non_membrane_mask, 'pdbtm_region_detailed'].unique()
 
     # loop through each non-membrane region
     for region in non_membrane:
         # Get all secondary structure elements that overlap with this region
-        region_name, region_count = region.split('_')
         mask = residue_table['pdbtm_region_detailed'] == region
         ss_in_region = residue_table.loc[mask, 'ss_group'].unique()
 
@@ -308,9 +314,9 @@ def define_membrane_secondary_structure(residue_table: pd.DataFrame, ss_df: pd.D
             unassigned_mask = residue_table.loc[ss_mask, 'ss_domains'].isna()
             ss_mask = ss_mask & unassigned_mask
 
-            # unassigned regions are part of the loop
+            # unassigned residues use the PDBTM detailed region as ss_domains
             if np.sum(ss_mask) > 0:
-                residue_table.loc[ss_mask, 'ss_domains'] = region_name + '_loop_' + region_count
+                residue_table.loc[ss_mask, 'ss_domains'] = region
 
     return residue_table
 
