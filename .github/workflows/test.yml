@@ -30,9 +30,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dssp
 
-      - name: Install dependencies
+      - name: Install CPU-only PyTorch
         run: |
           python -m pip install --upgrade pip
+          # pydssp depends on torch; preinstall the CPU wheel so pip does not pull CUDA torch on Linux.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple torch
+
+      - name: Install dependencies
+        run: |
           python -m pip install -e ".[test]"
 
       - name: Run Ruff
