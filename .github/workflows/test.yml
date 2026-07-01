@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.11', '3.12', '3.13']   # add or remove as you like
     permissions:
@@ -45,7 +46,8 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests/ -v --cov --cov-report=term --cov-report=xml
+          pytest tests/ -v --cov --cov-report=term --cov-report=xml -m "not integration"
+          pytest tests/ -v -m "integration"
 
       - name: Upload coverage to Coveralls
         if: matrix.python-version == '3.13'   # only upload from 3.13
