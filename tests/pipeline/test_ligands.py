@@ -1,13 +1,14 @@
 import biotite.structure as struc
 import numpy as np
 import pandas as pd
+import tomli
 
+from src.pipeline.context import Config, Context
 from src.pipeline.ligands import (
     calculate_protein_ligand_interactions,
     find_ligands,
     format_ligand_id,
 )
-from src.pipeline.runner import Runner
 from src.structure.structure_context import load_structure
 from tests.test_utils import _make_atoms, _make_config_file, _make_residue, _write_mmcif_file
 
@@ -66,21 +67,23 @@ def test_calculate_protein_ligand_interactions(tmp_path):
 
     config_path = tmp_path / "config_ligand.toml"
     _make_config_file(config_path, pdb_id="test")
+    with config_path.open("rb") as f:
+        config = Config(**tomli.load(f))
+    config.pdb_path = mmcif_path
 
-    myrunner = Runner(
-        pdb_id="test",
-        pdb_path=mmcif_path,
-        name="test_ligand",
-        config_path=config_path,
-    )
-
-    arr = myrunner.context.array
+    arr = load_structure(path=mmcif_path, pdb_id="test")
     if "hetero" not in arr.get_annotation_categories():
         hetero = np.zeros(arr.array_length(), dtype=bool)
         hetero[arr.chain_id == "B"] = True
         arr.set_annotation("hetero", hetero)
     else:
         arr.hetero[arr.chain_id == "B"] = True
+
+    context = Context(array=arr, config=config)
+    context.residue_table.rename(
+        columns={"resn": "resn_struct", "resi": "resi_struct"},
+        inplace=True,
+    )
 
     contacting_df = pd.DataFrame({
         "chain": ["A"],
@@ -89,15 +92,15 @@ def test_calculate_protein_ligand_interactions(tmp_path):
         "partner_residue_key": ["B:1:ALA"],
     })
 
-    result = calculate_protein_ligand_interactions(myrunner.context, contacting_df)
+    result = calculate_protein_ligand_interactions(context, contacting_df)
 
     assert "ligand_B_1_ALA_interactions" in result.columns
-    assert result.shape[0] == myrunner.context.residue_table.shape[0]
+    assert result.shape[0] == context.residue_table.shape[0]
     vals = result["ligand_B_1_ALA_interactions"].dropna().unique()
     assert len(vals) >= 1
     assert set(vals).issubset({"contact", "binding site", "second shell"})
 
     arr.hetero[:] = False
-    out_skip = calculate_protein_ligand_interactions(myrunner.context, contacting_df)
-    assert out_skip.shape[0] == myrunner.context.residue_table.shape[0]
+    out_skip = calculate_protein_ligand_interactions(context, contacting_df)
+    assert out_skip.shape[0] == context.residue_table.shape[0]
     assert "ligand_B_1_ALA_interactions" not in out_skip.columns
