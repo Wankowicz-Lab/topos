@@ -1,6 +1,4 @@
 """
-Plot per-residue metrics across a user-defined group of PDB analyses.
-
 Plot types
 ----------
 lineplot  : mean ± SD across structures, one coloured line per structure
@@ -12,9 +10,11 @@ heatmap   : structures (y) × residues (x), colour = metric value
 
 Usage
 -----
-python plot_all.py                                  # all csvs in directory (default)
-python plot_all.py --pdbs 1ABX 2CDY 3EFG            # only these pdbs
-python plot_all.py --dir mydir/                     # look in this input directory
+python plot_all.py                        # all three plot types
+python plot_all.py --only lineplots
+python plot_all.py --only boxplots
+python plot_all.py --only heatmaps
+python plot_all.py --only heatmaps --cluster
 python plot_all.py --chain B --out my_dir/
 """
 
@@ -28,6 +28,16 @@ import numpy as np
 import pandas as pd
 from scipy.cluster import hierarchy
 from scipy.spatial.distance import pdist
+
+# ── Config defaults ───────────────────────────────────────────────────────────
+_DEFAULT_RENUMBERED_DIR = Path(__file__).resolve().parent / "adk_output" / "renumbered"
+
+
+COLORS = [
+    "#4C72B0", "#DD8452", "#55A868", "#C44E52",
+    "#8172B3", "#937860", "#DA8BC3", "#8C8C8C",
+    "#2ECC71", "#E74C3C", "#9B59B6", "#F39C12",
+]
 
 # Columns to render as boxplots
 BOXPLOT_COLS = {
@@ -96,38 +106,12 @@ SKIP_COLS = {
     "mean_neighbor_sequence_distance",
 }
 
-DEFAULT_COLORS = [
-    "#4C72B0", "#DD8452", "#55A868", "#C44E52",
-    "#8172B3", "#937860", "#DA8BC3", "#8C8C8C", "#FFD700", "#27AE60", "#E67E22", "#E74C3C", "#B2BABB", "#A569BD"
-]
-
-def get_pdb_ids_and_paths(input_dir: Path, allowed_pdbs=None):
-    """
-    Scan directory for *_features.csv files, extract PDB ids and return dict {pdbid: path}.
-    If allowed_pdbs is set, only keep those.
-    """
-    paths = list(input_dir.glob("*_features.csv"))
-    pdb_id_to_path = {}
-    for p in sorted(paths):
-        name = p.name
-        if not name.endswith("_features.csv"):
-            continue
-        pdbid = name.split("_features.csv")[0]
-        if allowed_pdbs and pdbid not in allowed_pdbs:
-            continue
-        pdb_id_to_path[pdbid] = p
-    return pdb_id_to_path
-
-def assign_colors_to_pdbs(pdb_ids):
-    ncolors = len(DEFAULT_COLORS)
-    return {pdb: DEFAULT_COLORS[i % ncolors] for i, pdb in enumerate(sorted(pdb_ids))}
-
 # ── Data loading ──────────────────────────────────────────────────────────────
 
-def load_data(chain: str, pdb_id_to_path: dict):
+def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFrame:
     frames = []
-    available_pdb_ids = []
-    for pdb_id, path in pdb_id_to_path.items():
+    for pdb_id in pdb_ids:
+        path = renumbered_dir / f"{pdb_id}_features.csv"
         if not path.exists():
             print(f"WARNING: {path.name} not found, skipping.", file=sys.stderr)
             continue
@@ -137,12 +121,12 @@ def load_data(chain: str, pdb_id_to_path: dict):
             print(f"WARNING: chain {chain} not in {pdb_id}, skipping.", file=sys.stderr)
             continue
         frames.append(df[df["chain"] == chain])
-        available_pdb_ids.append(pdb_id)
     if not frames:
         sys.exit(f"No data loaded for chain {chain}.")
-    return pd.concat(frames, ignore_index=True), available_pdb_ids
+    return pd.concat(frames, ignore_index=True)
 
 # ── Line plot ─────────────────────────────────────────────────────────────────
+
 def per_residue_stats(df: pd.DataFrame, col: str) -> pd.DataFrame:
     pivot = (
         df.pivot_table(index="resi_struct", columns="pdb_id", values=col)
@@ -160,10 +144,11 @@ def per_residue_stats(df: pd.DataFrame, col: str) -> pd.DataFrame:
         stats[pdb] = pivot[pdb]
     return stats
 
-def plot_lineplot(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, pdb_color) -> pd.DataFrame:
+
+def plot_lineplot(col: str, df: pd.DataFrame, out_dir: Path) -> pd.DataFrame:
     st = per_residue_stats(df, col)
     resi = st.index.values
-    present_pdbs = [p for p in pdb_ids if p in st.columns]
+    present_pdbs = [p for p in df["pdb_id"].unique() if p in st.columns]
 
     fig, ax = plt.subplots(figsize=(13, 5))
     fig.suptitle(col, fontsize=13, fontweight="bold")
@@ -173,7 +158,7 @@ def plot_lineplot(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, pdb_color)
     ax.plot(resi, st["mean"], color="steelblue", lw=2, label="mean", zorder=4)
 
     for i, pdb_id in enumerate(present_pdbs):
-        ax.plot(resi, st[pdb_id], color=pdb_color[pdb_id],
+        ax.plot(resi, st[pdb_id], color=COLORS[i % len(COLORS)],
                 lw=0.9, alpha=0.75, label=pdb_id)
 
     ax.set_xlabel("Residue number", fontsize=11)
@@ -184,14 +169,17 @@ def plot_lineplot(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, pdb_color)
     plt.tight_layout()
 
     safe = col.replace("/", "_").replace(" ", "_")
-    fig.savefig(out_dir / f"{safe}_lineplot.png", dpi=150, bbox_inches="tight")
+    fig.savefig(out_dir / f"{safe}.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
     return st[["mean", "std", "cv", "min", "max", "range", "n_structures"]]
 
 # ── Boxplot ───────────────────────────────────────────────────────────────────
-def plot_boxplot(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, pdb_color) -> None:
+
+def plot_boxplot(col: str, df: pd.DataFrame, out_dir: Path) -> None:
     residues = sorted(df["resi_struct"].dropna().unique().astype(int))
+    all_pdb_ids = sorted(df["pdb_id"].unique())
+    pdb_color = {pdb: COLORS[i % len(COLORS)] for i, pdb in enumerate(all_pdb_ids)}
 
     data_per_resi = [
         df.loc[df["resi_struct"] == r, col].dropna().values
@@ -214,7 +202,7 @@ def plot_boxplot(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, pdb_color) 
     )
 
     rng = np.random.default_rng(42)
-    for pdb_id in pdb_ids:
+    for pdb_id in all_pdb_ids:
         sub = df[df["pdb_id"] == pdb_id][["resi_struct", col]].dropna()
         if sub.empty:
             continue
@@ -247,11 +235,12 @@ def plot_boxplot(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, pdb_color) 
     plt.close(fig)
 
 # ── Heatmap ───────────────────────────────────────────────────────────────────
-def plot_heatmap(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, cluster: bool = False) -> None:
+
+def plot_heatmap(col: str, df: pd.DataFrame, out_dir: Path, cluster: bool = False) -> None:
     # Pivot: rows = structures (pdb_id), columns = residues
     pivot = (
         df.pivot_table(index="pdb_id", columns="resi_struct", values=col)
-        .reindex(index=[p for p in pdb_ids if p in df["pdb_id"].values])
+        .reindex(index=[p for p in df["pdb_id"].unique() if p in df["pdb_id"].values])
         .sort_index(axis=1)
     )
 
@@ -349,29 +338,30 @@ def plot_heatmap(col: str, df: pd.DataFrame, out_dir: Path, pdb_ids, cluster: bo
     plt.close(fig)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Per-residue metric plots for provided group of structures."
+        description="Per-residue metric plots across multiple structures."
+    )
+    parser.add_argument("--chain", default="A", help="Chain to use (default: A).")
+    parser.add_argument(
+        "--pdbs",
+        default=None,
+        help=(
+            "Comma-separated PDB IDs to include. "
+            "Defaults to all *_features.csv files found in --renumbered-dir."
+        ),
     )
     parser.add_argument(
-        "--chain", default="A",
-        help="Chain to use (default: A)",
-    )
-    parser.add_argument(
-        '--dir',
+        "--renumbered-dir",
         type=Path,
-        default=Path("adk_output/renumbered"),  # Default matches the old RENUMBERED_DIR
-        help="Directory containing *_features.csv files (default: adk_output/renumbered)"
-    )
-    parser.add_argument(
-        '--pdbs',
-        nargs='+', default=None,
-        help="Optional: List of PDB IDs to restrict analysis to"
+        default=_DEFAULT_RENUMBERED_DIR,
+        help="Directory containing renumbered features CSVs (default: adk_output/renumbered/).",
     )
     parser.add_argument(
         "--out", type=Path,
-        default=Path("adk_output/residue_profiles"),
-        help="Output directory (default: adk_output/residue_profiles)",
+        default=_DEFAULT_RENUMBERED_DIR.parent / "residue_profiles",
+        help="Output directory (default: adk_output/residue_profiles/).",
     )
     parser.add_argument(
         "--only",
@@ -382,23 +372,26 @@ def main():
     parser.add_argument(
         "--cluster",
         action="store_true",
-        help="Apply hierarchical clustering to heatmaps (both residues and structures axes).",
+        help="Apply hierarchical clustering to heatmaps.",
     )
     args = parser.parse_args()
 
-    # Find all PDB features files
-    pdb_id_to_path = get_pdb_ids_and_paths(args.dir, allowed_pdbs=args.pdbs)
-    pdb_ids = sorted(pdb_id_to_path.keys())
-    if not pdb_ids:
-        sys.exit(f"No feature csvs found in {args.dir} for given --pdbs.")
-
-    pdb_color = assign_colors_to_pdbs(pdb_ids)
+    renumbered_dir = args.renumbered_dir
+    if args.pdbs:
+        pdb_ids = [p.strip().upper() for p in args.pdbs.split(",") if p.strip()]
+    else:
+        pdb_ids = sorted(
+            p.name.replace("_features.csv", "").upper()
+            for p in renumbered_dir.glob("*_features.csv")
+        )
+        if not pdb_ids:
+            sys.exit(f"No *_features.csv files found in {renumbered_dir}.")
 
     run_line = args.only in (None, "lineplots")
     run_box  = args.only in (None, "boxplots")
     run_heat = args.only in (None, "heatmaps")
 
-    df, available_pdb_ids = load_data(args.chain, pdb_id_to_path)
+    df = load_data(args.chain, pdb_ids, renumbered_dir)
     args.out.mkdir(parents=True, exist_ok=True)
 
     all_num_cols = [
@@ -412,7 +405,7 @@ def main():
     if run_line:
         all_stats = {}
         for i, col in enumerate(line_cols, 1):
-            st = plot_lineplot(col, df, args.out, available_pdb_ids, pdb_color)
+            st = plot_lineplot(col, df, args.out)
             all_stats[col] = st
 
         if all_stats:
@@ -426,17 +419,18 @@ def main():
     # ── Boxplots ──────────────────────────────────────────────────────────────
     if run_box:
         for i, col in enumerate(box_cols, 1):
-            plot_boxplot(col, df, args.out, available_pdb_ids, pdb_color)
+            plot_boxplot(col, df, args.out)
 
     # ── Heatmaps ──────────────────────────────────────────────────────────────
     if run_heat:
         cluster_label = " (clustered)" if args.cluster else ""
         for i, col in enumerate(all_num_cols, 1):
-            plot_heatmap(col, df, args.out, available_pdb_ids, cluster=args.cluster)
+            plot_heatmap(col, df, args.out, cluster=args.cluster)
 
     total = (len(line_cols) if run_line else 0) + \
             (len(box_cols)  if run_box  else 0) + \
             (len(all_num_cols) if run_heat else 0)
+
 
 if __name__ == "__main__":
     main()
