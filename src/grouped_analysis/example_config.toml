@@ -1,118 +1,153 @@
-# Fill in one [[structures]] block per PDB, then list
-# the comparisons you want in [[pairs]].
+# ============================================================
+# Biogenesis Structural Grouped Analysis Pipeline — Config Template
+# ============================================================
 #
-# Run:
-#   python run_analysis.py --config example_config.toml
-#   python pairwise_rmsd.py  --config example_config.toml
+# Copy this file, edit it for your protein system, then run:
+#   python run_pipeline.py --config your_config.toml
 #
+# All paths below are relative to the working directory where
+# you run run_pipeline.py (or use absolute paths).
 # ============================================================
 
 
-# Directory produced by the biogenesis pipeline.
-metrics_output_dir = "/path/to/output/files"
+# ── Global Settings ───────────────────────────────────────────────────────────
 
-# Where to write analysis outputs (created if missing).
-output_dir = "results/biogenesis_grouped/"
+# Where all output files will be written
+output_dir = "my_output/"
 
-# Å radius around a mutation residue or ligand used to define the
-# "local" zone for proximity-based difference tables.
+# PDB ID of the structure to use as the numbering reference for renumbering.
+# Must match the pdb_id of one of the [[structures]] entries below.
+reference_pdb = "4AKE"
+
+# Chain to analyze throughout the pipeline
+chain = "A"
+
+# Maximum number of sequence mismatches allowed when renumbering structures
+# to the reference. Structures that exceed this are excluded from multi-
+# structure analysis (they are too divergent to align reliably).
+max_mismatches = 5
+
+# Ångström radius around mutation site(s) or ligand used to define the
+# "local" proximity zone in comparison analysis.
 proximity_angstroms = 8.0
 
+# Number of top variable residues to highlight in variability plots/tables.
+top_n_variable = 20
 
-# ============================================================
-# Structures
-# ============================================================
-# Required keys: label, pdb_id
-# Optional keys: state, genotype, chain, pdb_path, ligand, mutations
+
+# ── Analysis Modes ────────────────────────────────────────────────────────────
+# Multi-structure: compute variability, generate per-residue plots,
+# export structural annotation CSV for DMS interpretation.
+run_multi = true
+
+# Comparison: compare pairs of structures (WT vs mutant, apo vs bound),
+# compute global + local metric differences, export comparison CSV.
+# Requires at least one [[pairs]] block below.
+run_comparison = true
+
+
+# ── Structures ────────────────────────────────────────────────────────────────
+# Add one [[structures]] block per PDB structure.
 #
-#   state    : "apo" | "bound"  (default "apo")
-#   genotype : "wt"  | "mutant" (default "wt")
-#   chain    : chain ID(s) to analyse (default "A")
-#   pdb_path : local .pdb / .cif path; omit to fetch from RCSB
-#   ligand   : HET residue name string OR {name="XYZ", chain="A"} table
-#   mutations: list of {resi=N, wt_aa="X", mut_aa="Y"} tables
-#              (single-letter amino acid codes)
-# ============================================================
+# Required fields:
+#   label   — unique name used in [[pairs]] and output file names
+#   pdb_id  — RCSB PDB ID (downloaded automatically) OR use pdb_path
+#
+# Optional fields:
+#   pdb_path — path to a local .pdb or .cif file (overrides pdb_id download)
+#   group    — group label for multi-structure grouping (e.g. "open", "closed")
+#   state    — "apo" or "bound" (default: "apo")
+#   genotype — "wt" or "mutant" (default: "wt")
+#   chain    — chain ID(s) to analyze (default: inherits global chain above)
+#   ligand   — HET residue for proximity detection: {name = "AP5", chain = "A"}
+#   mutations — list of point mutations (used for proximity detection):
+#               [[structures.mutations]]
+#               resi   = 64     # residue number in reference numbering
+#               wt_aa  = "S"    # single-letter WT amino acid
+#               mut_aa = "D"    # single-letter mutant amino acid
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Wild-type structures ──────────────────────────────────────────────────────
 
 [[structures]]
-label    = "WT_apo_1KE4"
-pdb_id   = "1KE4"
+label    = "4AKE"
+pdb_id   = "4AKE"
+group    = "open"
 state    = "apo"
 genotype = "wt"
 chain    = "A"
 
-# ── Point mutants (apo) ──────────────────────────────────────
 [[structures]]
-label    = "S64D_1L0D"
-pdb_id   = "1L0D"
-state    = "apo"
-genotype = "mutant"
-chain    = "A"
-
-[[structures.mutations]]
-resi   = 64
-wt_aa  = "S"
-mut_aa = "D"
-
-
-[[structures]]
-label    = "K67Q_1L0E"
-pdb_id   = "1L0E"
-state    = "apo"
-genotype = "mutant"
-chain    = "A"
-
-[[structures.mutations]]
-resi   = 67
-wt_aa  = "K"
-mut_aa = "Q"
-
-
-[[structures]]
-label    = "S64G_1L0G"
-pdb_id   = "1L0G"
-state    = "apo"
-genotype = "mutant"
-chain    = "A"
-
-[[structures.mutations]]
-resi   = 64
-wt_aa  = "S"
-mut_aa = "G"
-
-# ── Ligand-bound WT ─────────────────────────────────────────
-[[structures]]
-label    = "WT_bound_BZB_1C3B"
-pdb_id   = "1C3B"
+label    = "1AKE"
+pdb_id   = "1AKE"
+group    = "closed"
 state    = "bound"
 genotype = "wt"
 chain    = "A"
-ligand   = {name = "BZB", chain = "A"}
+ligand   = {name = "AP5", chain = "A"}
+
+[[structures]]
+label    = "1ANK"
+pdb_id   = "1ANK"
+group    = "open"
+state    = "apo"
+genotype = "wt"
+chain    = "A"
+
+[[structures]]
+label    = "3HPQ"
+pdb_id   = "3HPQ"
+group    = "closed"
+state    = "bound"
+genotype = "wt"
+chain    = "A"
+
+[[structures]]
+label    = "6F7U"
+pdb_id   = "6F7U"
+group    = "intermediate"
+state    = "apo"
+genotype = "wt"
+chain    = "A"
+
+# ── Mutant structures (examples) ─────────────────────────────────────────────
+
+[[structures]]
+label    = "G56A_mutant"
+pdb_id   = "XXXX"          
+group    = "mutant"
+state    = "apo"
+genotype = "mutant"
+chain    = "A"
+
+[[structures.mutations]]
+resi   = 56
+wt_aa  = "G"
+mut_aa = "A"
 
 
-# ============================================================
-# Comparison Pairs
-# ============================================================
-# Each pair compares one "comparison" structure against a "reference".
-# Omit all [[pairs]] blocks to auto-pair every structure against the
-# first wt/apo entry.
-# ============================================================
+# ── Comparison Pairs ──────────────────────────────────────────────────────────
+# Define which structures to compare pairwise.
+# Omit all [[pairs]] blocks to skip comparison analysis
+# (or set run_comparison = false above).
+#
+# Fields:
+#   reference   — label of the reference structure (usually WT/apo)
+#   comparison  — label of the structure to compare against it
+#   description — used in output file names and reports
+# ─────────────────────────────────────────────────────────────────────────────
 
 [[pairs]]
-reference   = "WT_apo_1KE4"
-comparison  = "S64D_1L0D"
-description = "WT apo vs S64D point mutant"
+reference   = "4AKE"
+comparison  = "1AKE"
+description = "Open apo vs Closed ligand-bound"
 
 [[pairs]]
-reference   = "WT_apo_1KE4"
-comparison  = "K67Q_1L0E"
-description = "WT apo vs K67Q point mutant"
+reference   = "4AKE"
+comparison  = "3HPQ"
+description = "Open apo vs Closed 3HPQ"
 
-[[pairs]]
-reference   = "WT_apo_1KE4"
-comparison  = "S64G_1L0G"
-description = "WT apo vs S64G point mutant"
-
-[[pairs]]
-reference   = "WT_apo_1KE4"
-comparison  = "WT_bound_BZB_1C3B"
+# [[pairs]]
+# reference   = "4AKE"
+# comparison  = "G56A_mutant"
+# description = "WT apo vs G56A mutant"
