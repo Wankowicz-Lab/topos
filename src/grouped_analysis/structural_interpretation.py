@@ -7,18 +7,18 @@ multi   : Aggregate biogenesis outputs across all structures into a single
           residue-level annotation CSV.  Each row is one residue position
           (reference numbering).  Columns include mean structural properties,
           variability score/class, and an interpretation string.
-          → dms_structural_annotations_multi.csv
+          → structural_annotations_multi.csv
 
 comparison : Summarise per-pair local-difference tables (from
           run_comparison_metrics.py) into a compact residue × comparison
           annotation CSV.  Each row is one residue in one comparison pair.
           Δ values for key structural metrics, a composite change score, and
           a change_class label are computed.
-          → dms_comparison_annotations_{pair}.csv  (one file per pair)
+          → comparison_annotations_{pair}.csv  (one file per pair)
 
 Usage
 -----
-# Multi-structure mode (reads adk_output/renumbered/ + adk_output/variability/)
+# Multi-structure mode (reads /renumbered/ + /variability/)
 python export_dms_annotations.py --mode multi
 
 # Comparison mode (reads a directory containing *_local_diffs.csv files)
@@ -26,21 +26,6 @@ python export_dms_annotations.py --mode comparison --local-dir results/local/
 
 # Override output directory
 python export_dms_annotations.py --mode multi --out my_annotations/
-
-Merging with your DMS data
---------------------------
-The exported CSVs use ``resi`` as the residue key (matches the reference
-numbering used throughout the pipeline).  To annotate your DMS table::
-
-    import pandas as pd
-    dms = pd.read_csv("my_dms_data.csv")           # must have a column 'position'
-    ann = pd.read_csv("dms_structural_annotations_multi.csv")
-    merged = dms.merge(ann, left_on="position", right_on="resi", how="left")
-
-You can then ask questions like:
-  - Do LOF mutations cluster in conserved, buried positions?
-  - Which residues that show large ΔSASA in a mutant also have low DMS fitness?
-  - Do high-variability residues tolerate more mutations?
 """
 
 from __future__ import annotations
@@ -122,7 +107,7 @@ def _variability_class(score: float, low_thr: float, high_thr: float) -> str:
 
 
 def _build_interpretation(row: pd.Series) -> str:
-    """Generate a one-sentence structural interpretation for a residue."""
+    """ Generate a one-sentence structural interpretation for a residue."""
     parts = []
 
     vc = row.get("variability_class", "")
@@ -162,7 +147,6 @@ def run_multi(chain: str, out_dir: Path, pdb_ids: list[str],
     Aggregate renumbered features CSVs + variability outputs into a single
     per-residue annotation file for DMS interpretation.
     """
-    print(f"[multi] Loading renumbered features from {renumbered_dir}/")
 
     # ── Load all structure data ───────────────────────────────────────────────
     frames = []
@@ -183,7 +167,6 @@ def run_multi(chain: str, out_dir: Path, pdb_ids: list[str],
 
     if not frames:
         sys.exit(f"ERROR: No usable features CSVs found for chain {chain}.")
-    print(f"  Loaded {len(loaded)} structures: {', '.join(loaded)}")
 
     all_df = pd.concat(frames, ignore_index=True)
 
@@ -248,23 +231,12 @@ def run_multi(chain: str, out_dir: Path, pdb_ids: list[str],
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "dms_structural_annotations_multi.csv"
     ann.reset_index().to_csv(out_path, index=False)
-    print(f"\n[multi] Wrote {len(ann)} residues × {len(ann.columns)} columns → {out_path}")
 
     # Quick summary
     if "variability_class" in ann.columns:
         vc = ann["variability_class"].value_counts()
-        print(f"\nVariability class breakdown:\n{vc.to_string()}")
     if "sasa_class" in ann.columns:
         sc = ann["sasa_class"].value_counts()
-        print(f"\nSASA class breakdown:\n{sc.to_string()}")
-
-    print(
-        "\nTo merge with your DMS data:\n"
-        "  dms = pd.read_csv('your_dms.csv')\n"
-        f"  ann = pd.read_csv('{out_path}')\n"
-        "  merged = dms.merge(ann, left_on='position', right_on='resi', how='left')"
-    )
-
 
 # ── Mode 2: Comparison ────────────────────────────────────────────────────────
 
@@ -276,13 +248,11 @@ def run_comparison(local_dir: Path, out_dir: Path, delta_threshold: float) -> No
     local_files = sorted(local_dir.glob("*_local_diffs.csv"))
     if not local_files:
         sys.exit(f"ERROR: No *_local_diffs.csv files found in {local_dir}")
-    print(f"[comparison] Found {len(local_files)} local-diff file(s) in {local_dir}/")
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for local_path in local_files:
         pair_name = local_path.stem.replace("_local_diffs", "")
-        print(f"\n  Processing: {pair_name}")
 
         diff_df = pd.read_csv(local_path)
         if diff_df.empty:
@@ -384,16 +354,6 @@ def run_comparison(local_dir: Path, out_dir: Path, delta_threshold: float) -> No
 
         n_changed = int((ann.get("change_class", pd.Series()) == "major").sum())
         n_prox    = int(ann.get("in_proximity", pd.Series(False)).sum())
-        print(f"    → {len(ann)} residues  |  {n_changed} major changes  |"
-              f"  {n_prox} in proximity  →  {out_path.name}")
-
-    print(
-        f"\n[comparison] Done. Files in {out_dir}/\n"
-        "\nTo merge with DMS data:\n"
-        "  dms = pd.read_csv('your_dms.csv')\n"
-        "  ann = pd.read_csv('dms_comparison_annotations_PAIR.csv')\n"
-        "  merged = dms.merge(ann, left_on='position', right_on='resi', how='left')"
-    )
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -437,7 +397,7 @@ def main():
     )
     parser.add_argument(
         "--delta-threshold", type=float, default=0.1,
-        help="Minimum normalised delta to flag a change (comparison mode, default: 0.1).",
+        help="Minimum normalized delta to flag a change (comparison mode, default: 0.1).",
     )
     args = parser.parse_args()
 
