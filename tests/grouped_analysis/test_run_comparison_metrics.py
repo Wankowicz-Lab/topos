@@ -1,9 +1,3 @@
-"""
-Tests for run_comparison_metrics.py  —  pure functions only.
-
-We test _find_features_csv, _classify_columns, and analyze_local
-without any network access or PDB file fetching.
-"""
 from __future__ import annotations
 
 import sys
