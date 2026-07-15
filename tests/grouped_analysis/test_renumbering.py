@@ -17,8 +17,6 @@ from renumber_to_reference import (
 )
 
 
-# ── to1 ──────────────────────────────────────────────────────────────────────
-
 class TestTo1:
     def test_standard_residues(self):
         assert to1("ALA") == "A"
@@ -40,8 +38,6 @@ class TestTo1:
         assert to1("PYL") == "O"
 
 
-# ── build_aligner ─────────────────────────────────────────────────────────────
-
 class TestBuildAligner:
     def test_returns_aligner(self):
         from Bio.Align import PairwiseAligner
@@ -60,7 +56,6 @@ class TestBuildAligner:
         assert aligner.extend_gap_score == -0.5
 
 
-# ── get_chain_sequence ────────────────────────────────────────────────────────
 
 class TestGetChainSequence:
     def _make_df(self):
@@ -99,7 +94,6 @@ class TestGetChainSequence:
         assert seq == [(1, "X")]
 
 
-# ── align_and_map ─────────────────────────────────────────────────────────────
 
 class TestAlignAndMap:
     @pytest.fixture(autouse=True)
