@@ -1,14 +1,12 @@
 """
 Tests for renumber_to_reference.py
 """
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from renumber_to_reference import (
     align_and_map,
