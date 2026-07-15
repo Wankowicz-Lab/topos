@@ -2,7 +2,6 @@
 Tests for run_grouped_pipeline.py
 """
 import textwrap
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
