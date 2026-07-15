@@ -6,13 +6,11 @@ from pathlib import Path
 import biotite.sequence.align as align
 import pandas as pd
 
-from src.grouped_analysis.renumber_to_referencePDB import (
-    align_and_map,
-    build_alignment_params,
-    get_chain_sequence,
-    main,
-    to1,
-)
+from src.grouped_analysis.renumber_to_referencePDB import align_and_map
+from src.grouped_analysis.renumber_to_referencePDB import build_alignment_params
+from src.grouped_analysis.renumber_to_referencePDB import get_chain_sequence
+from src.grouped_analysis.renumber_to_referencePDB import main
+from src.grouped_analysis.renumber_to_referencePDB import to1
 
 def test_to1_standard_residues():
     assert to1("ALA") == "A"
