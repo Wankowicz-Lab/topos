@@ -35,6 +35,7 @@ SKIP_COLS = {
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFrame:
+    """Load and concatenate renumbered features CSVs for all PDB IDs, filtered to the specified chain.""" 
     frames = []
     for pdb_id in pdb_ids:
         path = renumbered_dir / f"{pdb_id}_features.csv"
@@ -106,7 +107,6 @@ def plot_heatmap(normed: pd.DataFrame, out_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_dir / "variability_heatmap.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print("  → variability_heatmap.png")
 
 
 def plot_overall_score(score: pd.Series, top_n: int, out_dir: Path) -> None:
@@ -135,7 +135,6 @@ def plot_overall_score(score: pd.Series, top_n: int, out_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_dir / "overall_variability_score.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print("  → overall_variability_score.png")
 
 
 def plot_top_metrics(sd_df: pd.DataFrame, top_n: int, out_dir: Path) -> None:
@@ -168,7 +167,6 @@ def plot_top_metrics(sd_df: pd.DataFrame, top_n: int, out_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_dir / "top10_variable_metrics.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print("  → top10_variable_metrics.png")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
