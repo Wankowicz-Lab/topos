@@ -30,26 +30,10 @@ from scipy.stats import rankdata
 # Columns that are not meaningful metrics for variability analysis
 SKIP_COLS = {
     "resi_struct", "resi_mut",
-    "graph_all_graph_community_id",
-    "graph_all_graph_core_number",
-    "graph_hbond_graph_community_id",
-    "graph_hbond_graph_closeness_centrality",
-    "graph_hbond_graph_core_number",
-    "graph_hbond_graph_eigenvector_centrality",
-    "graph_vdw_contact_graph_community_id",
     "kyte_doolittle",
-    "mean_neighbor_sequence_distance",
-    "disulfide_bond_count",           # zero everywhere
-    "ss_domain_disulfide_bond_count",
-    "neighborhood_disulfide_bond_count",
-    "packing_n_atoms",                # zero variance
-    "distance_from_membrane_edge",    # not membrane protein
-    "ss_domain_distance_from_membrane_edge",
-    "neighborhood_distance_from_membrane_edge",
 }
 
 # ── Data loading ──────────────────────────────────────────────────────────────
-
 def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFrame:
     frames = []
     for pdb_id in pdb_ids:
