@@ -33,22 +33,41 @@ SKIP_COLS = {
     "kyte_doolittle",
 }
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Identify residues with largest metric changes across multiple structures."
+    )
+    parser.add_argument("--chain", default="A", help="Chain to analyse (default: A).")
+    parser.add_argument("--top", type=int, default=20,
+                        help="Number of top variable residues to highlight (default: 20).")
+    parser.add_argument(
+        "--pdbs", default=None,
+        help="Comma-separated PDB IDs. Defaults to all *_features.csvs found in --renumbered-dir."
+    )
+    parser.add_argument(
+        "--renumbered-dir", type=Path, required=True,
+        help="Directory containing renumbered features CSVs (no default, must provide)."
+    )
+    parser.add_argument(
+        "--out", type=Path, default=None,
+        help="Output directory (default: renumbered-dir/../variability/)."
+    )
+    return parser.parse_args()
+
 # ── Data loading ──────────────────────────────────────────────────────────────
 def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFrame:
     """Load and concatenate renumbered features CSVs for all PDB IDs, filtered to the specified chain.""" 
     frames = []
     for pdb_id in pdb_ids:
         path = renumbered_dir / f"{pdb_id}_features.csv"
-        if not path.exists():
-            print(f"WARNING: {path.name} not found in {renumbered_dir}, skipping.", file=sys.stderr)
-            continue
         df = pd.read_csv(path)
         df = df.assign(pdb_id=pdb_id)
         if chain not in df["chain"].values:
-            print(f"WARNING: Chain {chain} not found in {path.name}, skipping.", file=sys.stderr)
+            print(f"WARNING: Chain {chain} not found in {path.name}, skipping.")
             continue
         frames.append(df[df["chain"] == chain])
     if not frames:
+        # Requires at least one structure for the chain.
         sys.exit(f"No data loaded for chain {chain}.")
     return pd.concat(frames, ignore_index=True)
 
@@ -63,6 +82,7 @@ def compute_variability(df: pd.DataFrame, metric_cols: list[str]) -> tuple[pd.Da
     """
     sd_rows, rng_rows = {}, {}
     for col in metric_cols:
+        # Align values by residue across structures to compute per-residue stats.
         pivot = df.pivot_table(index="resi_struct", columns="pdb_id", values=col)
         sd_rows[col]  = pivot.std(axis=1)
         rng_rows[col] = pivot.max(axis=1) - pivot.min(axis=1)
@@ -71,15 +91,6 @@ def compute_variability(df: pd.DataFrame, metric_cols: list[str]) -> tuple[pd.Da
     rng_df = pd.DataFrame(rng_rows).sort_index()
     return sd_df, rng_df
 
-
-def rank_normalise(df: pd.DataFrame) -> pd.DataFrame:
-    """Rank-normalise each column to [0, 1] (higher = more variable)."""
-    n = len(df)
-    normed = df.apply(lambda col: rankdata(col.fillna(0)) / n)
-    normed.index = df.index
-    return normed
-
-# ── Plots ─────────────────────────────────────────────────────────────────────
 
 def plot_heatmap(normed: pd.DataFrame, out_dir: Path) -> None:
     """Heatmap: residues (rows) × metrics (cols), colour = rank-norm SD."""
@@ -168,29 +179,8 @@ def plot_top_metrics(sd_df: pd.DataFrame, top_n: int, out_dir: Path) -> None:
     fig.savefig(out_dir / "top10_variable_metrics.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
-    parser = argparse.ArgumentParser(
-        description="Identify residues with largest metric changes across multiple structures."
-    )
-    parser.add_argument("--chain", default="A", help="Chain to analyse (default: A).")
-    parser.add_argument("--top", type=int, default=20,
-                        help="Number of top variable residues to highlight (default: 20).")
-    parser.add_argument(
-        "--pdbs", default=None,
-        help="Comma-separated PDB IDs. Defaults to all *_features.csvs found in --renumbered-dir."
-    )
-    parser.add_argument(
-        "--renumbered-dir", type=Path, required=True,
-        help="Directory containing renumbered features CSVs (no default, must provide)."
-    )
-    parser.add_argument(
-        "--out", type=Path, default=None,
-        help="Output directory (default: renumbered-dir/../variability/)."
-    )
-    args = parser.parse_args()
-
+    args = parse_args()
     renumbered_dir = args.renumbered_dir.resolve()
     if not renumbered_dir.is_dir():
         sys.exit(f"Renumbered dir {renumbered_dir} does not exist or is not a directory.")
@@ -230,17 +220,10 @@ def main():
     sd_df  = sd_df.drop(columns=zero_var)
     rng_df = rng_df.drop(columns=zero_var)
 
-    # Rank-normalise
-    normed = rank_normalise(sd_df)
-
-    # Overall score = mean rank-normalised SD across all metrics
-    score = normed.mean(axis=1)
-    score.index = score.index.astype(int)
 
     # ── Save CSVs ─────────────────────────────────────────────────────────────
     sd_df.to_csv(out_dir / "per_residue_sd.csv")
     rng_df.to_csv(out_dir / "per_residue_range.csv")
-    normed.to_csv(out_dir / "per_residue_normalised_sd.csv")
 
     score_df = score.rename("variability_score").to_frame()
     score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
