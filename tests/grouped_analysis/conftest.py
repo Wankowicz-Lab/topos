@@ -1,7 +1,6 @@
 """
 Shared pytest fixtures for grouped_analysis tests.
 """
-import sys
 import textwrap
 from pathlib import Path
 
