@@ -1,434 +1,229 @@
+#!/usr/bin/env python3
 """
-Generate PyMOL visualisation scripts from structural annotation CSVs.
+Pairwise sequence-aligned superposition + CA-RMSD for all structures defined
+in a grouped_structures.toml.
 
-Given any annotation CSV produced by this pipeline (multi-structure or
-comparison mode), this script:
-  1. Writes a PyMOL .pml script that colours residues by the chosen metric.
-  2. Writes a B-factor-mapped PDB file where each residue's B-factor is
-     replaced by the metric value (allows coloring in any structure viewer).
+Outputs
+-------
+  <prefix>pairwise_rmsd.csv      — one row per pair
 
-Coloring modes
---------------
-spectrum  : continuous colour gradient (blue → white → red)
-           Mapped to the full range of the metric, or --vmin/--vmax.
-groups    : categorical colour (one colour per unique group/class label).
-           Use for columns like variability_class, sasa_class, change_class.
-
-Usage examples
---------------
-# Color 4AKE by variability score (from multi-structure analysis)
-python map_to_pymol.py \\
-    --csv structural_annotations_multi.csv \\
-    --metric variability_score \\
-    --pdb 4AKE \\
-    --output viz/4AKE_variability
-
-# Color by SASA class (categorical)
-python map_to_pymol.py \\
-    --csv structural_annotations_multi.csv \\
-    --metric sasa_class \\
-    --pdb 4AKE \\
-    --mode groups \\
-    --output viz/4AKE_sasa_class
-
-# Colour 4AKE by composite_change_score from a comparison
-python map_to_pymol.py \\
-    --csv comparison_annotations_WT_vs_mutant.csv \\
-    --metric composite_change_score \\
-    --pdb 4AKE \\
-    --output viz/4AKE_comparison
-
-Opening in PyMOL
-----------------
-  pymol viz/4AKE_variability.pml
-  # or drag the .pml file into PyMOL
-
-The B-factor PDB can be opened in PyMOL, ChimeraX, VMD, etc. and coloured
-with the built-in "colour by B-factor" option.
+Usage
+-----
+python pairwise_rmsd.py --config grouped_structures.toml [--output-dir results/]
 """
-
 from __future__ import annotations
 
 import argparse
+import itertools
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import io
+
+from src.grouped_analysis.load_grouped_config import load_config
 
 import biotite.database.rcsb as rcsb
-import biotite.structure.io.pdb as pdbio
+import biotite.sequence as bseq
+import biotite.sequence.align as balign
+import biotite.structure as struc
+from biotite.structure.io.pdb import PDBFile
+from biotite.structure.io.pdbx import CIFFile, get_structure as cif_get_structure
 
-# ── Categorical colour palettes ───────────────────────────────────────────────
-# _GROUP_COLORS maps group/category labels to hex color codes for PyMOL
-_GROUP_COLORS = {
-    # variability_class
-    "conserved":         "0x4C72B0",   # blue
-    "moderate":          "0xCCB974",   # yellow
-    "variable":          "0xC44E52",   # red
-    # sasa_class
-    "buried":            "0x2C7BB6",   # deep blue
-    "partially_buried":  "0xFDBD62",   # orange
-    "exposed":           "0xD7191C",   # red
-    # change_class
-    "major":             "0xC44E52",   # red
-    "moderate_change":   "0xDD8452",   # orange  (renamed to avoid clash)
-    "minor":             "0xCCB974",   # yellow
-    "minimal":           "0x4C72B0",   # blue
-    "unknown":           "0x999999",   # grey
+import io
+
+# Standard 3-letter to 1-letter amino acid code conversion
+_THREE_TO_ONE: dict[str, str] = {
+    "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
+    "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
+    "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
+    "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
 }
 
-# Spectrum palettes available in PyMOL
-_SPECTRUM_PALETTE = "blue_white_red"
-
-def parse_args() -> argparse.Namespace:
+def _load_arr(entry) -> struc.AtomArray:
+    """Load a biotite AtomArray for a StructureEntry.
+    
+    Tries to read structure file from provided path; if not available, fetches from RCSB.
+    Handles both PDB and CIF/MMCIF formats.
     """
-    Parse command line arguments for the script.
-    Returns an argparse.Namespace with all arguments.
-    """
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--csv", required=True, type=Path,
-        help="Annotation CSV file (from export_dms_annotations.py or any pipeline output).",
-    )
-    parser.add_argument(
-        "--metric", required=True,
-        help="Column name to visualise (e.g. variability_score, sasa_class, composite_change_score).",
-    )
-    parser.add_argument(
-        "--pdb", required=True,
-        help="PDB ID (fetched from RCSB) or local .pdb/.cif file path.",
-    )
-    parser.add_argument(
-        "--chain", default="A",
-        help="Chain to colour (default: A).",
-    )
-    parser.add_argument(
-        "--output", required=True,
-        help="Output file prefix (directory + base name, e.g. viz/4AKE_variability).",
-    )
-    parser.add_argument(
-        "--mode", choices=["spectrum", "groups", "both"], default="spectrum",
-        help=(
-            "spectrum: continuous gradient (numeric metrics). "
-            "groups: categorical colours (class columns). "
-            "both: generate both types. "
-            "Default: spectrum."
-        ),
-    )
-    parser.add_argument(
-        "--resi-col", default="resi",
-        help="Name of the residue-number column in the CSV (default: resi).",
-    )
-    parser.add_argument(
-        "--vmin", type=float, default=None,
-        help="Minimum value for spectrum colour scale (default: data minimum).",
-    )
-    parser.add_argument(
-        "--vmax", type=float, default=None,
-        help="Maximum value for spectrum colour scale (default: data maximum).",
-    )
-    parser.add_argument(
-        "--no-bfactor-pdb", action="store_true",
-        help="Skip writing the B-factor-mapped PDB file.",
-    )
-    return parser.parse_args()
+    extra = ["b_factor", "occupancy"]
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _load_annotation(csv_path: Path, metric: str, resi_col: str) -> pd.DataFrame:
-    """
-    Load the annotation CSV, validate that the residue and metric columns exist, 
-    and return a cleaned table with 'resi' and metric columns only.
-
-    High value: 
-      - Defensive checks for required columns and clear error messages.
-      - Only non-NA residue indices.
-      - Ensures residue indices are integers (for mapping to PDB).
-    """
-    df = pd.read_csv(csv_path)
-    if resi_col not in df.columns:
-        sys.exit(f"ERROR: column '{resi_col}' not found in {csv_path}.\n"
-                 f"Available columns: {list(df.columns)}")
-    if metric not in df.columns:
-        sys.exit(f"ERROR: metric column '{metric}' not found in {csv_path}.\n"
-                 f"Available columns: {list(df.columns)}")
-    df = df[[resi_col, metric]].dropna(subset=[resi_col])
-    df[resi_col] = df[resi_col].astype(int)
-    df = df.rename(columns={resi_col: "resi"})
-    return df
-
-
-
-# ── PML generation ────────────────────────────────────────────────────────────
-
-def _write_spectrum_pml(
-    df: pd.DataFrame,
-    metric: str,
-    pdb_source: str,
-    chain: str,
-    out_prefix: Path,
-    vmin: float,
-    vmax: float,
-    pdb_path: str | None,
-) -> None:
-    """
-    Write a PyMOL script for continuous (spectrum) colouring.
-
-    High value:
-      - Generates .pml that colours residues on a continuous spectrum based on metric.
-      - Uses B-factor property (b) for easy PyMOL colouring.
-      - Handles PDB load/local vs remote fetch.
-      - Exports a publication-quality PNG of the view.
-    """
-    lines = ["# PyMOL script generated by map_to_pymol.py"]
-    lines.append("# Metric: " + metric)
-    lines.append("")
-    # Handle local PDB load or fetch from RCSB
-    if pdb_path:
-        lines.append(f'load {pdb_path}, {pdb_source}')
+    if entry.pdb_path is not None:
+        path = Path(entry.pdb_path)
+        if not path.exists():
+            sys.exit(f"ERROR: PDB file not found for '{entry.label}': {path}")
+        ext = path.suffix.lstrip(".").lower()
+        if ext in ("cif", "mmcif"):
+            cif = CIFFile.read(str(path))
+            return cif_get_structure(cif, model=1, extra_fields=extra, altloc="occupancy")
+        else:
+            pdb = PDBFile.read(str(path))
+            return pdb.get_structure(model=1, extra_fields=extra, altloc="occupancy")
     else:
-        lines.append(f'fetch {pdb_source}, async=0')
-
-    lines += [
-        "",
-        "hide everything",
-        "show cartoon",
-        f"color grey80, {pdb_source}",
-        "",
-        "# Set B-factors to metric values",
-    ]
-
-    # Set all B-factors for the chain to zero before setting specific values
-    lines.append(f"alter {pdb_source} and chain {chain}, b=0.0")
-
-    # Iterate over DataFrame, set B-factor of each residue to metric value
-    for _, row in df.iterrows():
-        resi = int(row["resi"])
-        val  = row[metric]
-        if not pd.isna(val):
-            try:
-                fval = float(val)
-                lines.append(
-                    f"alter {pdb_source} and chain {chain} and resi {resi}, b={fval:.4f}"
-                )
-            except (TypeError, ValueError):
-                pass # skip if value can't be parsed to float
-
-    # Add spectrum coloring command and legend/ramp for user reference
-    lines += [
-        "",
-        "# Apply spectrum colouring based on B-factor (metric values)",
-        f"spectrum b, {_SPECTRUM_PALETTE}, {pdb_source} and chain {chain}, "
-        f"minimum={vmin:.4f}, maximum={vmax:.4f}",
-        "",
-        "# Colour residues with unset B-factor (b=0.0) as grey80",
-        f"color grey80, {pdb_source} and chain {chain} and b=0.0",
-        "",
-        "# Ramp legend (requires PyMOL ≥ 2.0)",
-        f"ramp_new colorbar, none, [{vmin:.4f}, {(vmin+vmax)/2:.4f}, {vmax:.4f}], "
-        f"[blue, white, red]",
-        "",
-        "# Set a default orientation and perform ray tracing for a nice image",
-        "set_view [\\",
-        "     1.0,  0.0,  0.0,\\",
-        "     0.0,  1.0,  0.0,\\",
-        "     0.0,  0.0,  1.0,\\",
-        "     0.0,  0.0,  -200.0,\\",
-        "     0.0,  0.0,  0.0,  40.0, 200.0, -20.0 ]",
-        "",
-        "ray 1200, 900",
-        f"png {out_prefix.name}_spectrum.png, dpi=150",
-    ]
-
-    # Write out the PML script
-    pml_path = Path(str(out_prefix) + "_spectrum.pml")
-    pml_path.parent.mkdir(parents=True, exist_ok=True)
-    pml_path.write_text("\n".join(lines))
+        # Fetch CIF from RCSB 
+        obj = rcsb.fetch(entry.pdb_id, format="cif")
+        buf = io.StringIO(obj.getvalue())
+        cif = CIFFile.read(buf)
+        return cif_get_structure(cif, model=1, extra_fields=extra, altloc="occupancy")
 
 
-def _write_groups_pml(
-    df: pd.DataFrame,
-    metric: str,
-    pdb_source: str,
-    chain: str,
-    out_prefix: Path,
-    pdb_path: str | None,
-) -> None:
+def extract_ca(arr: struc.AtomArray, chain_ids: list[str], label: str) -> struc.AtomArray:
     """
-    Write a PyMOL script for categorical (group) colouring.
+    Return CA-only AtomArray for standard amino acids in the given chains.
 
-    High value:
-      - Each unique metric value (group) gets a distinct color.
-      - Handles auto-legend and color assignment.
-      - Robust even if non-standard group names in input.
+    Filters for C-alpha atoms (CA) in specified chains and for standard amino acids.
     """
-    lines = ["# PyMOL script generated by map_to_pymol.py"]
-    lines.append("# Metric (categorical): " + metric)
-    lines.append("")
+    aa_mask    = struc.filter_amino_acids(arr)
+    ca_mask    = arr.atom_name == "CA"
+    chain_mask = np.isin(arr.chain_id, chain_ids)
+    ca = arr[aa_mask & ca_mask & chain_mask]
+    return ca
 
-    # Handle local or remote PDB
-    if pdb_path:
-        lines.append(f'load {pdb_path}, {pdb_source}')
-    else:
-        lines.append(f'fetch {pdb_source}, async=0')
-
-    lines += [
-        "",
-        "hide everything",
-        "show cartoon",
-        f"color grey80, {pdb_source}",
-        "",
-    ]
-
-    # Group residues by group label and build legend
-    groups: dict[str, list[int]] = {}
-    for _, row in df.iterrows():
-        key = str(row[metric]) if not pd.isna(row[metric]) else "unknown"
-        groups.setdefault(key, []).append(int(row["resi"]))
-
-    legend_lines: list[str] = []
-    for group_name, residues in sorted(groups.items()):
-        resi_str = "+".join(str(r) for r in sorted(residues))
-        sel_name = f"grp_{group_name.replace(' ', '_')}"
-        color_hex = _GROUP_COLORS.get(group_name, "0xAAAAAA")
-        color_name = f"col_{group_name.replace(' ', '_')}"
-
-        # Set the group color in PyMOL
-        lines.append(f"set_color {color_name}, [{color_hex}]")
-        # Select residues in this group
-        lines.append(
-            f"select {sel_name}, {pdb_source} and chain {chain} and resi {resi_str}"
-        )
-        # Color the selection
-        lines.append(f"color {color_name}, {sel_name}")
-        lines.append("")
-        legend_lines.append(f"# {group_name} ({len(residues)} residues): {color_hex}")
-
-    lines += ["# Legend:"] + legend_lines
-    lines += [
-        "",
-        "ray 1200, 900",
-        f"png {out_prefix.name}_groups.png, dpi=150",
-    ]
-
-    # Write out group-colouring PyMOL script
-    pml_path = Path(str(out_prefix) + "_groups.pml")
-    pml_path.parent.mkdir(parents=True, exist_ok=True)
-    pml_path.write_text("\n".join(lines))
-
-
-# ── B-factor PDB ──────────────────────────────────────────────────────────────
-
-def _write_bfactor_pdb(
-    df: pd.DataFrame,
-    metric: str,
-    pdb_id: str,
-    chain: str,
-    out_prefix: Path,
-    vmin: float,
-    vmax: float,
-    pdb_path_local: str | None,
-) -> None:
+def _to_protein_seq(ca: struc.AtomArray) -> bseq.ProteinSequence:
     """
-    Download or read the PDB file and replace B-factors with metric values.
-    Writes a new PDB file that can be opened in any structure viewer.
-
-    High value:
-      - Makes it easy to color by metric in any molecular viewer, not just PyMOL.
-      - Fills in missing residues with vmin so default color is neutral/grey.
-      - Supports both local and remote PDB fetch seamlessly.
+    Convert a CA-only AtomArray to a biotite ProteinSequence using 3-to-1 letter codes.
+    Residues not in the known dictionary become 'X'.
     """
+    letters = "".join(_THREE_TO_ONE.get(r.strip(), "X") for r in ca.res_name)
+    return bseq.ProteinSequence(letters)
 
-    # Build mapping: residue index (PDB numbering) to metric value
-    resi_to_val: dict[int, float] = {}
-    for _, row in df.iterrows():
-        try:
-            resi_to_val[int(row["resi"])] = float(row[metric])
-        except (TypeError, ValueError):
-            pass
+def _matched_ca(ca1: struc.AtomArray, ca2: struc.AtomArray) -> tuple[struc.AtomArray, struc.AtomArray]:
+    """
+    Given two AtomArrays with only C-alpha atoms, globally align their sequences
+    (using BLOSUM62) and return atom arrays containing only the aligned, non-gap CA positions.
+    """
+    seq1 = _to_protein_seq(ca1)
+    seq2 = _to_protein_seq(ca2)
+    matrix = balign.SubstitutionMatrix.std_protein_matrix()
+    alignments = balign.align_optimal(
+        seq1, seq2, matrix,
+        gap_penalty=(-10, -1),
+        terminal_penalty=False,
+    )
+    trace = alignments[0].trace          # shape (N, 2); -1 = gap
+    valid = (trace[:, 0] != -1) & (trace[:, 1] != -1)
+    idx1  = trace[valid, 0]
+    idx2  = trace[valid, 1]
+    return ca1[idx1], ca2[idx2]
 
-    # Load PDB structure, supports both local file and RCSB fetch
-    if pdb_path_local:
-        pdb_file = pdbio.PDBFile.read(pdb_path_local)
-    else:
-        # Fetch raw PDB contents from RCSB and read directly from string
-        raw = rcsb.fetch(pdb_id, format="pdb")
-        pdb_file = pdbio.PDBFile()
-        pdb_file.read(io.StringIO(raw.getvalue()))
-    arr = pdb_file.get_structure(model=1, extra_fields=["b_factor"])
+def align_rmsd(ca1: struc.AtomArray, ca2: struc.AtomArray) -> tuple[float, int]:
+    """
+    Sequence-align ca1 vs ca2, superimpose their structures, and return the CA RMSD (Å)
+    along with number of aligned residues.
+    CA1 is treated as the reference; ca2 is superimposed onto it.
+    Raises ValueError if <3 aligned residues.
+    """
+    fixed, mobile = _matched_ca(ca1, ca2)
+    n_aligned = fixed.array_length()
+    if n_aligned < 3:
+        raise ValueError(f"Too few aligned residues ({n_aligned}) to superimpose.")
 
-    # Iterate over atoms, set B-factor for correct chain/resi, fallback for missing
-    for i, atom in enumerate(arr):
-        if atom.chain_id == chain:
-            val = resi_to_val.get(atom.res_id, float("nan"))
-            if not np.isnan(val):
-                arr.b_factor[i] = val
-            else:
-                arr.b_factor[i] = vmin  # missing residues get minimum value
+    # Superimpose ca2 onto ca1 based on matched CAs, then compute pairwise distance RMSD
+    fitted, _ = struc.superimpose(fixed, mobile)
+    diff = fixed.coord - fitted.coord
+    rmsd = float(np.sqrt(np.mean(np.sum(diff ** 2, axis=1))))
+    return round(rmsd, 4), n_aligned
 
-    # Write the modified structure to an output file for coloring in external tools
-    out_pdb = Path(str(out_prefix) + "_bfactor.pdb")
-    out_pdb.parent.mkdir(parents=True, exist_ok=True)
-    out_pdb_file = pdbio.PDBFile()
-    out_pdb_file.set_structure(arr)
-    out_pdb_file.write(str(out_pdb))
+def state_comparison(e1, e2) -> str:
+    """Return a hyphen-joined label describing the state pair, e.g. 'apo-bound'."""
+    return f"{e1.state}-{e2.state}"
 
+def genotype_comparison(e1, e2) -> str:
+    """Return a hyphen-joined label describing the genotype pair, e.g. 'wt-mutant'."""
+    return f"{e1.genotype}-{e2.genotype}"
+
+def parse_args():
+    """
+    Parse command line arguments for config, output dir, color-by, and histogram bins.
+    """
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--config",     required=True, help="Path to grouped_structures.toml")
+    ap.add_argument("--output-dir", default=None,
+                    help="Output directory (default: taken from config or '.')")
+    ap.add_argument("--color-by",   choices=["state", "genotype"], default="state",
+                    help="Color histogram by state or genotype comparison (default: state)")
+    ap.add_argument("--bins",       type=int, default=20, help="Histogram bins (default: 20)")
+    return ap.parse_args()
 
 def main():
     """
-    Entry point for command-line usage.
-    High value:
-      - Orchestrates data loading, decision on visualization mode, and output.
-      - Handles both numeric and categorical metrics gracefully.
+    Main program logic:
+    - Loads structure entries from configuration.
+    - Loads C-alpha coordinates from PDB/CIF or fetches remotely.
+    - Performs pairwise sequence-aligned superpositions for all pairs.
+    - Calculates CA RMSD and outputs a CSV summary.
+    - Plots and saves a colored histogram of RMSD values.
     """
     args = parse_args()
-    df = _load_annotation(args.csv, args.metric, args.resi_col)
 
-    # Determine if input PDB is a local file or remote (RCSB)
-    pdb_path_arg = args.pdb
-    is_local = Path(pdb_path_arg).exists()
-    pdb_source = Path(pdb_path_arg).stem if is_local else pdb_path_arg.upper()
-    pdb_local  = pdb_path_arg if is_local else None
+    config_path = Path(args.config)
 
-    out_prefix = Path(args.output)
+    # Load structure entries and global settings
+    entries, global_settings = load_config(config_path)
+    if len(entries) < 2:
+        sys.exit("ERROR: Need at least 2 structures for pairwise comparison.")
 
-    # Compute numeric value range for color scale (only for numeric metrics)
-    numeric_vals = pd.to_numeric(df[args.metric], errors="coerce").dropna()
-    is_numeric   = len(numeric_vals) > 0 and numeric_vals.dtype.kind in "fi"
+    # Set up output location and file prefix
+    out_dir = Path(args.output_dir or global_settings.get("output_dir", "."))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    prefix = global_settings.get("output_prefix", "")
 
-    vmin = args.vmin if args.vmin is not None else (float(numeric_vals.min()) if is_numeric else 0.0)
-    vmax = args.vmax if args.vmax is not None else (float(numeric_vals.max()) if is_numeric else 1.0)
+    # Load CA-only AtomArrays for all entries, skip entries that fail to load or extract CA coords
+    ca_arrays: dict[str, struc.AtomArray] = {}
+    for entry in entries:
+        try:
+            arr = _load_arr(entry)
+        except Exception as exc:
+            continue
+        chains = [entry.chain] if isinstance(entry.chain, str) else list(entry.chain)
+        ca = extract_ca(arr, chains, entry.label)
+        if ca.array_length() > 0:
+            ca_arrays[entry.label] = ca
 
-    # Smartly determine whether to use spectrum or group coloring automatically
-    is_categorical = not is_numeric or df[args.metric].nunique() <= 10
+    # Get entries with successfully loaded CA arrays
+    valid_entries = [e for e in entries if e.label in ca_arrays]
+    if len(valid_entries) < 2:
+        sys.exit("ERROR: Fewer than 2 structures loaded successfully.")
 
-    # Decide what PyMOL scripts to make based on mode and metric type
-    do_spectrum = args.mode in ("spectrum", "both") and is_numeric
-    do_groups   = (args.mode == "groups") or \
-                  (args.mode == "both" and is_categorical) or \
-                  (not is_numeric)
+    # ---- Pairwise alignment --------------------------------------- #
+    # Generate all unique pairs of structures for comparison
+    pairs = list(itertools.combinations(valid_entries, 2))
 
+    rows = []
+    for e1, e2 in pairs:
+        ca1 = ca_arrays[e1.label]
+        ca2 = ca_arrays[e2.label]
+        try:
+            # Compute the sequence-aligned RMSD for the pair
+            rmsd, n_aln = align_rmsd(ca1, ca2)
+            print(f"RMSD = {rmsd:.3f} Å  ({n_aln} residues aligned)")
+        except Exception as exc:
+            print(f"FAILED ({exc})")
+            rmsd, n_aln = float("nan"), 0
 
-    if do_spectrum:
-        # Generate continuous spectrum .pml script
-        _write_spectrum_pml(df, args.metric, pdb_source, args.chain,
-                            out_prefix, vmin, vmax, pdb_local)
+        # Collect all relevant metadata and RMSD results in a row for the output CSV
+        rows.append({
+            "label_1":             e1.label,
+            "label_2":             e2.label,
+            "state_1":             e1.state,
+            "state_2":             e2.state,
+            "genotype_1":          e1.genotype,
+            "genotype_2":          e2.genotype,
+            "ligand_1":            e1.ligand or "",
+            "ligand_2":            e2.ligand or "",
+            "mutations_1":         e1.mutation_summary,
+            "mutations_2":         e2.mutation_summary,
+            "state_comparison":    state_comparison(e1, e2),
+            "genotype_comparison": genotype_comparison(e1, e2),
+            "n_aligned_residues":  n_aln,
+            "ca_rmsd_A":           rmsd,
+        })
 
-    if do_groups:
-        # Generate categorical (group/color) .pml script
-        _write_groups_pml(df, args.metric, pdb_source, args.chain,
-                          out_prefix, pdb_local)
+    df = pd.DataFrame(rows)
 
-    # Generate B-factor mapped PDB for use in any viewer (unless switched off)
-    if not args.no_bfactor_pdb and is_numeric:
-        _write_bfactor_pdb(df, args.metric, pdb_source, args.chain,
-                           out_prefix, vmin, vmax, pdb_local)
+    csv_path = out_dir / f"{prefix}pairwise_rmsd.csv"
+    df.to_csv(csv_path, index=False)
+
 
 
 if __name__ == "__main__":
