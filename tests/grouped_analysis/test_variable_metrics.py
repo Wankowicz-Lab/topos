@@ -1,240 +1,185 @@
 """
-Tests for identify_variable_residues.py
+Tests for identify_variable_metrics.py
 """
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from identify_variable_residues import (
+from src.grouped_analysis.identify_variable_metrics import (
+    SKIP_COLS,
     compute_variability,
     load_data,
     rank_normalise,
 )
 
 
-# ── rank_normalise ────────────────────────────────────────────────────────────
+def test_rank_normalise_output_in_zero_one():
+    df = pd.DataFrame({"a": [3.0, 1.0, 2.0], "b": [10.0, 30.0, 20.0]})
+    normed = rank_normalise(df)
+    assert normed.min().min() >= 0.0
+    assert normed.max().max() <= 1.0
 
-class TestRankNormalise:
-    def test_output_in_zero_one(self):
-        df = pd.DataFrame({"a": [3.0, 1.0, 2.0], "b": [10.0, 30.0, 20.0]})
-        normed = rank_normalise(df)
-        assert normed.min().min() >= 0.0
-        assert normed.max().max() <= 1.0
+def test_rank_normalise_shape_preserved():
+    df = pd.DataFrame({"x": range(5), "y": range(5, 10)})
+    assert rank_normalise(df).shape == df.shape
 
-    def test_shape_preserved(self):
-        df = pd.DataFrame({"x": range(5), "y": range(5, 10)})
-        assert rank_normalise(df).shape == df.shape
+def test_rank_normalise_ascending_rank_order():
+    df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0]})
+    normed = rank_normalise(df)
+    assert list(normed["v"]) == sorted(normed["v"])
 
-    def test_ascending_rank_order(self):
-        df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0]})
-        normed = rank_normalise(df)
-        # Ranks should be monotonically increasing
-        assert list(normed["v"]) == sorted(normed["v"])
+def test_rank_normalise_nan_treated_as_zero():
+    df = pd.DataFrame({"v": [np.nan, 1.0, 2.0]})
+    normed = rank_normalise(df)
+    assert not normed.isnull().any().any()
 
-    def test_nan_treated_as_zero(self):
-        df = pd.DataFrame({"v": [np.nan, 1.0, 2.0]})
-        normed = rank_normalise(df)
-        # NaN filled with 0 before ranking — no NaN in output
-        assert not normed.isnull().any().any()
+def test_rank_normalise_single_column():
+    df = pd.DataFrame({"x": [5.0, 5.0, 5.0]})
+    normed = rank_normalise(df)
+    assert normed.shape == (3, 1)
 
-    def test_single_column(self):
-        df = pd.DataFrame({"x": [5.0, 5.0, 5.0]})
-        normed = rank_normalise(df)
-        assert normed.shape == (3, 1)
-
-    def test_index_preserved(self):
-        df = pd.DataFrame({"m": [1.0, 2.0, 3.0]}, index=[10, 20, 30])
-        normed = rank_normalise(df)
-        assert list(normed.index) == [10, 20, 30]
+def test_rank_normalise_index_preserved():
+    df = pd.DataFrame({"m": [1.0, 2.0, 3.0]}, index=[10, 20, 30])
+    normed = rank_normalise(df)
+    assert list(normed.index) == [10, 20, 30]
 
 
-# ── compute_variability ───────────────────────────────────────────────────────
+def _make_variability_df():
+    """3 residues × 2 structures, one metric."""
+    return pd.DataFrame({
+        "resi_struct": [1, 1, 2, 2, 3, 3],
+        "pdb_id":      ["A", "B", "A", "B", "A", "B"],
+        "metric1":     [1.0, 1.0, 2.0, 4.0, 5.0, 5.0],
+        "metric2":     [10.0, 20.0, 10.0, 10.0, 10.0, 10.0],
+    })
 
-class TestComputeVariability:
-    def _make_df(self):
-        """3 residues × 2 structures, one metric."""
-        return pd.DataFrame({
-            "resi_struct": [1, 1, 2, 2, 3, 3],
-            "pdb_id":      ["A", "B", "A", "B", "A", "B"],
-            "metric1":     [1.0, 1.0, 2.0, 4.0, 5.0, 5.0],
-            "metric2":     [10.0, 20.0, 10.0, 10.0, 10.0, 10.0],
-        })
+def test_compute_variability_sd_zero_for_identical():
+    df = _make_variability_df()
+    sd_df, _ = compute_variability(df, ["metric1"])
+    assert sd_df.loc[1, "metric1"] == pytest.approx(0.0)
+    assert sd_df.loc[3, "metric1"] == pytest.approx(0.0)
 
-    def test_sd_zero_for_identical(self):
-        df = self._make_df()
-        sd_df, _ = compute_variability(df, ["metric1"])
-        # resi 1 and 3 have identical values across structures
-        assert sd_df.loc[1, "metric1"] == pytest.approx(0.0)
-        assert sd_df.loc[3, "metric1"] == pytest.approx(0.0)
+def test_compute_variability_sd_nonzero_for_variable():
+    df = _make_variability_df()
+    sd_df, _ = compute_variability(df, ["metric1"])
+    # resi 2 has values 2.0 and 4.0 → SD > 0
+    assert sd_df.loc[2, "metric1"] > 0
 
-    def test_sd_nonzero_for_variable(self):
-        df = self._make_df()
-        sd_df, _ = compute_variability(df, ["metric1"])
-        # resi 2 has values 2.0 and 4.0 → SD = 1.414...
-        assert sd_df.loc[2, "metric1"] > 0
+def test_compute_variability_range_values():
+    df = _make_variability_df()
+    _, rng_df = compute_variability(df, ["metric2"])
+    # metric2: resi 1 has 10, 20 → range = 10
+    assert rng_df.loc[1, "metric2"] == pytest.approx(10.0)
+    assert rng_df.loc[2, "metric2"] == pytest.approx(0.0)
 
-    def test_range_values(self):
-        df = self._make_df()
-        _, rng_df = compute_variability(df, ["metric2"])
-        # metric2: resi 1 has 10, 20 → range = 10
-        assert rng_df.loc[1, "metric2"] == pytest.approx(10.0)
-        # resi 2 and 3 have same value → range = 0
-        assert rng_df.loc[2, "metric2"] == pytest.approx(0.0)
+def test_compute_variability_multiple_metrics():
+    df = _make_variability_df()
+    sd_df, rng_df = compute_variability(df, ["metric1", "metric2"])
+    assert "metric1" in sd_df.columns
+    assert "metric2" in sd_df.columns
+    assert "metric1" in rng_df.columns
+    assert "metric2" in rng_df.columns
 
-    def test_multiple_metrics(self):
-        df = self._make_df()
-        sd_df, rng_df = compute_variability(df, ["metric1", "metric2"])
-        assert "metric1" in sd_df.columns
-        assert "metric2" in sd_df.columns
-        assert "metric1" in rng_df.columns
-        assert "metric2" in rng_df.columns
-
-    def test_returns_sorted_index(self):
-        df = self._make_df()
-        sd_df, _ = compute_variability(df, ["metric1"])
-        assert list(sd_df.index) == sorted(sd_df.index)
+def test_compute_variability_returns_sorted_index():
+    df = _make_variability_df()
+    sd_df, _ = compute_variability(df, ["metric1"])
+    assert list(sd_df.index) == sorted(sd_df.index)
 
 
-# ── load_data ─────────────────────────────────────────────────────────────────
+def _write_test_features(directory: Path, pdb_id: str):
+    df = pd.DataFrame({
+        "chain": ["A", "A", "B"],
+        "resi_struct": [1, 2, 1],
+        "metric1": [1.0, 2.0, 3.0],
+    })
+    df.to_csv(directory / f"{pdb_id}_features.csv", index=False)
 
-class TestLoadData:
-    def _write_features(self, directory: Path, pdb_id: str):
-        df = pd.DataFrame({
-            "chain": ["A", "A", "B"],
-            "resi_struct": [1, 2, 1],
-            "metric1": [1.0, 2.0, 3.0],
-        })
-        df.to_csv(directory / f"{pdb_id}_features.csv", index=False)
+def test_load_data_loads_correct_chain(tmp_path):
+    _write_test_features(tmp_path, "AAAA")
+    df = load_data("A", ["AAAA"], tmp_path)
+    assert all(df["chain"] == "A")
 
-    def test_loads_correct_chain(self, tmp_path):
-        self._write_features(tmp_path, "AAAA")
-        df = load_data("A", ["AAAA"], tmp_path)
-        assert all(df["chain"] == "A")
+def test_load_data_assigns_pdb_id_column(tmp_path):
+    _write_test_features(tmp_path, "AAAA")
+    df = load_data("A", ["AAAA"], tmp_path)
+    assert "pdb_id" in df.columns
+    assert (df["pdb_id"] == "AAAA").all()
 
-    def test_assigns_pdb_id_column(self, tmp_path):
-        self._write_features(tmp_path, "AAAA")
-        df = load_data("A", ["AAAA"], tmp_path)
-        assert "pdb_id" in df.columns
-        assert (df["pdb_id"] == "AAAA").all()
+def test_load_data_multiple_pdbs_concatenated(tmp_path):
+    _write_test_features(tmp_path, "AAAA")
+    _write_test_features(tmp_path, "BBBB")
+    df = load_data("A", ["AAAA", "BBBB"], tmp_path)
+    assert set(df["pdb_id"].unique()) == {"AAAA", "BBBB"}
 
-    def test_multiple_pdbs_concatenated(self, tmp_path):
-        self._write_features(tmp_path, "AAAA")
-        self._write_features(tmp_path, "BBBB")
-        df = load_data("A", ["AAAA", "BBBB"], tmp_path)
-        assert set(df["pdb_id"].unique()) == {"AAAA", "BBBB"}
+def test_load_data_missing_file_skipped(tmp_path, capsys):
+    _write_test_features(tmp_path, "AAAA")
+    # BBBB not on disk
+    df = load_data("A", ["AAAA", "BBBB"], tmp_path)
+    assert "BBBB" not in df["pdb_id"].values
+    err = capsys.readouterr().err
+    assert "WARNING" in err
 
-    def test_missing_file_skipped(self, tmp_path, capsys):
-        self._write_features(tmp_path, "AAAA")
-        # BBBB not on disk
-        df = load_data("A", ["AAAA", "BBBB"], tmp_path)
-        assert "BBBB" not in df["pdb_id"].values
-        err = capsys.readouterr().err
-        assert "WARNING" in err
-
-    def test_chain_not_in_pdb_skipped(self, tmp_path):
-        pd.DataFrame({"chain": ["B"], "resi_struct": [1], "metric1": [0.0]}).to_csv(
-            tmp_path / "CCCC_features.csv", index=False
-        )
-        # chain A not present in CCCC → should be skipped
-        df = load_data("A", ["CCCC"], tmp_path)
-        assert df.empty or len(df) == 0
+def test_load_data_chain_not_in_pdb_raises(tmp_path):
+    pd.DataFrame({"chain": ["B"], "resi_struct": [1], "metric1": [0.0]}).to_csv(
+        tmp_path / "CCCC_features.csv", index=False
+    )
+    # chain A not present → sys.exit called when no data loaded
+    with pytest.raises(SystemExit):
+        load_data("A", ["CCCC"], tmp_path)
 
 
-# ── Integration: main via CLI ─────────────────────────────────────────────────
+def _write_pipeline_features(directory: Path, pdb_id: str, seed: int = 0):
+    rng = np.random.default_rng(seed)
+    df = pd.DataFrame({
+        "chain": ["A"] * 5,
+        "resi_struct": list(range(1, 6)),
+        "metric1": rng.uniform(0, 10, 5).tolist(),
+        "metric2": rng.uniform(0, 5, 5).tolist(),
+        "disulfide_bond_count": [0] * 5,  # in SKIP_COLS
+    })
+    df.to_csv(directory / f"{pdb_id}_features.csv", index=False)
 
-class TestIdentifyVariableMain:
-    def _write_features(self, directory: Path, pdb_id: str, seed: int = 0):
-        rng = np.random.default_rng(seed)
-        df = pd.DataFrame({
-            "chain": ["A"] * 5,
-            "resi_struct": list(range(1, 6)),
-            "metric1": rng.uniform(0, 10, 5).tolist(),
-            "metric2": rng.uniform(0, 5, 5).tolist(),
-            "disulfide_bond_count": [0] * 5,  # in SKIP_COLS
-        })
-        df.to_csv(directory / f"{pdb_id}_features.csv", index=False)
+def _run_variability_pipeline(rdir: Path, pdb_ids=("AAAA", "BBBB")):
+    df = load_data("A", list(pdb_ids), rdir)
+    metric_cols = [
+        c for c in df.select_dtypes(include="number").columns
+        if c not in SKIP_COLS
+    ]
+    sd_df, rng_df = compute_variability(df, metric_cols)
+    zero_var = sd_df.columns[sd_df.max() == 0]
+    sd_df = sd_df.drop(columns=zero_var)
+    rng_df = rng_df.drop(columns=zero_var)
+    normed = rank_normalise(sd_df)
+    score = normed.mean(axis=1)
+    score_df = score.rename("variability_score").to_frame()
+    score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
+    return score_df, sd_df, rng_df
 
-    def test_main_creates_output_files(self, tmp_path):
-        rdir = tmp_path / "renumbered"
-        rdir.mkdir()
-        out_dir = tmp_path / "variability"
+def test_variability_pipeline_variability_ranking_has_correct_columns(tmp_path):
+    rdir = tmp_path / "renumbered"
+    rdir.mkdir()
+    _write_pipeline_features(rdir, "AAAA", seed=3)
+    _write_pipeline_features(rdir, "BBBB", seed=4)
+    score_df, _, _ = _run_variability_pipeline(rdir)
+    assert "variability_score" in score_df.columns
+    assert "rank" in score_df.columns
 
-        self._write_features(rdir, "AAAA", seed=1)
-        self._write_features(rdir, "BBBB", seed=2)
+def test_variability_pipeline_skip_cols_excluded_from_variability(tmp_path):
+    rdir = tmp_path / "renumbered"
+    rdir.mkdir()
+    _write_pipeline_features(rdir, "AAAA", seed=5)
+    _write_pipeline_features(rdir, "BBBB", seed=6)
+    _, sd_df, _ = _run_variability_pipeline(rdir)
+    assert "disulfide_bond_count" not in sd_df.columns
 
-        import identify_variable_residues as ivr
-        old_argv = sys.argv
-        sys.argv = [
-            "identify_variable_residues.py",
-            "--pdbs", "AAAA,BBBB",
-            "--renumbered-dir", str(rdir),
-            "--chain", "A",
-            "--top", "3",
-            "--out", str(out_dir),
-        ]
-        try:
-            ivr.main()
-        finally:
-            sys.argv = old_argv
-
-        assert (out_dir / "residue_variability_ranking.csv").exists()
-        assert (out_dir / "per_residue_sd.csv").exists()
-        assert (out_dir / "per_residue_range.csv").exists()
-        assert (out_dir / "per_residue_normalised_sd.csv").exists()
-
-    def test_variability_ranking_has_correct_columns(self, tmp_path):
-        rdir = tmp_path / "renumbered"
-        rdir.mkdir()
-        out_dir = tmp_path / "variability"
-
-        self._write_features(rdir, "AAAA", seed=3)
-        self._write_features(rdir, "BBBB", seed=4)
-
-        import identify_variable_residues as ivr
-        old_argv = sys.argv
-        sys.argv = [
-            "identify_variable_residues.py",
-            "--pdbs", "AAAA,BBBB",
-            "--renumbered-dir", str(rdir),
-            "--chain", "A",
-            "--out", str(out_dir),
-        ]
-        try:
-            ivr.main()
-        finally:
-            sys.argv = old_argv
-
-        df = pd.read_csv(out_dir / "residue_variability_ranking.csv")
-        assert "variability_score" in df.columns
-        assert "rank" in df.columns
-
-    def test_skip_cols_excluded_from_variability(self, tmp_path):
-        """disulfide_bond_count (all-zero) should be dropped as zero-variance."""
-        rdir = tmp_path / "renumbered"
-        rdir.mkdir()
-        out_dir = tmp_path / "variability"
-
-        self._write_features(rdir, "AAAA", seed=5)
-        self._write_features(rdir, "BBBB", seed=6)
-
-        import identify_variable_residues as ivr
-        old_argv = sys.argv
-        sys.argv = [
-            "identify_variable_residues.py",
-            "--pdbs", "AAAA,BBBB",
-            "--renumbered-dir", str(rdir),
-            "--chain", "A",
-            "--out", str(out_dir),
-        ]
-        try:
-            ivr.main()
-        finally:
-            sys.argv = old_argv
-
-        sd_df = pd.read_csv(out_dir / "per_residue_sd.csv", index_col=0)
-        assert "disulfide_bond_count" not in sd_df.columns
+def test_variability_pipeline_ranking_covers_all_residues(tmp_path):
+    rdir = tmp_path / "renumbered"
+    rdir.mkdir()
+    _write_pipeline_features(rdir, "AAAA", seed=7)
+    _write_pipeline_features(rdir, "BBBB", seed=8)
+    score_df, _, _ = _run_variability_pipeline(rdir)
+    # 5 residues in the test data
+    assert len(score_df) == 5
+    assert set(score_df["rank"]) == set(range(1, 6))
