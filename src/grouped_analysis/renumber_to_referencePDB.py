@@ -2,10 +2,6 @@
 Re-number biogenesis output CSVs so that resi_struct matches the user-specified reference
 PDB via pairwise sequence alignment.
 
-Usage
------
-python renumber_to_reference.py --ref <reference_pdbid> [--input-dir INPUT_DIR] [--pdbs PDB1,PDB2,...] [--max-mismatches 5]
-
 Logic per structure
 -------------------
 1. Reference PDB and list of PDBs to renumber are chosen by the user, either
@@ -20,7 +16,6 @@ Logic per structure
    bonds CSVs and save to <output_dir>/renumbered/.
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -30,41 +25,6 @@ from biotite.sequence import ProteinSequence
 
 DEFAULT_INPUT_DIR = "."
 RENUMBERED_DIR = "renumbered"
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Re-number biogenesis CSVs to a reference PDB numbering."
-    )
-    parser.add_argument(
-        "--ref", required=True,
-        help="PDB ID to use as the numbering reference (required)",
-    )
-    parser.add_argument(
-        "--max-mismatches",
-        type=int,
-        default=5,
-        help="Remove structures with more than this many sequence mismatches (default: 5)",
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=str,
-        default=DEFAULT_INPUT_DIR,
-        help=f"Directory containing input CSV files (default: '{DEFAULT_INPUT_DIR}')",
-    )
-    parser.add_argument(
-        "--pdbs",
-        type=str,
-        default="",
-        help="Comma-separated PDB IDs to process (default: all PDBs in input-dir). "
-                "The reference PDB will always be included.",
-    )
-    parser.add_argument(
-        "--ref-chain",
-        type=str,
-        default="A",
-        help="Reference chain ID to use for alignment (default: A)",
-    )
-    return parser.parse_args()
 
 def to1(resn: str) -> str:
     """Convert a 3-letter residue name to a 1-letter code (returns 'X' for unknowns)."""
@@ -164,7 +124,7 @@ def detect_pdbs(input_dir: Path, ref_pdb: str = None) -> list[str]:
     return sorted(pdbs)
 
 
-def main(
+def renumber_structures(
     ref_pdb: str,
     max_mismatches: int,
     input_dir: str = DEFAULT_INPUT_DIR,
@@ -181,7 +141,7 @@ def main(
         - Otherwise, renumber all related CSVs and save to output directory.
     """
     input_dir = Path(input_dir)
-    renum_dir = Path(RENUMBERED_DIR)
+    renum_dir = input_dir / RENUMBERED_DIR
     renum_dir.mkdir(parents=True, exist_ok=True)
     matrix, gap_penalty = build_alignment_params()
 
@@ -260,25 +220,3 @@ def main(
                 df["resi_mut"] = df.apply(lambda r: remap_resi(r, "resi_mut"), axis=1)
 
             df.to_csv(renum_dir / src.name, index=False)
-
-    if removed:
-        print(f"Removed ({len(removed)}): {', '.join(removed)}")
-
-
-if __name__ == "__main__":
-    # Command-line interface: parse arguments and run the main renumbering function
-    args = parse_args()
-
-    # Build list of PDBs to process, always placing the reference PDB first
-    user_pdbs = [p.strip() for p in args.pdbs.split(",") if p.strip()]
-    if args.ref not in user_pdbs:
-        user_pdbs = [args.ref] + [p for p in user_pdbs if p != args.ref]
-
-    # Invoke main renumbering logic
-    main(
-        ref_pdb=args.ref,
-        max_mismatches=args.max_mismatches,
-        input_dir=args.input_dir,
-        pdb_list=user_pdbs if user_pdbs else None,
-        ref_chain=args.ref_chain,
-    )
