@@ -96,6 +96,47 @@ output_prefix = ""
 ```
 ---
 
+---
+
+## Example 3 — Grouped Analysis
+
+**Directory**: `examples/grouped_analysis/`
+
+**Protein**: E. coli adenylate kinase (PDBs: 1AKE, 1ANK, 3HPQ, 4AKE, 4JLB, 8RJ8)
+
+**Input**: Topos CSVs and local PDBs
+
+For each PDB, we expect to see the following (only showing 1AKE): 
+| File | Description |
+|------|-------------|
+| `1AKE_features.csv` | 294 residues × 68 structural metrics |
+| `1AKE_metadata.csv` | Residue-level structural annotation |
+| `1AKE_run_log.txt` | Human-readable summary of the run |
+| `1AKE.cif` | mmCIF/PDBx file |
+
+
+**What it shows**:
+- Loading a local PDB file using `pdb_path`
+- Running all structural metrics (SASA, packing, hydrogen bonds, etc.)
+- No mutation data — sequence-level metrics are skipped automatically
+- The run log records that no hydrogens were present in the file
+
+```bash
+python examples/grouped_analysis/run_grouped_example.py
+```
+
+**Outputs** (written to `examples/grouped_analysis/output/`):
+
+| File | Description |
+|------|-------------|
+
+
+**Config**: `ADK_grouped_config.toml`
+
+```toml
+```
+---
+
 
 ## Troubleshooting
 
