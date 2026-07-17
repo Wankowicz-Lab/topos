@@ -26,7 +26,6 @@ python run_analysis.py --config example_config.toml [--output-dir results/]
 """
 from __future__ import annotations
 
-import argparse
 import sys
 import warnings
 from pathlib import Path
@@ -44,36 +43,8 @@ from biotite.structure.io.pdb import PDBFile
 from biotite.structure.io.pdbx import CIFFile
 from biotite.structure.io.pdbx import get_structure as cif_get_structure
 
+from grouped_analysis.load_group_config import load_config
 
-def parse_args():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--config", required=True, help="Path to grouped_structures.toml"
-    )
-    ap.add_argument(
-        "--output-dir",
-        default=None,
-        help="Override output_dir from config",
-    )
-    ap.add_argument(
-        "--metrics-dir",
-        default=None,
-        help="Override metrics_dir from config",
-    )
-    ap.add_argument(
-        "--bins", type=int, default=30, help="Histogram bins (default: 30)"
-    )
-    ap.add_argument(
-        "--no-histograms",
-        action="store_true",
-        help="Skip histogram generation (faster)",
-    )
-    ap.add_argument(
-        "--no-proximity",
-        action="store_true",
-        help="Skip PDB fetching for proximity detection; report all residues",
-    )
-    return ap.parse_args()
 
 
 
@@ -208,34 +179,26 @@ def _load_structure_array(entry):
     """Return a biotite AtomArray for *entry* (fetch from RCSB if needed)."""
 
     extra = ["b_factor", "occupancy"]
-    try:
-        if entry.pdb_path is not None:
-            path = Path(entry.pdb_path)
-            ext = path.suffix.lstrip(".").lower()
-            if ext in ("cif", "mmcif"):
-                cif = CIFFile.read(str(path))
-                return cif_get_structure(cif, model=1, extra_fields=extra, altloc="occupancy")
-            pdb = PDBFile.read(str(path))
-            return pdb.get_structure(model=1, extra_fields=extra, altloc="occupancy")
+    if entry.pdb_path is not None:
+        path = Path(entry.pdb_path)
+        ext = path.suffix.lstrip(".").lower()
+        if ext in ("cif", "mmcif"):
+            cif = CIFFile.read(str(path))
+            return cif_get_structure(cif, model=1, extra_fields=extra, altloc="occupancy")
+        pdb = PDBFile.read(str(path))
+        return pdb.get_structure(model=1, extra_fields=extra, altloc="occupancy")
 
-        # Fetch from RCSB
-        obj = rcsb.fetch(entry.pdb_id, format="cif")
-        tmp = NamedTemporaryFile(delete=False, suffix=".cif")
-        tmp.write(obj.getvalue().encode("utf-8"))
-        tmp.close()
-        cif = CIFFile.read(tmp.name)
-        return cif_get_structure(cif, model=1, extra_fields=extra, altloc="occupancy")
-    except Exception as exc:
-        print(f"  WARNING: could not load structure for {entry.label}: {exc}")
-        return None
+    # Fetch from RCSB
+    obj = rcsb.fetch(entry.pdb_id, format="cif")
+    tmp = NamedTemporaryFile(delete=False, suffix=".cif")
+    tmp.write(obj.getvalue().encode("utf-8"))
+    tmp.close()
+    cif = CIFFile.read(tmp.name)
+    return cif_get_structure(cif, model=1, extra_fields=extra, altloc="occupancy")
 
 
 def _residues_near_position(arr, chain: str, resi: int, cutoff: float) -> set[int]:
     """Return residue numbers (res_id) within *cutoff* Å of residue *resi*."""
-    try:
-        import biotite.structure as struc
-    except ImportError:
-        return set()
 
     aa_mask = struc.filter_amino_acids(arr)
     chain_mask = arr.chain_id == chain
@@ -257,11 +220,6 @@ def _residues_near_position(arr, chain: str, resi: int, cutoff: float) -> set[in
 
 def _residues_near_ligand(arr, ligand_name: str, chain: str, cutoff: float) -> set[int]:
     """Return protein residue numbers within *cutoff* Å of ligand *ligand_name*."""
-    try:
-        import biotite.structure as struc
-    except ImportError:
-        return set()
-
     lig_mask = arr.hetero & (np.char.strip(arr.res_name) == ligand_name)
     if not lig_mask.any():
         print(f"  WARNING: ligand '{ligand_name}' not found in structure.")
@@ -547,20 +505,34 @@ def analyze_local(
     return df
 
 
-def main():
-    args = parse_args()
-    config_path = Path(args.config)
-    if not config_path.exists():
-        sys.exit(f"ERROR: config not found: {config_path}")
+def run_comparison_analysis(
+    config_path: Path,
+    metrics_dir: Path,
+    out_dir: Path,
+    bins: int = 30,
+    no_histograms: bool = False,
+    no_proximity: bool = False,
+) -> None:
+    """
+    Programmatic entry point: run per-pair comparison analysis and write outputs.
 
-    # Allow running from any directory
-    sys.path.insert(0, str(config_path.resolve().parents[2]))
-    from src.grouped_analysis.load_grouped_config import load_config
-
+    Parameters
+    ----------
+    config_path : Path
+        Path to the grouped_structures TOML config file.
+    metrics_dir : Path
+        Directory containing ``{PDB_ID}_features.csv`` files.
+    out_dir : Path
+        Directory where CSV and histogram outputs are written.
+    bins : int
+        Number of histogram bins.
+    no_histograms : bool
+        Skip histogram generation.
+    no_proximity : bool
+        Skip PDB fetching for proximity detection; report all residues.
+    """
     entries, pairs, settings = load_config(config_path)
 
-    metrics_dir = Path(args.metrics_dir or settings.get("metrics_dir", "."))
-    out_dir = Path(args.output_dir or settings.get("output_dir", "results"))
     prefix = settings.get("output_prefix", "")
     cutoff = float(settings.get("proximity_angstroms", 8.0))
 
@@ -573,12 +545,8 @@ def main():
         sys.exit("ERROR: No metrics CSVs could be loaded.")
 
     # -- Global histograms (all structures) ----------------------------------
-    if not args.no_histograms:
-        generate_histograms(
-            metrics_map,
-            out_dir / "histograms",
-            bins=args.bins,
-        )
+    if not no_histograms:
+        generate_histograms(metrics_map, out_dir / "histograms", bins=bins)
 
     # -- Per-pair analysis ---------------------------------------------------
     all_stats: list[pd.DataFrame] = []
@@ -589,55 +557,39 @@ def main():
         cmp_lbl = pair.comparison
         desc = pair.description.replace(" ", "_").replace("/", "-")
 
-        if ref_lbl not in metrics_map:
-            print(f"  SKIP {pair.description}: reference '{ref_lbl}' metrics missing.")
-            continue
-        if cmp_lbl not in metrics_map:
-            print(f"  SKIP {pair.description}: comparison '{cmp_lbl}' metrics missing.")
-            continue
-
         ref_df = metrics_map[ref_lbl]
         cmp_df = metrics_map[cmp_lbl]
         ref_entry = entry_map[ref_lbl]
         cmp_entry = entry_map[cmp_lbl]
 
-        # Global stats
         stats_df, count_df = analyze_global(ref_df, cmp_df, ref_lbl, cmp_lbl)
         stats_df["pair"] = pair.description
         count_df["pair"] = pair.description
         all_stats.append(stats_df)
         all_counts.append(count_df)
 
-        # Proximity residues
         proximity_resi: set[int] = set()
-        if not args.no_proximity:
+        if not no_proximity:
             has_mutation = bool(cmp_entry.mutations)
             has_ligand = cmp_entry.ligand is not None or ref_entry.ligand is not None
             if has_mutation or has_ligand:
                 proximity_resi = get_proximity_residues(ref_entry, cmp_entry, cutoff)
-            else:
-                print("  No mutations or ligand specified; local zone = all residues.")
 
-        # Local differences
-        local_df = analyze_local(
-            ref_df, cmp_df, ref_lbl, cmp_lbl, proximity_resi
-        )
+        local_df = analyze_local(ref_df, cmp_df, ref_lbl, cmp_lbl, proximity_resi)
         if not local_df.empty:
             local_dir = out_dir / "local"
             local_dir.mkdir(exist_ok=True)
             local_path = local_dir / f"{prefix}{desc}_local_diffs.csv"
             local_df.to_csv(local_path, index=False)
-            n_prox = int(local_df["in_proximity"].sum())
+
     # -- Write combined global outputs ---------------------------------------
     if all_stats:
-        stats_path = out_dir / f"{prefix}global_stats.csv"
-        pd.concat(all_stats, ignore_index=True).to_csv(stats_path, index=False)
-
+        pd.concat(all_stats, ignore_index=True).to_csv(
+            out_dir / f"{prefix}global_stats.csv", index=False
+        )
     if all_counts:
-        count_path = out_dir / f"{prefix}count_differences.csv"
-        pd.concat(all_counts, ignore_index=True).to_csv(count_path, index=False)
+        pd.concat(all_counts, ignore_index=True).to_csv(
+            out_dir / f"{prefix}count_differences.csv", index=False
+        )
 
 
-
-if __name__ == "__main__":
-    main()
