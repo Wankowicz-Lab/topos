@@ -134,6 +134,22 @@ python examples/grouped_analysis/run_grouped_example.py
 **Config**: `ADK_grouped_config.toml`
 
 ```toml
+# Required fields:
+#   label   — unique name used in [[pairs]] and output file names
+#   pdb_id  — RCSB PDB ID (downloaded automatically) OR use pdb_path
+#
+# Optional fields:
+#   pdb_path — path to a local .pdb or .cif file (overrides pdb_id download)
+#   group    — group label for multi-structure grouping (e.g. "open", "closed")
+#   state    — "apo" or "bound" (default: "apo")
+#   genotype — "wt" or "mutant" (default: "wt")
+#   chain    — chain ID(s) to analyze (default: inherits global chain above)
+#   ligand   — HET residue for proximity detection: {name = "AP5", chain = "A"}
+#   mutations — list of point mutations (used for proximity detection):
+#               [[structures.mutations]]
+#               resi   = 64     # residue number in reference numbering
+#               wt_aa  = "S"    # single-letter WT amino acid
+#               mut_aa = "D"    # single-letter mutant amino acid
 ```
 ---
 
