@@ -8,17 +8,8 @@ heatmap   : structures (y) × residues (x), colour = metric value
             both axes (residues clustered by similarity across structures,
             structures clustered by similarity across residues)
 
-Usage
------
-python plot_all.py                        # all three plot types
-python plot_all.py --only lineplots
-python plot_all.py --only boxplots
-python plot_all.py --only heatmaps
-python plot_all.py --only heatmaps --cluster
-python plot_all.py --chain B --out my_dir/
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -31,47 +22,7 @@ from scipy.spatial.distance import pdist
 import itertools
 
 
-def parse_args():
-    """
-    Argument parser for per-residue metric plots across multiple structures.
-    """
-    parser = argparse.ArgumentParser(
-        description="Per-residue metric plots across multiple structures."
-    )
-    parser.add_argument("--chain", default="A", help="Chain to use (default: A).")
-    parser.add_argument(
-        "--pdbs",
-        default=None,
-        help=(
-            "Comma-separated PDB IDs to include. "
-            "Defaults to all *_features.csv files found in --renumbered-dir."
-        ),
-    )
-    parser.add_argument(
-        "--renumbered-dir",
-        type=Path,
-        default=_DEFAULT_RENUMBERED_DIR,
-        help="Directory containing renumbered features CSVs (default: adk_output/renumbered/).",
-    )
-    parser.add_argument(
-        "--out", type=Path,
-        default=_DEFAULT_RENUMBERED_DIR.parent / "residue_profiles",
-        help="Output directory (default: adk_output/residue_profiles/).",
-    )
-    parser.add_argument(
-        "--only",
-        choices=["lineplots", "boxplots", "heatmaps"],
-        default=None,
-        help="Run only one plot type. Omit to run all three.",
-    )
-    parser.add_argument(
-        "--cluster",
-        action="store_true",
-        help="Apply hierarchical clustering to heatmaps.",
-    )
-    return parser.parse_args()
-
-DEFAULT_COLORS = [
+COLORS = [
     "#4C72B0", "#DD8452", "#55A868", "#C44E52",
     "#8172B3", "#937860", "#DA8BC3", "#8C8C8C",
     "#2ECC71", "#E74C3C", "#9B59B6", "#F39C12",
@@ -81,7 +32,7 @@ def color_cycle(n, palette=None):
     """
     Returns an iterator of colors for n items, cycling if needed.
     """
-    palette = palette or DEFAULT_COLORS
+    palette = palette or COLORS
     if n <= len(palette):
         return palette[:n]
     return list(itertools.islice(itertools.cycle(palette), n))
@@ -164,16 +115,8 @@ def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFr
     frames = []
     for pdb_id in pdb_ids:
         path = renumbered_dir / f"{pdb_id}_features.csv"
-        # If one of the input files is missing, skip with warning
-        if not path.exists():
-            print(f"WARNING: {path.name} not found, skipping.", file=sys.stderr)
-            continue
         df = pd.read_csv(path)
         df = df.assign(pdb_id=pdb_id)
-        # If this CSV does not contain the target chain, skip with warning
-        if chain not in df["chain"].values:
-            print(f"WARNING: chain {chain} not in {pdb_id}, skipping.", file=sys.stderr)
-            continue
         # Keep only rows matching the requested chain
         frames.append(df[df["chain"] == chain])
     if not frames:
@@ -422,30 +365,40 @@ def plot_heatmap(col: str, df: pd.DataFrame, out_dir: Path, cluster: bool = Fals
     plt.close(fig)
 
 
-def main():
+def run_plots(
+    chain: str,
+    pdb_ids: list[str],
+    renumbered_dir: Path,
+    out_dir: Path,
+    only: str | None = None,
+    cluster: bool = False,
+) -> None:
+    """
+    Programmatic entry point: generate per-residue metric plots across structures.
 
-    args = parse_args()
-
-    renumbered_dir = args.renumbered_dir
-    # Gather PDB IDs either from argument or from folder contents
-    if args.pdbs:
-        pdb_ids = [p.strip().upper() for p in args.pdbs.split(",") if p.strip()]
-    else:
-        pdb_ids = sorted(
-            p.name.replace("_features.csv", "").upper()
-            for p in renumbered_dir.glob("*_features.csv")
-        )
-        if not pdb_ids:
-            sys.exit(f"No *_features.csv files found in {renumbered_dir}.")
+    Parameters
+    ----------
+    chain : str
+        Chain identifier to analyse (e.g. ``"A"``).
+    pdb_ids : list[str]
+        PDB IDs whose renumbered features CSVs to load.
+    renumbered_dir : Path
+        Directory containing ``{PDB_ID}_features.csv`` files.
+    out_dir : Path
+        Directory where PNG and CSV outputs are written.
+    only : str or None
+        Restrict to one plot type: ``"lineplots"``, ``"boxplots"``, or
+        ``"heatmaps"``.  ``None`` runs all three.
+    cluster : bool
+        Apply hierarchical clustering to heatmap axes.
+    """
+    df = load_data(chain, pdb_ids, renumbered_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Determine which plot modes should be run
-    run_line = args.only in (None, "lineplots")
-    run_box  = args.only in (None, "boxplots")
-    run_heat = args.only in (None, "heatmaps")
-
-    # Load concatenated DataFrame for all requested PDBs and selected chain
-    df = load_data(args.chain, pdb_ids, renumbered_dir)
-    args.out.mkdir(parents=True, exist_ok=True)
+    run_line = only in (None, "lineplots")
+    run_box  = only in (None, "boxplots")
+    run_heat = only in (None, "heatmaps")
 
     # Filter columns: numerical columns minus skip set
     all_num_cols = [
@@ -458,37 +411,27 @@ def main():
 
     # ── Line plots ────────────────────────────────────────────────────────────
     if run_line:
-        # For each metric/column, plot and accumulate statistics
         all_stats = {}
-        for i, col in enumerate(line_cols, 1):
-            st = plot_lineplot(col, df, args.out)
+        for col in line_cols:
+            st = plot_lineplot(col, df, out_dir)
             all_stats[col] = st
 
-        # Save per-residue means and stds for all columns as CSVs
         if all_stats:
             pd.DataFrame({c: s["mean"] for c, s in all_stats.items()}) \
               .rename_axis("resi_struct") \
-              .to_csv(args.out / "all_columns_mean_per_residue.csv")
+              .to_csv(out_dir / "all_columns_mean_per_residue.csv")
             pd.DataFrame({c: s["std"] for c, s in all_stats.items()}) \
               .rename_axis("resi_struct") \
-              .to_csv(args.out / "all_columns_std_per_residue.csv")
+              .to_csv(out_dir / "all_columns_std_per_residue.csv")
 
     # ── Boxplots ──────────────────────────────────────────────────────────────
     if run_box:
-        for i, col in enumerate(box_cols, 1):
-            plot_boxplot(col, df, args.out)
+        for col in box_cols:
+            plot_boxplot(col, df, out_dir)
 
     # ── Heatmaps ──────────────────────────────────────────────────────────────
     if run_heat:
-        cluster_label = " (clustered)" if args.cluster else ""
-        for i, col in enumerate(all_num_cols, 1):
-            plot_heatmap(col, df, args.out, cluster=args.cluster)
-
-    # Total number of metrics run through (could be useful for logging)
-    total = (len(line_cols) if run_line else 0) + \
-            (len(box_cols)  if run_box  else 0) + \
-            (len(all_num_cols) if run_heat else 0)
+        for col in all_num_cols:
+            plot_heatmap(col, df, out_dir, cluster=cluster)
 
 
-if __name__ == "__main__":
-    main()
