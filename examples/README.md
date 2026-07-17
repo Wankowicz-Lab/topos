@@ -1,4 +1,4 @@
-# biogenesis Examples
+# Topos Examples
 
 This directory contains ready-to-run examples demonstrating the two main biogenesis
 use cases.  Run all scripts from the **repository root** directory.
