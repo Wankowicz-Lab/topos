@@ -20,9 +20,6 @@ For each comparison pair defined in a config TOML, produces:
   continuous + count metrics) is sorted by the biggest changes.
     → <output_dir>/local/<pair_description>_local_diffs.csv
 
-Usage
------
-python run_analysis.py --config example_config.toml [--output-dir results/]
 """
 from __future__ import annotations
 
