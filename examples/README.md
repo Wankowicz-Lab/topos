@@ -116,10 +116,10 @@ For each PDB, we expect to see the following (only showing 1AKE):
 
 
 **What it shows**:
-- Loading a local PDB file using `pdb_path`
-- Running all structural metrics (SASA, packing, hydrogen bonds, etc.)
-- No mutation data — sequence-level metrics are skipped automatically
-- The run log records that no hydrogens were present in the file
+- Loading Topos metrics files
+- Renumber Topos metric files based on sequence alignment so all outputs have the residue/chain for comparison.
+- Running figures and descriptive statistics on distribution of structures
+- Outputs figures and CSVs to compare and/or use multiple structures to analyze outputs
 
 ```bash
 python examples/grouped_analysis/run_grouped_example.py
@@ -127,8 +127,14 @@ python examples/grouped_analysis/run_grouped_example.py
 
 **Outputs** (written to `examples/grouped_analysis/output/`):
 
-| File | Description |
+| Folder | Description |
 |------|-------------|
+| `renumbered` | features, bonds, metadata renumbered |
+| `rmsd` | CSV of alpha carbon RMSD between PDBs |
+| `residue profiles` | Joint CSV with mean/median of metrics across all PDBs and corresponding figures |
+| `variability` | CSV and corresponding figures with largest variability of metrics between PDBs |
+| `comparisons` | CSV and corresponding figures on differences between PDBs if toml file indicates comparisons |
+
 
 
 **Config**: `ADK_grouped_config.toml`
