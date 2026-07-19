@@ -44,7 +44,6 @@ line-length = 100
 extend-exclude = [
   "venv",
   "results",
-  "src/topos/grouped_analysis",
   "debug.py",
   "plots.py",
   "working_*.py",

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-import numpy as np
 import pandas as pd
 from scipy.stats import rankdata
 
@@ -301,7 +300,7 @@ def run_variability_analysis(
     for resi, row in top_residues.iterrows():
         print(f"  Residue {int(resi):>4}   score={row['variability_score']:.4f}   rank={row['rank']}")
 
-    print(f"\nTop 10 most variable metrics (mean SD across residues):")
+    print("\nTop 10 most variable metrics (mean SD across residues):")
     print("-" * 45)
     for col, val in sd_df.mean().nlargest(10).items():
         print(f"  {col:<55} mean SD={val:.4g}")

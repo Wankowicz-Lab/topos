@@ -248,9 +248,9 @@ def plot_boxplot(col: str, df: pd.DataFrame, out_dir: Path) -> None:
     # Deduplicate legend entries (each pdb may appear multiple times in scatter)
     handles, labels = ax.get_legend_handles_labels()
     seen = {}
-    for h, l in zip(handles, labels):
-        if l not in seen:
-            seen[l] = h
+    for handle, label in zip(handles, labels):
+        if label not in seen:
+            seen[label] = handle
     ax.legend(seen.values(), seen.keys(), fontsize=8, framealpha=0.7,
               loc="upper right", ncol=2)
 

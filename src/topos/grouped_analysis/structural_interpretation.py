@@ -235,8 +235,12 @@ def run_multi(chain: str, out_dir: Path, pdb_ids: list[str],
     # Quick summary
     if "variability_class" in ann.columns:
         vc = ann["variability_class"].value_counts()
+        print("  Variability class counts:")
+        print(vc.to_string())
     if "sasa_class" in ann.columns:
         sc = ann["sasa_class"].value_counts()
+        print("  SASA class counts:")
+        print(sc.to_string())
 
 # ── Mode 2: Comparison ────────────────────────────────────────────────────────
 
@@ -256,13 +260,13 @@ def run_comparison(local_dir: Path, out_dir: Path, delta_threshold: float) -> No
 
         diff_df = pd.read_csv(local_path)
         if diff_df.empty:
-            print(f"    WARNING: empty file, skipping.")
+            print("    WARNING: empty file, skipping.")
             continue
 
         # ── Pivot: one row per residue, one column per metric delta ──────────
         avail = [m for m in _CMP_METRICS if m in diff_df["metric"].values]
         if not avail:
-            print(f"    WARNING: none of the key metrics found in this file.")
+            print("    WARNING: none of the key metrics found in this file.")
             continue
 
         sub = diff_df[diff_df["metric"].isin(avail)].copy()
@@ -270,7 +274,7 @@ def run_comparison(local_dir: Path, out_dir: Path, delta_threshold: float) -> No
         # Pick up value column names (depend on pair labels)
         val_cols = [c for c in sub.columns if c.endswith("_value")]
         if len(val_cols) < 2:
-            print(f"    WARNING: cannot identify ref/cmp value columns.")
+            print("    WARNING: cannot identify ref/cmp value columns.")
             continue
 
         ref_val_col = val_cols[0]
@@ -353,7 +357,8 @@ def run_comparison(local_dir: Path, out_dir: Path, delta_threshold: float) -> No
         ann.reset_index().to_csv(out_path, index=False)
 
         n_changed = int((ann.get("change_class", pd.Series()) == "major").sum())
-        n_prox    = int(ann.get("in_proximity", pd.Series(False)).sum())
+        n_prox = int(ann.get("in_proximity", pd.Series(False)).sum())
+        print(f"  {pair_name}: {n_changed} major-change residues, {n_prox} in proximity")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

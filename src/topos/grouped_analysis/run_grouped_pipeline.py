@@ -16,12 +16,18 @@ See template_config.toml for the full annotated template.
 
 from __future__ import annotations
 
-import argparse
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
+
+from topos.grouped_analysis.comparison_metrics import run_comparison_analysis
+from topos.grouped_analysis.identify_variable_metrics import run_variability_analysis
+from topos.grouped_analysis.pairwise_RMSD import compute_pairwise_rmsd
+from topos.grouped_analysis.plot_all_distributions import run_plots
+from topos.grouped_analysis.renumber_to_referencePDB import renumber_structures
+from topos.grouped_analysis.structural_interpretation import run_comparison, run_multi
 
 # ── Module-level helpers (used by stage functions and tests) ──────────────────
 
@@ -96,14 +102,6 @@ def stage_comparison(config_path, input_dir, comparison_dir, no_proximity, proxi
 
 
 # ── Pipeline class ─────────────────────────────────────────────────────────────
-
-from topos.grouped_analysis.identify_variable_metrics import run_variability_analysis
-from topos.grouped_analysis.pairwise_RMSD import compute_pairwise_rmsd
-from topos.grouped_analysis.plot_all_distributions import run_plots
-from topos.grouped_analysis.renumber_to_referencePDB import renumber_structures
-from topos.grouped_analysis.comparison_metrics import run_comparison_analysis
-from topos.grouped_analysis.structural_interpretation import run_comparison, run_multi
-
 
 @dataclass
 class GroupedPipelineRunner:
