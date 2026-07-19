@@ -1,0 +1,58 @@
+{
+  "run_date": "2026-07-17T10:44:14.469407",
+  "config": {
+    "name": "3HPQ",
+    "pdb_id": "3HPQ",
+    "uniprot_id": null,
+    "pdb_path": null,
+    "membrane_protein": false,
+    "membrane_thickness": 15.0,
+    "remove_hydrogens": true,
+    "altloc_policy": "highest",
+    "structural_feature_chains": [
+      "A"
+    ],
+    "mutation_data_path": null,
+    "mutation_data_chain": null,
+    "alignment_cutoff": 0.95,
+    "mutation_residue_col_name": "wildtype",
+    "mutation_residue_idx_name": "position",
+    "mutation_col_name": "mutation",
+    "mutation_type_col_name": "type",
+    "mutation_score_col_name": "effect",
+    "mutation_category_logs_base": null,
+    "aaindex_path": "/Users/stephaniewanko/Downloads/vanderbilt/ADK/biogenesis/data/aaindex_parsed_small.csv",
+    "kidera_path": "/Users/stephaniewanko/Downloads/vanderbilt/ADK/biogenesis/data/kidera_factors.csv",
+    "output_dir": null,
+    "output_prefix": null
+  },
+  "chains": [
+    "A",
+    "B"
+  ],
+  "n_residues": 214,
+  "had_hydrogens": false,
+  "metrics_run": [
+    "salt_bridge_count",
+    "ionic_bond_count",
+    "disulfide_bond_count",
+    "pi_stacking_count",
+    "cation_pi_count",
+    "vdw_contact_count",
+    "calculate_hbond_metrics",
+    "total_bond_count",
+    "sasa",
+    "distance_to_surface",
+    "kyte_doolittle",
+    "membrane_distance",
+    "calculate_packing_metrics",
+    "center_of_mass_distance",
+    "dssp_metrics"
+  ],
+  "feature_rows": 214,
+  "feature_columns": 111,
+  "output_files": {
+    "features": "/Users/stephaniewanko/Downloads/vanderbilt/ADK/output/3HPQ/3HPQ_features.csv",
+    "metadata": "/Users/stephaniewanko/Downloads/vanderbilt/ADK/output/3HPQ/3HPQ_metadata.csv"
+  }
+}
