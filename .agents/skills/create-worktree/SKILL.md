@@ -8,7 +8,7 @@ compatibility: Linked worktrees may require full terminal permissions because gi
 
 ## Goal
 
-Use a separate checkout and branch for isolated agent work. Prefer a sibling directory named after the change, such as `../biogenesis-my-feature`.
+Use a separate checkout and branch for isolated agent work. Prefer a sibling directory named after the change, such as `../topos-my-feature`.
 
 ## 1. Create the worktree safely
 
@@ -17,19 +17,19 @@ Use a separate checkout and branch for isolated agent work. Prefer a sibling dir
 - Create a new branch with the worktree when starting fresh:
 
 ```bash
-git worktree add -b <branch-name> ../biogenesis-<slug> origin/main
+git worktree add -b <branch-name> ../topos-<slug> origin/main
 ```
 
 - If the branch already exists, attach it explicitly:
 
 ```bash
-git worktree add ../biogenesis-<slug> <branch-name>
+git worktree add ../topos-<slug> <branch-name>
 ```
 
 - If the intended base is not `origin/main`, still pass it explicitly:
 
 ```bash
-git worktree add -b <branch-name> ../biogenesis-<slug> <base-commit-ish>
+git worktree add -b <branch-name> ../topos-<slug> <base-commit-ish>
 ```
 
 ## 2. Verify the checkout immediately

@@ -153,7 +153,7 @@ def _find_features_csv(pdb_id: str, metrics_dir: Path) -> Optional[Path]:
     Optional[Path]
         Matching CSV path if found; otherwise None.
     """
-    # Flat layout (biogenesis default)
+    # Flat layout (topos default)
     flat = metrics_dir / f"{pdb_id}_features.csv"
     if flat.exists():
         return flat

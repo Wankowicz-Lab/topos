@@ -2,7 +2,7 @@
 Grouped analysis example: adenylate kinase open vs. closed
 ===========================================================
 This example demonstrates how to use the grouped analysis pipeline to compare
-multiple structures after they have been processed by the biogenesis pipeline.
+multiple structures after they have been processed by the topos pipeline.
 
 Structures compared
 -------------------
@@ -15,7 +15,7 @@ Structures compared
 
 Prerequisites
 -------------
-Run the biogenesis pipeline on each structure first so that
+Run the topos pipeline on each structure first so that
 ``{PDB_ID}_features.csv`` files exist in output_dir (set in the config):
 
     from src.pipeline.runner import Runner
@@ -38,7 +38,7 @@ The grouped analysis pipeline then:
 
 Run from anywhere — the script resolves paths relative to the repository root:
 
-    conda activate biogenesis-py311
+    conda activate topos-py311
     python examples/grouped_analysis_example/run_example.py
 """
 
@@ -71,7 +71,7 @@ CONFIG_PATH = _REPO_ROOT / "examples" / "grouped_analysis_example" / "grouped_an
 # ---------------------------------------------------------------------------
 # Run grouped analysis pipeline
 # ---------------------------------------------------------------------------
-print("\n=== biogenesis: grouped analysis (adenylate kinase) ===\n")
+print("\n=== topos: grouped analysis (adenylate kinase) ===\n")
 
 # Initialise the runner from the config file.
 # GroupedPipelineRunner reads all settings from the TOML and resolves output paths.

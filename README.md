@@ -1,8 +1,8 @@
-# biogenesis
+# topos
 
 A toolkit for computing structural and sequence metrics on protein structures.
 
-Given a PDB file and/or mutation data, biogenesis produces per-residue feature tables
+Given a PDB file and/or mutation data, topos produces per-residue feature tables
 useful for downstream analysis of mutational effects, structural variation, and protein
 function.
 
@@ -32,8 +32,8 @@ function.
 Requires **Python ≥ 3.11**.
 
 ```bash
-git clone https://github.com/Wankowicz-Lab/biogenesis.git
-cd biogenesis
+git clone https://github.com/Wankowicz-Lab/topos.git
+cd topos
 pip install -e .
 ```
 
@@ -41,8 +41,8 @@ The required conda environment (Python 3.11 + all dependencies) is used for
 development and testing:
 
 ```bash
-conda create -n biogenesis-py311 python=3.11
-conda activate biogenesis-py311
+conda create -n topos-py311 python=3.11
+conda activate topos-py311
 pip install -e .
 ```
 
@@ -102,7 +102,7 @@ runner.run()
 Run the ready-made example scripts from the repository root:
 
 ```bash
-conda activate biogenesis-py311
+conda activate topos-py311
 
 # Structure-only (1HCK kinase, local PDB file)
 python examples/1HCK_structure_only_example/run_example.py

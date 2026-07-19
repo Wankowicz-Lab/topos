@@ -1,7 +1,7 @@
 """
 Deep Mutational Scanning (DMS) example: B2AR (Beta-2 Adrenergic Receptor)
 ==========================================================================
-This example demonstrates the full biogenesis workflow combining a membrane
+This example demonstrates the full topos workflow combining a membrane
 protein structure (PDB: 4LDE) with deep mutational scanning data.
 
 Inputs:
@@ -15,7 +15,7 @@ Outputs (written to examples/B2AR_DMS_example/output/):
     - 4LDE_run_log.txt    — human-readable run summary
 
 Run from anywhere:
-    conda activate biogenesis-py311
+    conda activate topos-py311
     python examples/B2AR_DMS_example/run_example.py
 """
 
@@ -30,7 +30,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Configure logging before importing biogenesis so all pipeline messages are visible
+# Configure logging before importing topos so all pipeline messages are visible
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s - %(message)s",
@@ -48,7 +48,7 @@ OUTPUT_DIR  = _REPO_ROOT / "examples" / "B2AR_DMS_example" / "output"
 # ---------------------------------------------------------------------------
 # Run pipeline
 # ---------------------------------------------------------------------------
-print("\n=== biogenesis: DMS Example (B2AR / 4LDE) ===\n")
+print("\n=== topos: DMS Example (B2AR / 4LDE) ===\n")
 
 # Initialise Runner from the config file.
 # The config specifies:

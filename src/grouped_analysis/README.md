@@ -1,9 +1,9 @@
-# Biogenesis — Grouped Structural Analysis
+# Topos — Grouped Structural Analysis
 
 Compare multiple pre-processed protein structures to identify conserved features,
 variable positions, and pairwise structural differences.
 
-Run this pipeline **after** the main biogenesis pipeline has produced
+Run this pipeline **after** the main topos pipeline has produced
 `{PDB_ID}_features.csv` files for each structure.
 
 ---
@@ -12,7 +12,7 @@ Run this pipeline **after** the main biogenesis pipeline has produced
 
 ### 1. Generate per-structure features
 
-Run the main biogenesis pipeline on each structure first:
+Run the main topos pipeline on each structure first:
 
 ```python
 from src.pipeline.runner import Runner

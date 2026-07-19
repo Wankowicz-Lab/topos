@@ -115,7 +115,7 @@ def _write_temp_pdb(context: Context) -> Path:
     # mkdssp expects a valid PDB header line for PDB inputs.
     pdb_text = pdb_path.read_text(encoding="utf-8")
     if not pdb_text.startswith("HEADER"):
-        pdb_text = "HEADER    BIOGENESIS GENERATED\n" + pdb_text
+        pdb_text = "HEADER    TOPOS GENERATED\n" + pdb_text
         pdb_path.write_text(pdb_text, encoding="utf-8")
     return pdb_path
 

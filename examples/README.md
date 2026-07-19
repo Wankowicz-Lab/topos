@@ -1,10 +1,10 @@
 # Topos Examples
 
-This directory contains ready-to-run examples demonstrating the two main biogenesis
+This directory contains ready-to-run examples demonstrating the two main topos
 use cases.  Run all scripts from the **repository root** directory.
 
 ```bash
-conda activate biogenesis-py311
+conda activate topos-py311
 ```
 
 ---

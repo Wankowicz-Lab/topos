@@ -1,5 +1,5 @@
 """
-Test utilities for biogenesis tests.
+Test utilities for topos tests.
 
 Provides helper functions for creating test data including residue tables,
 atom arrays, and synthetic structure files.

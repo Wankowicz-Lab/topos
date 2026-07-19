@@ -3,7 +3,7 @@ Export per-residue structural annotations for interpretation.
 
 Two modes
 ---------
-multi   : Aggregate biogenesis outputs across all structures into a single
+multi   : Aggregate topos outputs across all structures into a single
           residue-level annotation CSV.  Each row is one residue position
           (reference numbering).  Columns include mean structural properties,
           variability score/class, and an interpretation string.

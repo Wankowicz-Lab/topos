@@ -26,7 +26,7 @@ dependencies = [
 test = ["pytest", "pytest-cov", "coveralls", "ruff", "mypy"]
 
 [project.scripts]
-biogenesis = "pipeline.runner:main"
+topos = "pipeline.runner:main"
 grouped-pipeline = "grouped_analysis.run_grouped_pipeline:main"
 
 
