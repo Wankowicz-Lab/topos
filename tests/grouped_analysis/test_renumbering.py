@@ -5,12 +5,14 @@ from pathlib import Path
 
 import biotite.sequence.align as align
 import pandas as pd
-
-from src.grouped_analysis.renumber_to_referencePDB import align_and_map
-from src.grouped_analysis.renumber_to_referencePDB import build_alignment_params
-from src.grouped_analysis.renumber_to_referencePDB import get_chain_sequence
-from src.grouped_analysis.renumber_to_referencePDB import main
-from src.grouped_analysis.renumber_to_referencePDB import to1
+import pytest
+from src.grouped_analysis.renumber_to_referencePDB import (
+    align_and_map,
+    build_alignment_params,
+    get_chain_sequence,
+    renumber_structures,
+    to1,
+)
 
 def test_to1_standard_residues():
     assert to1("ALA") == "A"
@@ -135,7 +137,7 @@ def test_main_reference_is_copied_unchanged(tmp_path, monkeypatch):
     resnames = ["ALA", "GLY", "VAL", "LEU", "SER"]
     _write_features(tmp_path, "REFA", range(1, 6), resnames)
     _write_features(tmp_path, "BBBB", range(1, 6), resnames)
-    main(ref_pdb="REFA", max_mismatches=5,
+    renumber_structures(ref_pdb="REFA", max_mismatches=5,
          pdb_list=["REFA", "BBBB"], input_dir=str(tmp_path))
     out = pd.read_csv(tmp_path / "renumbered" / "REFA_features.csv")
     assert list(out["resi_struct"]) == list(range(1, 6))
@@ -145,7 +147,7 @@ def test_main_identical_seqs_kept_and_renumbered(tmp_path, monkeypatch):
     resnames = ["ALA", "GLY", "VAL", "LEU", "SER"]
     _write_features(tmp_path, "REFA", range(1, 6), resnames)
     _write_features(tmp_path, "BBBB", range(10, 15), resnames)
-    main(ref_pdb="REFA", max_mismatches=0,
+    renumber_structures(ref_pdb="REFA", max_mismatches=0,
          pdb_list=["REFA", "BBBB"], input_dir=str(tmp_path))
     out = pd.read_csv(tmp_path / "renumbered" / "BBBB_features.csv")
     assert set(out["resi_struct"]) == set(range(1, 6))
@@ -156,7 +158,7 @@ def test_main_too_many_mismatches_removes_structure(tmp_path, monkeypatch):
     qry_resnames = ["TRP", "TRP", "TRP"]  # 3 mismatches
     _write_features(tmp_path, "REFA", range(1, 4), ref_resnames)
     _write_features(tmp_path, "BBBB", range(1, 4), qry_resnames)
-    main(ref_pdb="REFA", max_mismatches=0,
+    renumber_structures(ref_pdb="REFA", max_mismatches=0,
          pdb_list=["REFA", "BBBB"], input_dir=str(tmp_path))
     assert not (tmp_path / "renumbered" / "BBBB_features.csv").exists()
 
@@ -165,7 +167,7 @@ def test_main_missing_features_csv_skipped(tmp_path, monkeypatch):
     resnames = ["ALA", "GLY", "VAL"]
     _write_features(tmp_path, "REFA", range(1, 4), resnames)
     # BBBB has no features CSV
-    main(ref_pdb="REFA", max_mismatches=5,
+    renumber_structures(ref_pdb="REFA", max_mismatches=5,
          pdb_list=["REFA", "BBBB"], input_dir=str(tmp_path))
     assert not (tmp_path / "renumbered" / "BBBB_features.csv").exists()
 
@@ -173,6 +175,6 @@ def test_main_creates_renumbered_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     resnames = ["ALA"]
     _write_features(tmp_path, "REFA", range(1, 2), resnames)
-    main(ref_pdb="REFA", max_mismatches=5,
+    renumber_structures(ref_pdb="REFA", max_mismatches=5,
          pdb_list=["REFA"], input_dir=str(tmp_path))
     assert (tmp_path / "renumbered").is_dir()
