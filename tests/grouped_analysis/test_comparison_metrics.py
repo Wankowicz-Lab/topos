@@ -42,7 +42,7 @@ def test_empty_subdir_returns_none(tmp_path):
     assert _find_features_csv("AAAA", tmp_path) is None
 
 
-def _make_df():
+def _make_df(extra: dict = None):
     """Return a minimal df with continuous + count columns."""
     base = {
         "chain": ["A"],
@@ -53,6 +53,8 @@ def _make_df():
         "vdw_contact_count": [8],
         "packing_contact_density": [0.45],
     }
+    if extra:
+        base.update(extra)
     return pd.DataFrame(base)
 
 def test_continuous_excludes_identifiers():
