@@ -5,6 +5,7 @@ from pathlib import Path
 
 import biotite.sequence.align as align
 import pandas as pd
+import pytest
 
 from src.grouped_analysis.renumber_to_referencePDB import (
     align_and_map,
@@ -78,6 +79,7 @@ def test_get_chain_sequence_unknown_residue_becomes_X():
     seq = get_chain_sequence(df, "A")
     assert seq == [(1, "X")]
 
+@pytest.fixture
 def aligner_params():
     matrix, gap_penalty = build_alignment_params()
     return matrix, gap_penalty
