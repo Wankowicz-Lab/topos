@@ -23,7 +23,6 @@ from pathlib import Path
 import tomllib
 
 from src.grouped_analysis.identify_variable_metrics import run_variability_analysis
-from src.grouped_analysis.metrics_to_pymol import run_pymol_export
 from src.grouped_analysis.pairwise_RMSD import compute_pairwise_rmsd
 from src.grouped_analysis.plot_all_distributions import run_plots
 from src.grouped_analysis.renumber_to_referencePDB import renumber_structures
@@ -109,7 +108,6 @@ class GroupedPipelineRunner:
         self.profiles_dir    = self.output_dir / "residue_profiles"
         self.comparison_dir  = self.output_dir / "comparisons"
         self.annotations_dir = self.output_dir / "dms_annotations"
-        self.viz_dir         = self.output_dir / "pymol"
         self.rmsd_dir        = self.output_dir / "rmsd"
 
 
@@ -126,7 +124,6 @@ class GroupedPipelineRunner:
             if not self.skip_plots:
                 self._run_plots()
             self._run_export_multi()
-            self._run_pymol_multi()
 
         # Pairwise RMSD (always run when multiple structures present)
         if len(self.pdb_ids) > 1:
@@ -136,7 +133,6 @@ class GroupedPipelineRunner:
         if self.run_comparison_flag and self.pairs:
             self._run_comparison()
             self._run_export_comparison()
-            self._run_pymol_comparison()
 
     def _run_renumber(self) -> None:
         """Align all structures' residue numbering to the reference PDB."""
