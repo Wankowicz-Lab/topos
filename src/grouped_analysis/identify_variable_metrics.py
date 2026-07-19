@@ -16,7 +16,6 @@ python identify_variable_residues.py --chain A --top 20 --renumbered-dir my_data
 python identify_variable_residues.py --renumbered-dir /any/folder/ --pdbs AABB,CCDD,EFFE
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -30,44 +29,44 @@ from scipy.stats import rankdata
 # Columns that are not meaningful metrics for variability analysis
 SKIP_COLS = {
     "resi_struct", "resi_mut",
+    "graph_all_graph_community_id",
+    "graph_all_graph_core_number",
+    "graph_hbond_graph_community_id",
+    "graph_hbond_graph_closeness_centrality",
+    "graph_hbond_graph_core_number",
+    "graph_hbond_graph_eigenvector_centrality",
+    "graph_vdw_contact_graph_community_id",
     "kyte_doolittle",
+    "mean_neighbor_sequence_distance",
+    "disulfide_bond_count",           # zero everywhere
+    "ss_domain_disulfide_bond_count",
+    "neighborhood_disulfide_bond_count",
+    "packing_n_atoms",                # zero variance
+    "distance_from_membrane_edge",    # not membrane protein
+    "ss_domain_distance_from_membrane_edge",
+    "neighborhood_distance_from_membrane_edge",
 }
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Identify residues with largest metric changes across multiple structures."
-    )
-    parser.add_argument("--chain", default="A", help="Chain to analyse (default: A).")
-    parser.add_argument("--top", type=int, default=20,
-                        help="Number of top variable residues to highlight (default: 20).")
-    parser.add_argument(
-        "--pdbs", default=None,
-        help="Comma-separated PDB IDs. Defaults to all *_features.csvs found in --renumbered-dir."
-    )
-    parser.add_argument(
-        "--renumbered-dir", type=Path, required=True,
-        help="Directory containing renumbered features CSVs (no default, must provide)."
-    )
-    parser.add_argument(
-        "--out", type=Path, default=None,
-        help="Output directory (default: renumbered-dir/../variability/)."
-    )
-    return parser.parse_args()
-
 # ── Data loading ──────────────────────────────────────────────────────────────
+
 def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFrame:
-    """Load and concatenate renumbered features CSVs for all PDB IDs, filtered to the specified chain.""" 
+    """Load and concatenate renumbered features CSVs for all PDB IDs, filtered to the specified chain."""
     frames = []
     for pdb_id in pdb_ids:
         path = renumbered_dir / f"{pdb_id}_features.csv"
+        if not path.exists():
+            # Missing features files are expected for some IDs; warn and move on.
+            print(f"WARNING: {path.name} not found in {renumbered_dir}, skipping.", file=sys.stderr)
+            continue
         df = pd.read_csv(path)
         df = df.assign(pdb_id=pdb_id)
         if chain not in df["chain"].values:
-            print(f"WARNING: Chain {chain} not found in {path.name}, skipping.")
+            # Do not crash on incomplete structures; only keep requested chain.
+            print(f"WARNING: Chain {chain} not found in {path.name}, skipping.", file=sys.stderr)
             continue
         frames.append(df[df["chain"] == chain])
     if not frames:
-        # Requires at least one structure for the chain.
+        # Upstream pipeline requires at least one structure for the chain.
         sys.exit(f"No data loaded for chain {chain}.")
     return pd.concat(frames, ignore_index=True)
 
@@ -92,8 +91,19 @@ def compute_variability(df: pd.DataFrame, metric_cols: list[str]) -> tuple[pd.Da
     return sd_df, rng_df
 
 
+def rank_normalise(df: pd.DataFrame) -> pd.DataFrame:
+    """Rank-normalise each column to [0, 1] (higher = more variable)."""
+    n = len(df)
+    # Fill NaNs so missing residues do not get dropped from ranking.
+    normed = df.apply(lambda col: rankdata(col.fillna(0)) / n)
+    normed.index = df.index
+    return normed
+
+# ── Plots ─────────────────────────────────────────────────────────────────────
+
 def plot_heatmap(normed: pd.DataFrame, out_dir: Path) -> None:
     """Heatmap: residues (rows) × metrics (cols), colour = rank-norm SD."""
+    # Scale figure size to data dimensions for readability.
     fig_h = max(10, len(normed.columns) * 0.18)
     fig_w = max(18, len(normed) * 0.08)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
@@ -118,12 +128,14 @@ def plot_heatmap(normed: pd.DataFrame, out_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_dir / "variability_heatmap.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
+    print("  → variability_heatmap.png")
 
 
 def plot_overall_score(score: pd.Series, top_n: int, out_dir: Path) -> None:
     """Bar chart of overall variability score per residue."""
     fig, ax = plt.subplots(figsize=(18, 5))
 
+    # Highlight top-N residues in a contrasting color.
     colors = ["#C44E52" if r in score.nlargest(top_n).index else "#AEC6CF"
               for r in score.index]
 
@@ -146,12 +158,14 @@ def plot_overall_score(score: pd.Series, top_n: int, out_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_dir / "overall_variability_score.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
+    print("  → overall_variability_score.png")
 
 
 def plot_top_metrics(sd_df: pd.DataFrame, top_n: int, out_dir: Path) -> None:
     """For the top-10 most variable metrics, plot SD across residues."""
     # Rank metrics by mean SD across residues
     mean_sd = sd_df.mean()
+    # Use a fixed top-10 view for a consistent plot grid.
     top_metrics = mean_sd.nlargest(10).index.tolist()
 
     fig, axes = plt.subplots(5, 2, figsize=(16, 18), sharex=True)
@@ -178,39 +192,43 @@ def plot_top_metrics(sd_df: pd.DataFrame, top_n: int, out_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_dir / "top10_variable_metrics.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
+    print("  → top10_variable_metrics.png")
 
-def main():
-    args = parse_args()
-    renumbered_dir = args.renumbered_dir.resolve()
-    if not renumbered_dir.is_dir():
-        sys.exit(f"Renumbered dir {renumbered_dir} does not exist or is not a directory.")
+# ── Main ──────────────────────────────────────────────────────────────────────
 
-    if args.pdbs:
-        pdb_ids = [p.strip().upper() for p in args.pdbs.split(",") if p.strip()]
-    else:
-        pdb_ids = sorted(
-            p.stem.replace("_features", "").upper()
-            for p in renumbered_dir.glob("*_features.csv")
-        )
-        if not pdb_ids:
-            sys.exit(f"No *_features.csv files found in {renumbered_dir}.")
 
-    # Flexible output directory choice
-    if args.out is not None:
-        out_dir = Path(args.out).resolve()
-    else:
-        # Default: variability one level up from data folder
-        out_dir = renumbered_dir.parent / "variability"
+def run_variability_analysis(
+    chain: str,
+    pdb_ids: list[str],
+    renumbered_dir: Path,
+    out_dir: Path,
+    top_n: int = 20,
+) -> None:
+    """
+    Programmatic entry point: compute per-residue variability across structures and write all outputs.
+
+    Parameters
+    ----------
+    chain : str
+        Chain identifier to analyse (e.g. "A").
+    pdb_ids : list[str]
+        PDB IDs whose renumbered features CSVs to load.
+    renumbered_dir : Path
+        Directory containing ``{PDB_ID}_features.csv`` files.
+    out_dir : Path
+        Directory where CSV and PNG outputs are written.
+    top_n : int
+        Number of top-variable residues to highlight in plots and console summary.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    df = load_data(args.chain, pdb_ids, renumbered_dir)
+    df = load_data(chain, pdb_ids, renumbered_dir)
 
     metric_cols = [
         c for c in df.select_dtypes(include="number").columns
         if c not in SKIP_COLS
     ]
 
-    # ── Compute variability ───────────────────────────────────────────────────
+    # Compute per-residue SD and range across structures
     sd_df, rng_df = compute_variability(df, metric_cols)
 
     # Drop metrics with zero variance everywhere (uninformative)
@@ -220,10 +238,17 @@ def main():
     sd_df  = sd_df.drop(columns=zero_var)
     rng_df = rng_df.drop(columns=zero_var)
 
+    # Rank-normalise so all metrics contribute equally to the overall score
+    normed = rank_normalise(sd_df)
+
+    # Overall score = mean rank-normalised SD across all metrics
+    score = normed.mean(axis=1)
+    score.index = score.index.astype(int)
 
     # ── Save CSVs ─────────────────────────────────────────────────────────────
     sd_df.to_csv(out_dir / "per_residue_sd.csv")
     rng_df.to_csv(out_dir / "per_residue_range.csv")
+    normed.to_csv(out_dir / "per_residue_normalised_sd.csv")
 
     score_df = score.rename("variability_score").to_frame()
     score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
@@ -234,23 +259,23 @@ def main():
     top_per_metric = {}
     for col in sd_df.columns:
         top_per_metric[col] = (
-            sd_df[col].nlargest(args.top)
+            sd_df[col].nlargest(top_n)
             .rename("sd")
             .to_frame()
             .assign(range=rng_df[col])
         )
     per_metric_df = pd.concat(top_per_metric, names=["metric", "resi_struct"])
-    per_metric_df.to_csv(out_dir / f"top{args.top}_residues_per_metric.csv")
+    per_metric_df.to_csv(out_dir / f"top{top_n}_residues_per_metric.csv")
 
     # ── Plots ─────────────────────────────────────────────────────────────────
     plot_heatmap(normed, out_dir)
-    plot_overall_score(score, args.top, out_dir)
-    plot_top_metrics(sd_df, args.top, out_dir)
+    plot_overall_score(score, top_n, out_dir)
+    plot_top_metrics(sd_df, top_n, out_dir)
 
     # ── Console summary ───────────────────────────────────────────────────────
-    print(f"\nTop {args.top} most variable residues (overall score):")
+    print(f"\nTop {top_n} most variable residues (overall score):")
     print("-" * 45)
-    top_residues = score_df.sort_values("rank").head(args.top)
+    top_residues = score_df.sort_values("rank").head(top_n)
     for resi, row in top_residues.iterrows():
         print(f"  Residue {int(resi):>4}   score={row['variability_score']:.4f}   rank={row['rank']}")
 
@@ -260,6 +285,3 @@ def main():
         print(f"  {col:<55} mean SD={val:.4g}")
 
 
-
-if __name__ == "__main__":
-    main()
