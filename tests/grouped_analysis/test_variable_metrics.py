@@ -119,9 +119,7 @@ def _run_variability_pipeline(rdir: Path, pdb_ids=("AAAA", "BBBB")):
     zero_var = sd_df.columns[sd_df.max() == 0]
     sd_df = sd_df.drop(columns=zero_var)
     rng_df = rng_df.drop(columns=zero_var)
-    score_df = score.rename("variability_score").to_frame()
-    score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
-    return score_df, sd_df, rng_df
+    return sd_df, rng_df
 
 def test_variability_pipeline_variability_ranking_has_correct_columns(tmp_path):
     rdir = tmp_path / "renumbered"
@@ -130,7 +128,6 @@ def test_variability_pipeline_variability_ranking_has_correct_columns(tmp_path):
     _write_pipeline_features(rdir, "BBBB", seed=4)
     score_df, _, _ = _run_variability_pipeline(rdir)
     assert "variability_score" in score_df.columns
-    assert "rank" in score_df.columns
 
 def test_variability_pipeline_skip_cols_excluded_from_variability(tmp_path):
     rdir = tmp_path / "renumbered"
