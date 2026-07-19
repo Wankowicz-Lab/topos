@@ -26,7 +26,7 @@ from src.grouped_analysis.identify_variable_metrics import run_variability_analy
 from src.grouped_analysis.pairwise_RMSD import compute_pairwise_rmsd
 from src.grouped_analysis.plot_all_distributions import run_plots
 from src.grouped_analysis.renumber_to_referencePDB import renumber_structures
-from src.grouped_analysis.comparison_metrics import comparison_analysis
+from src.grouped_analysis.comparison_metrics import run_comparison_analysis
 from src.grouped_analysis.structural_interpretation import run_comparison, run_multi
 
 
