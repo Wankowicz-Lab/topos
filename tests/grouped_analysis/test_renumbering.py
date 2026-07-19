@@ -1,17 +1,17 @@
 """
 Tests for renumber_to_referencePDB.py
 """
-from pathlib import Path
+from __future__ import annotations
 
-import biotite.sequence.align as align
+from typing import Optional
+
 import pandas as pd
+import pytest
 
-from src.grouped_analysis.renumber_to_referencePDB import (
-    align_and_map,
-    build_alignment_params,
-    get_chain_sequence,
-    renumber_structures,
-    to1,
+from src.grouped_analysis.run_comparison_metrics import (
+    _classify_columns,
+    _find_features_csv,
+    analyze_local,
 )
 
 
