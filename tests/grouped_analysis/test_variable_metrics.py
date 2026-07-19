@@ -11,6 +11,7 @@ from src.grouped_analysis.identify_variable_metrics import (
     SKIP_COLS,
     compute_variability,
     load_data,
+    rank_normalise,
 )
 
 
@@ -119,7 +120,13 @@ def _run_variability_pipeline(rdir: Path, pdb_ids=("AAAA", "BBBB")):
     zero_var = sd_df.columns[sd_df.max() == 0]
     sd_df = sd_df.drop(columns=zero_var)
     rng_df = rng_df.drop(columns=zero_var)
-    return sd_df, rng_df
+    normed = rank_normalise(sd_df)
+    score = normed.mean(axis=1)
+    score.index = score.index.astype(int)
+    score_df = score.rename("variability_score").to_frame()
+    score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
+    score_df.index.name = "resi_struct"
+    return score_df, sd_df, rng_df
 
 def test_variability_pipeline_variability_ranking_has_correct_columns(tmp_path):
     rdir = tmp_path / "renumbered"
