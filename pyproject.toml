@@ -34,7 +34,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-exclude = ["topos.dev*"]
 
 [tool.setuptools.package-data]
 topos = ["data/*.csv"]
