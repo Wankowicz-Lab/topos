@@ -1,81 +1,123 @@
-# Biogenesis Grouped Structural Analysis
+# Biogenesis — Grouped Structural Analysis
 
-## Overview
+Compare multiple pre-processed protein structures to identify conserved features,
+variable positions, and pairwise structural differences.
 
-There are two primary use cases:
-
-| Use Case | Question | Key Scripts |
-|----------|----------|-------------|
-| **Multi-structure** | What structural features are conserved or variable across conformations? Why do some positions tolerate mutations? | `plot_all.py`, `identify_variable_residues.py`, `export_dms_annotations.py` |
-
-| **Comparison** | How does a mutant or ligand-bound structure differ from WT/apo? Why does a specific mutation disrupt function? | `run_comparison_metrics.py`, `export_dms_annotations.py` |
-
-Both modes produce **graphical outputs** and **annotation CSVs** that can be merged directly with DMS data.
+Run this pipeline **after** the main biogenesis pipeline has produced
+`{PDB_ID}_features.csv` files for each structure.
 
 ---
 
-## Overview
-These scripts are meant to be used AFTER you have generated CSVs on metrics from individual PDBs.
+## Quick Start
 
-```bash
-# 1. Edit the template config for your protein
-# Edit my_protein_config.toml: add your PDB IDs, set reference_pdb, define pairs
+### 1. Generate per-structure features
 
-# 2. Run the full pipeline (renumber → variability → plots → DMS annotations → PyMOL)
-python run_pipeline.py --config my_protein_config.toml
+Run the main biogenesis pipeline on each structure first:
 
-# Preview all commands without running them
-python run_pipeline.py --config my_protein_config.toml --dry-run
+```python
+from src.pipeline.runner import Runner
 
-# Skip plot generation (annotation CSVs still produced — faster)
-python run_pipeline.py --config my_protein_config.toml --skip-plots
+for pdb_id in ["4AKE", "1AKE", "1ANK", "3HPQ", "6F7U"]:
+    runner = Runner(pdb_id=pdb_id)
+    runner.run()
+    runner.save_results(output_dir="my_output/")
 ```
 
-## Config TOML Reference
+### 2. Write a config file
 
-See `template_config.toml` for the full annotated template. Summary of all fields:
+Copy `examples/grouped_analysis_example/grouped_analysis_config.toml` and edit it
+for your protein system.
+
+### 3. Run the grouped analysis pipeline
+
+```python
+from src.grouped_analysis.run_grouped_pipeline import GroupedPipelineRunner
+
+runner = GroupedPipelineRunner(config_path="my_protein_config.toml")
+runner.run()
+```
+
+Skip plot generation (annotation CSVs still produced — faster):
+
+```python
+runner = GroupedPipelineRunner(config_path="my_protein_config.toml", skip_plots=True)
+runner.run()
+```
+---
+
+## Config Reference
+
+All settings live in a single TOML file. See the fully annotated template at
+`examples/grouped_analysis_example/grouped_analysis_config.toml`.
+
+### Global settings
 
 ```toml
-# ── Global settings (all optional; shown with defaults) ─────────────────────
 output_dir          = "my_output/"   # all outputs written here
-reference_pdb       = "4AKE"        # pdb_id of the reference for renumbering
+reference_pdb       = "4AKE"        # pdb_id of the reference for residue renumbering
 chain               = "A"           # chain to analyse throughout
-max_mismatches      = 5             # max allowed seq mismatches for renumbering
+max_mismatches      = 5             # max sequence mismatches before a structure is excluded
 proximity_angstroms = 8.0           # Å radius for local comparison zone
-top_n_variable      = 20            # top N variable residues to highlight
+top_n_variable      = 20            # top-N variable residues to highlight
 
-[analysis]
+# Analysis modes (can be at top level or inside [analysis] section)
 run_multi      = true   # multi-structure variability analysis
 run_comparison = true   # pairwise comparison (requires [[pairs]])
+```
 
-# ── Structure block (one per PDB) ────────────────────────────────────────────
+### Structure blocks
+
+One `[[structures]]` block per PDB structure:
+
+```toml
 [[structures]]
-label    = "WT_apo"               # unique name used in [[pairs]] and file names
-pdb_id   = "4AKE"                 # RCSB ID (auto-downloaded)
-pdb_path = "/path/to/local.pdb"  # optional: local file overrides download
-group    = "open"                 # optional: group label for multi-structure
-state    = "apo"                  # "apo" or "bound"
-genotype = "wt"                   # "wt" or "mutant"
-chain    = "A"
+label    = "4AKE"              # unique name used in [[pairs]] and file names
+pdb_id   = "4AKE"             # RCSB PDB ID (must match features CSV prefix)
+group    = "open"              # optional: group label (e.g. "open", "closed")
+state    = "apo"               # optional: "apo" or "bound"
+genotype = "wt"                # optional: "wt" or "mutant"
+chain    = "A"                 # optional: overrides global chain
 
 # Optional: ligand for proximity detection
 ligand = {name = "AP5", chain = "A"}
 
-# Optional: point mutations (one block per mutation)
+# Optional: point mutations (one block per mutation; residue numbers in reference numbering)
 [[structures.mutations]]
-resi   = 64     # residue number (reference numbering)
-wt_aa  = "S"    # single-letter WT amino acid
-mut_aa = "D"    # single-letter mutant amino acid
+resi   = 56
+wt_aa  = "G"
+mut_aa = "A"
+```
 
-# ── Comparison pairs ─────────────────────────────────────────────────────────
+### Comparison pairs
+
+Define which structures to compare:
+
+```toml
 [[pairs]]
-reference   = "WT_apo"       # label of reference structure
-comparison  = "R167A"        # label of structure to compare
-description = "WT vs R167A"  # used in output file names
+reference   = "4AKE"                      # label of reference structure
+comparison  = "1AKE"                      # label of structure to compare
+description = "Open apo vs Closed bound"  # used in output file names
 ```
 
 ---
 
+## Pipeline Steps
+
+`GroupedPipelineRunner.run()` executes these steps in order:
+
+| Step | Function | Output |
+|------|----------|--------|
+| 1 | Renumber all structures to reference numbering | `output_dir/renumbered/` |
+| 2 | Compute per-residue variability scores | `output_dir/variability/` |
+| 3 | Generate line plots, boxplots, heatmaps | `output_dir/residue_profiles/` |
+| 4 | Export multi-structure annotation CSV | `output_dir/dms_annotations/` |
+| 5 | Generate PyMOL scripts (multi) | `output_dir/pymol/` |
+| 5b | Compute pairwise CA-RMSD | `output_dir/rmsd/` |
+| 6 | Compute pairwise metric differences | `output_dir/comparisons/` |
+| 7 | Export per-pair comparison annotation CSVs | `output_dir/dms_annotations/` |
+
+Steps 2–5 only run when `run_multi = true`.
+Steps 6–8 only run when `run_comparison = true` and at least one `[[pairs]]` block is defined.
 
 ---
 
@@ -83,77 +125,32 @@ description = "WT vs R167A"  # used in output file names
 
 ### Purpose
 
-Analyze multiple structures of the same protein (different conformations, crystal forms, or homologs) to identify:
-- **Conserved positions**: structurally invariant across conformations
-- **Variable positions**: change between conformations 
+Identify which residues are **structurally conserved** or **variable** across multiple
+conformations, crystal forms, or homologs of the same protein.
 
+### What the pipeline does
 
-### Step-by-Step (Manual)
-
-All scripts auto-discover PDB IDs from their input directory when `--pdbs` is omitted. Every script also accepts explicit `--pdbs` for manual use.
-
-```bash
-
-# 1. Align all structures to a common reference numbering
-python renumber_to_reference.py --output-dir my_output/ --ref 4AKE
-# → my_output/renumbered/{PDBID}_features.csv
-
-# 2. Identify residues with the largest metric changes across structures
-python identify_variable_residues.py --renumbered-dir my_output/renumbered/ \
-    --chain A --top 20 --out my_output/variability/
-# → my_output/variability/residue_variability_ranking.csv
-# → my_output/variability/variability_heatmap.png
-# → my_output/variability/overall_variability_score.png
-
-# 3. Generate comprehensive per-residue plots
-python plot_all.py --renumbered-dir my_output/renumbered/ \
-    --chain A --out my_output/residue_profiles/
-# → my_output/residue_profiles/{metric}.png        (line plots)
-# → my_output/residue_profiles/{metric}_boxplot.png
-# → my_output/residue_profiles/{metric}_heatmap.png
-
-# 4. Export perturbation annotation CSV
-python export_structural_annotations.py --mode multi --chain A \
-    --renumbered-dir my_output/renumbered/ \
-    --variability-dir my_output/variability/ \
-    --out my_output/dms_annotations/
-# → my_output/annotations/structural_annotations_multi.csv
-
-# 5. Generate PyMOL visualization scripts
-python map_to_pymol.py \
-    --csv my_output/annotations/structural_annotations_multi.csv \
-    --metric variability_score \
-    --pdb 4AKE --output my_output/pymol/4AKE_variability
-# → my_output/pymol/4AKE_variability_spectrum.pml
-# → my_output/pymol/4AKE_variability_bfactor.pdb
-```
-
-### Graphical Outputs
-
-| File | Description |
-|------|-------------|
-| `variability_heatmap.png` | All residues × all metrics coloured by variability (rank-normalised SD) |
-| `overall_variability_score.png` | Bar chart: one bar per residue, top-20 highlighted in red |
-| `top10_variable_metrics.png` | SD per residue for the 10 most variable metrics |
-| `{metric}.png` (line plots) | Mean ± SD across structures + individual structure traces |
-| `{metric}_boxplot.png` | Per-residue boxes with individual structure points |
-| `{metric}_heatmap.png` | Structures × residues colour matrix |
+1. Aligns all structure residue numberings to the reference PDB.
+2. Computes per-residue standard deviation and range across structures for every metric.
+3. Rank-normalizes and averages SDs into an overall **variability score** (0–1).
+4. Produces an annotation CSV for merging with DMS data.
 
 ### Annotation CSV: `dms_structural_annotations_multi.csv`
 
-One row per residue position (reference numbering). Key columns:
+One row per residue position (reference numbering):
 
-| Column | Description | DMS Use |
-|--------|-------------|---------|
-| `resi` | Residue number (reference) | Merge key |
-| `resn` | Residue name (most common) | Identity check |
-| `variability_score` | 0–1; higher = more variable across structures | 
-| `sasa_class` | buried / partially_buried / exposed |
+| Column | Description |
+|--------|-------------|
+| `resi` | Residue number (reference) |
+| `resn` | Residue name (most common across structures) |
+| `variability_score` | 0–1; higher = more variable across structures |
+| `variability_class` | `low` / `medium` / `high` |
+| `sasa_class` | `buried` / `partially_buried` / `exposed` |
 | `mean_sasa` | Mean solvent-accessible surface area (Å²) |
-| `mean_total_hbond_count` | Mean H-bond count | 
+| `mean_total_hbond_count` | Mean hydrogen bond count |
 | `mean_packing_contact_density` | Mean packing density |
-| `mean_graph_all_graph_betweenness_centrality` |
-| `ss_group_consensus` | Most common secondary structure element | 
+| `mean_graph_all_graph_betweenness_centrality` | Mean betweenness centrality |
+| `ss_group_consensus` | Most common secondary structure element |
 
 ---
 
@@ -161,108 +158,58 @@ One row per residue position (reference numbering). Key columns:
 
 ### Purpose
 
-Compare two structures to find which residues change structurally:
-- **WT vs. point mutant**: which residues are allosterically affected by the mutation?
-- **Apo vs. ligand-bound**: which residues reorganize upon ligand binding?
+Compare two structures (WT vs mutant, apo vs bound) to identify which residues
+show the largest structural changes, and which are near a mutation site or ligand.
 
-This explains *why* a particular mutation might disrupt function.
+### What the pipeline does
 
-### Input
+1. Computes per-residue, per-metric differences (Δ) between the two structures.
+2. Flags residues within `proximity_angstroms` of a mutation site or ligand.
+3. Summarizes differences into a **composite change score**.
+4. Produces a per-pair annotation CSV for merging with DMS data.
 
-A TOML config file defining structures and comparison pairs. Copy and edit `template_config.toml`:
+### Annotation CSV: `dms_comparison_annotations_{description}.csv`
 
-```toml
-output_dir          = "my_output/"
-reference_pdb       = "4AKE"
-proximity_angstroms = 8.0
+One row per residue position:
 
-[[structures]]
-label    = "WT_apo"
-pdb_id   = "4AKE"
-state    = "apo"
-genotype = "wt"
-chain    = "A"
-
-[[structures]]
-label    = "R167A_mutant"
-pdb_id   = "1XYZ"        # PDB ID of your mutant structure
-state    = "apo"
-genotype = "mutant"
-chain    = "A"
-
-[[structures.mutations]]
-resi   = 167
-wt_aa  = "R"
-mut_aa = "A"
-
-[[pairs]]
-reference  = "WT_apo"
-comparison = "R167A_mutant"
-description = "WT vs R167A"
-```
-
-### Running the Full Pipeline
-
-```bash
-# One command — reads everything (structures, pairs, output_dir) from config
-python run_pipeline.py --config my_protein_config.toml
-
-# Manual steps
-
-python run_comparison_metrics.py \
-    --config my_protein_config.toml \
-    --metrics-dir my_output/ \
-    --output-dir my_output/comparisons/
-
-python export_dms_annotations.py \
-    --mode comparison \
-    --local-dir my_output/comparisons/local/ \
-    --out my_output/dms_annotations/
-
-python map_to_pymol.py \
-    --csv my_output/dms_annotations/dms_comparison_annotations_WT_vs_R167A.csv \
-    --metric composite_change_score \
-    --pdb 4AKE --output my_output/pymol/WT_vs_R167A_changes
-```
-
-### Graphical Outputs
-
-| File | Description |
-|------|-------------|
-| `histograms/{metric}.jpg` | Distribution overlays for all structures |
-| `local/{pair}_local_diffs.csv` | Per-residue, per-metric Δ values sorted by magnitude |
-| `global_stats.csv` | Mann-Whitney U test + descriptive stats per metric |
-| `{pair}_spectrum.pml` | PyMOL script: residues coloured by composite change score |
-| `{pair}_groups.pml` | PyMOL script: residues coloured by change class |
-
-### DMS Annotation CSV: `dms_comparison_annotations_{pair}.csv`
-
-One row per residue position. Key columns:
-
-| Column | Description | DMS Use |
-|--------|-------------|---------|
-| `resi` | Residue number | Merge key |
-| `composite_change_score` | Normalized mean Δ across key metrics | 
-| `in_proximity` | Within N Å of mutation/ligand site | 
+| Column | Description |
+|--------|-------------|
+| `resi` | Residue number |
+| `composite_change_score` | Normalized mean Δ across key metrics |
+| `change_class` | `unchanged` / `moderate` / `large` |
+| `in_proximity` | `True` if within N Å of mutation/ligand site |
 | `sasa_delta` | Change in solvent accessibility |
 | `total_hbond_count_delta` | Change in H-bond count |
 | `packing_contact_density_delta` | Change in packing |
-| `max_abs_delta` | Largest single-metric change | 
-| `top_changed_metric` | Which metric changed most | 
+| `max_abs_delta` | Largest single-metric change |
+| `top_changed_metric` | Which metric changed most |
 
+---
 
-## PyMOL Visualization
+## Outputs
 
-```bash
-# Open any .pml script in PyMOL
-pymol viz/4AKE_variability_spectrum.pml
-
-# Or load the B-factor PDB and color in PyMOL
-pymol viz/4AKE_variability_score_bfactor.pdb
-# In PyMOL: spectrum b, blue_white_red, all
-
-# In ChimeraX:
-# File → Open → viz/4AKE_variability_score_bfactor.pdb
-# Color → By Attribute → bfactor
+```
+output_dir/
+├── renumbered/                        # reference-renumbered feature CSVs
+│   └── {PDB_ID}_features.csv
+├── variability/                       # multi-structure variability
+│   ├── per_residue_sd.csv
+│   ├── per_residue_range.csv
+│   ├── residue_variability_ranking.csv
+│   ├── variability_heatmap.png
+│   └── overall_variability_score.png
+├── residue_profiles/                  # per-metric distribution plots
+│   ├── {metric}.png
+│   ├── {metric}_boxplot.png
+│   └── {metric}_heatmap.png
+├── rmsd/                              # pairwise CA-RMSD matrix
+│   └── pairwise_rmsd.csv
+├── comparisons/                       # pairwise metric differences
+│   ├── global_stats.csv
+│   ├── histograms/
+│   └── local/{description}_local_diffs.csv
+├── dms_annotations/                   # annotation CSVs for DMS merging
+│   ├── dms_structural_annotations_multi.csv
+│   └── dms_comparison_annotations_{description}.csv
 ```
 
