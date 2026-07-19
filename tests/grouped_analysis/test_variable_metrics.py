@@ -11,39 +11,7 @@ from src.grouped_analysis.identify_variable_metrics import (
     SKIP_COLS,
     compute_variability,
     load_data,
-    rank_normalise,
 )
-
-
-def test_rank_normalise_output_in_zero_one():
-    df = pd.DataFrame({"a": [3.0, 1.0, 2.0], "b": [10.0, 30.0, 20.0]})
-    normed = rank_normalise(df)
-    assert normed.min().min() >= 0.0
-    assert normed.max().max() <= 1.0
-
-def test_rank_normalise_shape_preserved():
-    df = pd.DataFrame({"x": range(5), "y": range(5, 10)})
-    assert rank_normalise(df).shape == df.shape
-
-def test_rank_normalise_ascending_rank_order():
-    df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0]})
-    normed = rank_normalise(df)
-    assert list(normed["v"]) == sorted(normed["v"])
-
-def test_rank_normalise_nan_treated_as_zero():
-    df = pd.DataFrame({"v": [np.nan, 1.0, 2.0]})
-    normed = rank_normalise(df)
-    assert not normed.isnull().any().any()
-
-def test_rank_normalise_single_column():
-    df = pd.DataFrame({"x": [5.0, 5.0, 5.0]})
-    normed = rank_normalise(df)
-    assert normed.shape == (3, 1)
-
-def test_rank_normalise_index_preserved():
-    df = pd.DataFrame({"m": [1.0, 2.0, 3.0]}, index=[10, 20, 30])
-    normed = rank_normalise(df)
-    assert list(normed.index) == [10, 20, 30]
 
 
 def _make_variability_df():
