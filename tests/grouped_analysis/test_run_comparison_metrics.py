@@ -53,8 +53,6 @@ def _make_df():
         "vdw_contact_count": [8],
         "packing_contact_density": [0.45],
     }
-    if extra_cols:
-        base.update(extra_cols)
     return pd.DataFrame(base)
 
 def test_continuous_excludes_identifiers():
