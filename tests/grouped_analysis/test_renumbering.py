@@ -14,6 +14,7 @@ from src.grouped_analysis.renumber_to_referencePDB import (
     to1,
 )
 
+
 def test_to1_standard_residues():
     assert to1("ALA") == "A"
     assert to1("GLY") == "G"
