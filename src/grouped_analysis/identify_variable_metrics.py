@@ -69,11 +69,26 @@ def load_data(chain: str, pdb_ids: list[str], renumbered_dir: Path) -> pd.DataFr
 
 def compute_variability(df: pd.DataFrame, metric_cols: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
+    Compute per-residue variability metrics across structures.
+
+    Inputs
+    ------
+    df : pd.DataFrame
+        Metrics table with `resi_struct` and per-structure rows.
+    metric_cols : list[str]
+        Numeric metric columns to evaluate.
+
+    Output
+    ------
+    tuple[pd.DataFrame, pd.DataFrame]
+        DataFrames of per-residue standard deviation and range per metric.
+
     Returns
     -------
     sd_df   : DataFrame (resi × metric) of per-residue SD across structures
     range_df: DataFrame (resi × metric) of per-residue range across structures
     """
+  
     sd_rows, rng_rows = {}, {}
     for col in metric_cols:
         # Align values by residue across structures to compute per-residue stats.
@@ -87,7 +102,19 @@ def compute_variability(df: pd.DataFrame, metric_cols: list[str]) -> tuple[pd.Da
 
 
 def rank_normalise(df: pd.DataFrame) -> pd.DataFrame:
-    """Rank-normalise each column to [0, 1] (higher = more variable)."""
+        """
+    Rank-normalise each column to [0, 1] for comparable variability scores.
+
+    Inputs
+    ------
+    df : pd.DataFrame
+        Per-residue metric values (e.g., SDs).
+
+    Output
+    ------
+    pd.DataFrame
+        Rank-normalised values with the same index/columns.
+    """
     n = len(df)
     # Fill NaNs so missing residues do not get dropped from ranking.
     normed = df.apply(lambda col: rankdata(col.fillna(0)) / n)
