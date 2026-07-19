@@ -124,7 +124,7 @@ def _run_variability_pipeline(rdir: Path, pdb_ids=("AAAA", "BBBB")):
     score = normed.mean(axis=1)
     score.index = score.index.astype(int)
     score_df = score.rename("variability_score").to_frame()
-    score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
+    score_df["rank"] = score_df["variability_score"].rank(ascending=False, method='first').astype(int)
     score_df.index.name = "resi_struct"
     return score_df, sd_df, rng_df
 
