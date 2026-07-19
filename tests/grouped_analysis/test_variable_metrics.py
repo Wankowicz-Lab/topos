@@ -119,7 +119,6 @@ def _run_variability_pipeline(rdir: Path, pdb_ids=("AAAA", "BBBB")):
     zero_var = sd_df.columns[sd_df.max() == 0]
     sd_df = sd_df.drop(columns=zero_var)
     rng_df = rng_df.drop(columns=zero_var)
-    score = normed.mean(axis=1)
     score_df = score.rename("variability_score").to_frame()
     score_df["rank"] = score_df["variability_score"].rank(ascending=False).astype(int)
     return score_df, sd_df, rng_df
