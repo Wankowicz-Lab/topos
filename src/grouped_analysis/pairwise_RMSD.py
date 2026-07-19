@@ -7,9 +7,6 @@ Outputs
 -------
   <prefix>pairwise_rmsd.csv      — one row per pair
 
-Usage
------
-python pairwise_rmsd.py --config grouped_structures.toml [--output-dir results/]
 """
 from __future__ import annotations
 
