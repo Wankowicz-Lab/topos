@@ -13,7 +13,6 @@ python pairwise_rmsd.py --config grouped_structures.toml [--output-dir results/]
 """
 from __future__ import annotations
 
-import argparse
 import itertools
 import sys
 from pathlib import Path
@@ -21,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.grouped_analysis.load_grouped_config import load_config
+from grouped_analysis.load_group_config import load_config
 
 import biotite.database.rcsb as rcsb
 import biotite.sequence as bseq
@@ -132,76 +131,57 @@ def genotype_comparison(e1, e2) -> str:
     """Return a hyphen-joined label describing the genotype pair, e.g. 'wt-mutant'."""
     return f"{e1.genotype}-{e2.genotype}"
 
-def parse_args():
+def compute_pairwise_rmsd(config_path: Path, output_dir: Path | None = None) -> pd.DataFrame:
     """
-    Parse command line arguments for config, output dir, color-by, and histogram bins.
-    """
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--config",     required=True, help="Path to grouped_structures.toml")
-    ap.add_argument("--output-dir", default=None,
-                    help="Output directory (default: taken from config or '.')")
-    ap.add_argument("--color-by",   choices=["state", "genotype"], default="state",
-                    help="Color histogram by state or genotype comparison (default: state)")
-    ap.add_argument("--bins",       type=int, default=20, help="Histogram bins (default: 20)")
-    return ap.parse_args()
+    Compute pairwise sequence-aligned CA-RMSD for all structures defined in a config TOML.
 
-def main():
-    """
-    Main program logic:
-    - Loads structure entries from configuration.
-    - Loads C-alpha coordinates from PDB/CIF or fetches remotely.
-    - Performs pairwise sequence-aligned superpositions for all pairs.
-    - Calculates CA RMSD and outputs a CSV summary.
-    - Plots and saves a colored histogram of RMSD values.
-    """
-    args = parse_args()
+    Parameters
+    ----------
+    config_path : Path
+        Path to the grouped_structures TOML config file.
+    output_dir : Path or None
+        Directory to write ``pairwise_rmsd.csv``.  Falls back to ``output_dir``
+        in the config, then the current directory.
 
-    config_path = Path(args.config)
-
-    # Load structure entries and global settings
-    entries, global_settings = load_config(config_path)
+    Returns
+    -------
+    pd.DataFrame
+        One row per structure pair with RMSD and metadata columns.
+    """
+    entries, _pairs, global_settings = load_config(config_path)
     if len(entries) < 2:
         sys.exit("ERROR: Need at least 2 structures for pairwise comparison.")
 
-    # Set up output location and file prefix
-    out_dir = Path(args.output_dir or global_settings.get("output_dir", "."))
+    out_dir = Path(output_dir or global_settings.get("output_dir", "."))
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = global_settings.get("output_prefix", "")
 
-    # Load CA-only AtomArrays for all entries, skip entries that fail to load or extract CA coords
     ca_arrays: dict[str, struc.AtomArray] = {}
     for entry in entries:
         try:
             arr = _load_arr(entry)
-        except Exception as exc:
+        except Exception:
             continue
         chains = [entry.chain] if isinstance(entry.chain, str) else list(entry.chain)
         ca = extract_ca(arr, chains, entry.label)
         if ca.array_length() > 0:
             ca_arrays[entry.label] = ca
 
-    # Get entries with successfully loaded CA arrays
     valid_entries = [e for e in entries if e.label in ca_arrays]
     if len(valid_entries) < 2:
         sys.exit("ERROR: Fewer than 2 structures loaded successfully.")
 
-    # ---- Pairwise alignment --------------------------------------- #
-    # Generate all unique pairs of structures for comparison
-    pairs = list(itertools.combinations(valid_entries, 2))
-
     rows = []
-    for e1, e2 in pairs:
+    for e1, e2 in itertools.combinations(valid_entries, 2):
         ca1 = ca_arrays[e1.label]
         ca2 = ca_arrays[e2.label]
         try:
-            # Compute the sequence-aligned RMSD for the pair
             rmsd, n_aln = align_rmsd(ca1, ca2)
             print(f"RMSD = {rmsd:.3f} Å  ({n_aln} residues aligned)")
         except Exception as exc:
             print(f"FAILED ({exc})")
             rmsd, n_aln = float("nan"), 0
 
-        # Collect all relevant metadata and RMSD results in a row for the output CSV
         rows.append({
             "label_1":             e1.label,
             "label_2":             e2.label,
@@ -220,11 +200,5 @@ def main():
         })
 
     df = pd.DataFrame(rows)
-
-    csv_path = out_dir / f"{prefix}pairwise_rmsd.csv"
-    df.to_csv(csv_path, index=False)
-
-
-
-if __name__ == "__main__":
-    main()
+    df.to_csv(out_dir / f"{prefix}pairwise_rmsd.csv", index=False)
+    return df
