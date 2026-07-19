@@ -9,11 +9,6 @@ across all provided structures (from any folder/PDB set). Then:
   3. Per-metric top-N table saved to CSV
   4. Master variability CSV (residue × metric SD values)
 
-Usage
------
-python identify_variable_residues.py
-python identify_variable_residues.py --chain A --top 20 --renumbered-dir my_data/ --out my_output/
-python identify_variable_residues.py --renumbered-dir /any/folder/ --pdbs AABB,CCDD,EFFE
 """
 
 import sys
