@@ -42,7 +42,7 @@ def test_empty_subdir_returns_none(tmp_path):
     assert _find_features_csv("AAAA", tmp_path) is None
 
 
-def _make_df(extra_cols: Optional[dict] = None):
+def _make_df():
     """Return a minimal df with continuous + count columns."""
     base = {
         "chain": ["A"],
