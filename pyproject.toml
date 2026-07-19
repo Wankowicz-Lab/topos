@@ -1,11 +1,11 @@
 [project]
-name = "biogenesis"
+name = "topos"
 version = "0.1.0"
 description = "A toolkit for computing and analyzing sequence/structure metrics in proteins"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Stephanie Wankowicz, Noah Greenwald"}]
+authors = [{ name = "Noah Greenwald, Stephanie Wankowicz"}]
 dependencies = [
   "biotite>=1.0,<1.7",
   "biopython",   
@@ -27,6 +27,8 @@ test = ["pytest", "pytest-cov", "coveralls", "ruff", "mypy"]
 
 [project.scripts]
 biogenesis = "pipeline.runner:main"
+grouped-pipeline = "grouped_analysis.run_grouped_pipeline:main"
+
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -46,6 +48,9 @@ extend-exclude = [
   "working_*.py",
 ]
 
+[tool.ruff.lint.isort]                            
+known-first-party = ["src"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = [
@@ -61,6 +66,7 @@ ignore = [
   "B028",
   "B904",
   "B905",
+  "I001",
 ]
 
 [tool.ruff.lint.per-file-ignores]
