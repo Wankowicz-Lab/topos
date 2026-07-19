@@ -102,7 +102,7 @@ def compute_variability(df: pd.DataFrame, metric_cols: list[str]) -> tuple[pd.Da
 
 
 def rank_normalise(df: pd.DataFrame) -> pd.DataFrame:
-        """
+    """
     Rank-normalise each column to [0, 1] for comparable variability scores.
 
     Inputs
