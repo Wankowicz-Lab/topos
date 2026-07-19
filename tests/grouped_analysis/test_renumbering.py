@@ -5,6 +5,7 @@ from pathlib import Path
 
 import biotite.sequence.align as align
 import pandas as pd
+
 from src.grouped_analysis.renumber_to_referencePDB import (
     align_and_map,
     build_alignment_params,
