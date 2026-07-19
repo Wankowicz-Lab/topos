@@ -17,10 +17,85 @@ See template_config.toml for the full annotated template.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
+
+# ── Module-level helpers (used by stage functions and tests) ──────────────────
+
+def load_config(cfg_path) -> dict:
+    """Load a TOML config file and return the parsed dict."""
+    with open(cfg_path, "rb") as f:
+        return tomllib.load(f)
+
+
+def get_pdb_ids(cfg: dict) -> list[str]:
+    """Return uppercase PDB IDs from cfg['structures']."""
+    return [s["pdb_id"].upper() for s in cfg.get("structures", [])]
+
+
+def get_setting(cfg: dict, key: str, default):
+    """Return cfg[key] or default if absent."""
+    return cfg.get(key, default)
+
+
+def get_analysis(cfg: dict, key: str, default):
+    """Return cfg['analysis'][key] or default if the key or section is absent."""
+    return cfg.get("analysis", {}).get(key, default)
+
+
+def _run(cmd: list, dry_run: bool, step_name: str) -> None:
+    """Run cmd as a subprocess; print a dry-run message if dry_run is True."""
+    if dry_run:
+        print(f"[dry-run] {step_name}: {' '.join(str(c) for c in cmd)}")
+        return
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        sys.exit(f"Step '{step_name}' failed with exit code {result.returncode}")
+
+
+def stage_renumber(pdb_list, ref_pdb, input_dir, max_mismatches, dry_run=False) -> None:
+    """Build and run the renumber_to_referencePDB command."""
+    cmd = [
+        sys.executable, "-m", "src.grouped_analysis.renumber_to_referencePDB",
+        "--ref", str(ref_pdb),
+        "--input-dir", str(input_dir),
+        "--max-mismatches", str(max_mismatches),
+        "--pdbs", *[str(p) for p in pdb_list],
+    ]
+    _run(cmd, dry_run=dry_run, step_name="renumber_to_reference")
+
+
+def stage_variability(pdb_ids, renumbered_dir, variability_dir, chain, top_n, dry_run=False) -> None:
+    """Build and run the identify_variable_residues command."""
+    cmd = [
+        sys.executable, "-m", "src.grouped_analysis.identify_variable_residues",
+        "--chain", str(chain),
+        "--input-dir", str(renumbered_dir),
+        "--output-dir", str(variability_dir),
+        "--top", str(top_n),
+        "--pdbs", *[str(p) for p in pdb_ids],
+    ]
+    _run(cmd, dry_run=dry_run, step_name="identify_variable_residues")
+
+
+def stage_comparison(config_path, input_dir, comparison_dir, no_proximity, proximity_angstroms, dry_run=False) -> None:
+    """Build and run the run_comparison_metrics command."""
+    cmd = [
+        sys.executable, "-m", "src.grouped_analysis.run_comparison_metrics",
+        "--config", str(config_path),
+        "--input-dir", str(input_dir),
+        "--output-dir", str(comparison_dir),
+        "--proximity-angstroms", str(proximity_angstroms),
+    ]
+    if no_proximity:
+        cmd.append("--no-proximity")
+    _run(cmd, dry_run=dry_run, step_name="run_comparison_metrics")
+
+
+# ── Pipeline class ─────────────────────────────────────────────────────────────
 
 from src.grouped_analysis.identify_variable_metrics import run_variability_analysis
 from src.grouped_analysis.pairwise_RMSD import compute_pairwise_rmsd
