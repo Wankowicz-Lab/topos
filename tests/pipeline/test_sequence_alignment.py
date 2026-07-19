@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from Bio.Align import PairwiseAligner
 
-from src.pipeline.sequence_alignment import (
+from topos.pipeline.sequence_alignment import (
     alignment_to_index_map,
     evaluate_sequence_alignment,
     load_mutation_scores,

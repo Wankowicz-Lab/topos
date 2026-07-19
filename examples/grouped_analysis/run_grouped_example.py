@@ -18,7 +18,7 @@ Prerequisites
 Run the topos pipeline on each structure first so that
 ``{PDB_ID}_features.csv`` files exist in output_dir (set in the config):
 
-    from src.pipeline.runner import Runner
+    from topos.pipeline.runner import Runner
 
     for pdb_id in ["4AKE", "1AKE", "1ANK", "3HPQ", "6F7U"]:
         runner = Runner(pdb_id=pdb_id)
@@ -60,7 +60,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-from src.grouped_analysis.run_grouped_pipeline import GroupedPipelineRunner  # noqa: E402
+from topos.grouped_analysis.run_grouped_pipeline import GroupedPipelineRunner  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # File paths — all derived from the repository root so the script can be run

@@ -18,8 +18,7 @@ alignment_cutoff = 0.95
 # mutation_score_col_name = "effect"
 
 # Sequence parameters
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path = "data/kidera_factors.csv"
+# aaindex_path / kidera_path default to CSVs bundled with the topos package
 
 # Pipeline parameters
 output_dir = "examples/B2AR_DMS_example/output"

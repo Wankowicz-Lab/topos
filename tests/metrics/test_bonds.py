@@ -3,9 +3,9 @@ import biotite.structure as struc
 import pandas as pd
 import pytest
 
-from src.metrics import bonds
-from src.pipeline.context import Context
-from src.structure.utils import res_key
+from topos.metrics import bonds
+from topos.pipeline.context import Context
+from topos.structure.utils import res_key
 from tests.test_utils import _make_atoms, _make_chain, _make_residue
 
 

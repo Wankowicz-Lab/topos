@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from src.metrics.aaindex_schema import (
+from topos.metrics.aaindex_schema import (
     AAINDEX_REQUIRED_COLUMNS,
     validate_aaindex_columns,
 )

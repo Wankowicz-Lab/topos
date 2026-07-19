@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.grouped_analysis import run_grouped_pipeline as rp
+from topos.grouped_analysis import run_grouped_pipeline as rp
 
 
 def test_loads_valid_toml(tmp_path):

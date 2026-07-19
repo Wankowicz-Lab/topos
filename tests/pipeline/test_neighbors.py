@@ -4,14 +4,14 @@ import warnings
 import pandas as pd
 import pytest
 
-from src.metrics.neighborhood_metrics import (
+from topos.metrics.neighborhood_metrics import (
     _secondary_structure_coarse_from_label,
     average_neighbor_metrics,
     neighbor_sequence_range_metrics,
 )
-from src.pipeline.neighbors import calculate_neighborhood_features, compute_residue_neighbors
-from src.pipeline.runner import Runner
-from src.structure.utils import res_key
+from topos.pipeline.neighbors import calculate_neighborhood_features, compute_residue_neighbors
+from topos.pipeline.runner import Runner
+from topos.structure.utils import res_key
 
 
 def test_compute_residue_neighbors_basic(tmp_path):

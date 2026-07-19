@@ -3,7 +3,7 @@ import warnings
 
 import pytest
 
-from src.sequence.utils import (
+from topos.sequence.utils import (
     AA_1_TO_3,
     AA_3_TO_1,
     convert_amino_acid_1to3,

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.databases import pdbtm
+from topos.databases import pdbtm
 from tests.test_utils import _make_residue_table
 
 

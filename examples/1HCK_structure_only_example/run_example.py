@@ -28,7 +28,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-from src.pipeline.runner import Runner  # noqa: E402 (import after logging/path setup)
+from topos.pipeline.runner import Runner  # noqa: E402 (import after logging/path setup)
 
 # ---------------------------------------------------------------------------
 # File paths — all derived from the repository root so the script can be run

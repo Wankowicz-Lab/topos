@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.pipeline.context import Config, Context
-from src.structure.secondary_structure import (
+from topos.pipeline.context import Config, Context
+from topos.structure.secondary_structure import (
     define_membrane_secondary_structure,
     define_soluble_secondary_structure,
     get_secondary_structure_annotations,
@@ -51,7 +51,7 @@ def test_get_secondary_structure_annotations_uses_mkdssp_backend(monkeypatch):
         "dssp_acc": [10, 20, 30, 40, 50, 60],
     })
 
-    import src.structure.secondary_structure as ss_module
+    import topos.structure.secondary_structure as ss_module
     monkeypatch.setattr(ss_module, "_annotate_with_mkdssp", lambda _ctx: (mock_ss_df, mock_dssp_df))
 
     ss_df = get_secondary_structure_annotations(context)
@@ -72,7 +72,7 @@ def test_get_secondary_structure_annotations_uses_pydssp_backend(monkeypatch):
         "sse": ["c"] * 6,
     })
 
-    import src.structure.secondary_structure as ss_module
+    import topos.structure.secondary_structure as ss_module
     monkeypatch.setattr(ss_module, "_annotate_with_pydssp", lambda _ctx: mock_ss_df)
 
     ss_df = get_secondary_structure_annotations(context)

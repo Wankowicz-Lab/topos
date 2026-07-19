@@ -37,7 +37,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-from src.pipeline.runner import Runner  # noqa: E402
+from topos.pipeline.runner import Runner  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # File paths

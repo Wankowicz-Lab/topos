@@ -3,13 +3,13 @@ import numpy as np
 import pandas as pd
 import tomli
 
-from src.pipeline.context import Config, Context
-from src.pipeline.ligands import (
+from topos.pipeline.context import Config, Context
+from topos.pipeline.ligands import (
     calculate_protein_ligand_interactions,
     find_ligands,
     format_ligand_id,
 )
-from src.structure.structure_context import load_structure
+from topos.structure.structure_context import load_structure
 from tests.test_utils import _make_atoms, _make_config_file, _make_residue, _write_mmcif_file
 
 

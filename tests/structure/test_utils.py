@@ -1,6 +1,6 @@
 import biotite.structure as struc
 
-from src.structure import utils
+from topos.structure import utils
 from tests.test_utils import _make_chain, _make_residue
 
 

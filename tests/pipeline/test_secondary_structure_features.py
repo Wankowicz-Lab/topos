@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from src.pipeline.runner import Runner
-from src.pipeline.secondary_structure_features import calculate_secondary_structure_features
+from topos.pipeline.runner import Runner
+from topos.pipeline.secondary_structure_features import calculate_secondary_structure_features
 from tests.test_utils import _make_config_file
 
 
@@ -69,7 +69,7 @@ def test_calculate_secondary_structure_features_columns_exist(tmp_path):
     assert "ss_domain_length" in out.columns
     assert "ss_domain_metric_a" in out.columns
 
-    from src.metrics import secondary_structure as ss_module
+    from topos.metrics import secondary_structure as ss_module
 
     for group_name in ss_module.AA_GROUPS:
         assert f"ss_domain_log2_aa_group_ratio_{group_name}" in out.columns

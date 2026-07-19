@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.structure.structure_context import download_alphafold_pdb, load_structure, residue_table
+from topos.structure.structure_context import download_alphafold_pdb, load_structure, residue_table
 from tests.test_utils import _make_chain, _write_mmcif_file
 
 
