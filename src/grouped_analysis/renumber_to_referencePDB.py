@@ -26,8 +26,13 @@ from biotite.sequence import ProteinSequence
 DEFAULT_INPUT_DIR = "."
 RENUMBERED_DIR = "renumbered"
 
+# Non-standard amino acids not covered by biotite's standard protein alphabet.
+_NONSTANDARD_AA = {"SEC": "U", "PYL": "O"}
+
 def to1(resn: str) -> str:
     """Convert a 3-letter residue name to a 1-letter code (returns 'X' for unknowns)."""
+    if resn in _NONSTANDARD_AA:
+        return _NONSTANDARD_AA[resn]
     try:
         return ProteinSequence.convert_letter_3to1(resn)
     except KeyError:
@@ -89,7 +94,7 @@ def align_and_map(
         mapping[qry_seq[q_idx][0]] = ref_seq[r_idx][0]
 
     # Any residues in the query chain not aligned are mapped to None
-    aligned_q = {q for _, q in alignment.trace if q != -1}
+    aligned_q = {qry_seq[q][0] for _, q in alignment.trace if q != -1}
     for resi, _ in qry_seq:
         if resi not in aligned_q:
             mapping[resi] = None
