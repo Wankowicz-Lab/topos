@@ -1,10 +1,8 @@
-from __future__ import annotations
-
-from typing import Optional
-
+"""
+Tests for comparison metrics
+"""
 import pandas as pd
 import pytest
-
 from src.grouped_analysis.run_comparison_metrics import (
     _classify_columns,
     _find_features_csv,
