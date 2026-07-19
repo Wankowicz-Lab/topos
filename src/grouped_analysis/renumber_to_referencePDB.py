@@ -1,5 +1,5 @@
 """
-Re-number biogenesis output CSVs so that resi_struct matches the user-specified reference
+Re-number topos output CSVs so that resi_struct matches the user-specified reference
 PDB via pairwise sequence alignment.
 
 Logic per structure

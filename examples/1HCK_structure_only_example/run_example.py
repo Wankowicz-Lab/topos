@@ -1,12 +1,12 @@
 """
 Structure-only example: 1HCK (CDK2/cyclin kinase inhibitor complex)
 ====================================================================
-This example demonstrates how to use biogenesis with a local PDB file and
+This example demonstrates how to use topos with a local PDB file and
 no mutation/DMS data.  All structural metrics are computed and saved to CSV.
 
 Run from anywhere — the script resolves paths relative to the repository root:
 
-    conda activate biogenesis-py311
+    conda activate topos-py311
     python examples/1HCK_structure_only_example/run_example.py
 """
 
@@ -21,7 +21,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Configure logging before importing biogenesis so all pipeline messages are visible
+# Configure logging before importing topos so all pipeline messages are visible
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s - %(message)s",
