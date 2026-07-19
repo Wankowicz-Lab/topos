@@ -8,9 +8,9 @@ import pytest
 import tomli_w
 
 # import files containing metrics to register them in _REGISTRY
-from src.metrics.registry import _REGISTRY
-from src.pipeline import runner
-from src.pipeline.context import Config
+from topos.metrics.registry import _REGISTRY
+from topos.pipeline import runner
+from topos.pipeline.context import Config
 from tests.test_utils import (
     _make_aaindex_data,
     _make_config_file,

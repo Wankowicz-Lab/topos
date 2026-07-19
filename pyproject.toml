@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "topos"
 version = "0.1.0"
@@ -8,7 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Noah Greenwald, Stephanie Wankowicz"}]
 dependencies = [
   "biotite>=1.0,<1.7",
-  "biopython",   
+  "biopython",
   "numpy>=1.24",
   "pandas>=2.0",
   "scipy>=1.11",
@@ -25,16 +29,14 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "coveralls", "ruff", "mypy"]
 
-[project.scripts]
-topos = "pipeline.runner:main"
-grouped-pipeline = "grouped_analysis.run_grouped_pipeline:main"
-
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+topos = ["data/*.csv"]
 
 [tool.ruff]
 target-version = "py311"
@@ -42,14 +44,13 @@ line-length = 100
 extend-exclude = [
   "venv",
   "results",
-  "src/grouped_analysis",
   "debug.py",
   "plots.py",
   "working_*.py",
 ]
 
-[tool.ruff.lint.isort]                            
-known-first-party = ["src"]
+[tool.ruff.lint.isort]
+known-first-party = ["topos"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -75,17 +76,14 @@ ignore = [
 [tool.mypy]
 python_version = "3.11"
 modules = [
-  "src.pipeline.runner",
-  "src.pipeline.context",
-  "src.pipeline.sequence_alignment",
-  "src.metrics.registry",
+  "topos.pipeline.runner",
+  "topos.pipeline.context",
+  "topos.pipeline.sequence_alignment",
+  "topos.metrics.registry",
 ]
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_ignores = true
 no_implicit_optional = true
-exclude = "(^src/grouped_analysis/|^venv/|^results/)"
+exclude = "(^src/topos/grouped_analysis/|^venv/|^results/)"
 explicit_package_bases = true
-
-
-

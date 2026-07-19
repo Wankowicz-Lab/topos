@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.pipeline.batch_processing import batch_process, expand_batch_arguments
+from topos.pipeline.batch_processing import batch_process, expand_batch_arguments
 
 
 def test_batch_process(monkeypatch, tmp_path):
@@ -26,7 +26,7 @@ def test_batch_process(monkeypatch, tmp_path):
             self.features = pd.DataFrame({'result_summary': ['custom']})
 
 
-    monkeypatch.setattr('src.pipeline.batch_processing.Runner', FakeRunner)
+    monkeypatch.setattr('topos.pipeline.batch_processing.Runner', FakeRunner)
     _ = batch_process(batch_file_path)
 
     for idx, call in enumerate(calls):

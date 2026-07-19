@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.pipeline.runner import Runner
+from topos.pipeline.runner import Runner
 
 
 def test_b2ar_example(tmp_path):

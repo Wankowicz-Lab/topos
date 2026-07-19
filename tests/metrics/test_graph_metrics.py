@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from src.metrics.graph_metrics import calculate_graph_metrics
+from topos.metrics.graph_metrics import calculate_graph_metrics
 
 
 def test_calculate_graph_metrics_simple():

@@ -31,10 +31,18 @@ function.
 
 Requires **Python ≥ 3.11**.
 
+Install from GitHub:
+
+```bash
+pip install "git+https://github.com/Wankowicz-Lab/topos.git"
+```
+
+Or clone for development:
+
 ```bash
 git clone https://github.com/Wankowicz-Lab/topos.git
 cd topos
-pip install -e .
+pip install -e ".[test]"
 ```
 
 The required conda environment (Python 3.11 + all dependencies) is used for
@@ -43,7 +51,7 @@ development and testing:
 ```bash
 conda create -n topos-py311 python=3.11
 conda activate topos-py311
-pip install -e .
+pip install -e ".[test]"
 ```
 
 ### DSSP requirement for secondary structure
@@ -79,7 +87,7 @@ mkdssp --version
 ### Structure only (no mutation data)
 
 ```python
-from src.pipeline.runner import Runner
+from topos.pipeline.runner import Runner
 
 runner = Runner(
     pdb_id='1HCK',           # PDB ID (downloaded from RCSB) — OR use pdb_path for a local file
@@ -92,7 +100,7 @@ runner.run()                  # compute all structural metrics
 ### With deep mutational scanning (DMS) data
 
 ```python
-from src.pipeline.runner import Runner
+from topos.pipeline.runner import Runner
 
 runner = Runner(config_path='examples/B2AR_DMS_example/B2AR_config.toml')
 
@@ -274,8 +282,8 @@ It records:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `aaindex_path` | `str` | `"data/aaindex_parsed_small.csv"` | Path to amino acid index database |
-| `kidera_path` | `str` | `"data/kidera_factors.csv"` | Path to Kidera factors data |
+| `aaindex_path` | `str` | packaged CSV | Path to amino acid index database (defaults to data bundled with the install) |
+| `kidera_path` | `str` | packaged CSV | Path to Kidera factors data (defaults to data bundled with the install) |
 
 ### Pipeline parameters
 

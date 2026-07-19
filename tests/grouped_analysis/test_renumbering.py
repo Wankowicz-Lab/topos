@@ -7,7 +7,7 @@ import biotite.sequence.align as align
 import pandas as pd
 import pytest
 
-from src.grouped_analysis.renumber_to_referencePDB import (
+from topos.grouped_analysis.renumber_to_referencePDB import (
     align_and_map,
     build_alignment_params,
     get_chain_sequence,

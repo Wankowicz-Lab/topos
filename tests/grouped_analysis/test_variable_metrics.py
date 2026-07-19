@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.grouped_analysis.identify_variable_metrics import (
+from topos.grouped_analysis.identify_variable_metrics import (
     SKIP_COLS,
     compute_variability,
     load_data,

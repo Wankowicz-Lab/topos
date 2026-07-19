@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.metrics import secondary_structure
+from topos.metrics import secondary_structure
 
 
 def test_ss_domain_lengths():

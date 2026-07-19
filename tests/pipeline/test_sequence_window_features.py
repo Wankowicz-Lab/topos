@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.pipeline.sequence_window_features import calculate_sequence_window_features
+from topos.pipeline.sequence_window_features import calculate_sequence_window_features
 
 
 class DummyContext:

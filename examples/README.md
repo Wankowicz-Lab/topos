@@ -49,8 +49,7 @@ mutation_data_path  = "examples/B2AR_DMS_example/B2AR_processed_scores.csv"
 mutation_data_chain = "A"
 alignment_cutoff    = 0.95
 
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path  = "data/kidera_factors.csv"
+# aaindex_path / kidera_path default to bundled package data
 output_dir   = "examples/B2AR_DMS_example/output"
 ```
 
@@ -89,8 +88,7 @@ python examples/1HCK_structure_only_example/run_example.py
 membrane_protein = false
 remove_hydrogens = true
 altloc_policy = "highest"
-aaindex_path = "data/aaindex_parsed_small.csv"
-kidera_path  = "data/kidera_factors.csv"
+# aaindex_path / kidera_path default to bundled package data
 output_dir   = ""
 output_prefix = ""
 ```

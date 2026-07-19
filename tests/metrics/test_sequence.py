@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.metrics import sequence as metrics
-from src.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
-from src.sequence.utils import convert_amino_acid_3to1
+from topos.metrics import sequence as metrics
+from topos.metrics.aaindex_schema import AAINDEX_AA_COLUMNS
+from topos.sequence.utils import convert_amino_acid_3to1
 from tests.test_utils import AA_LIST, _make_aaindex_data, _make_residue_table
 
 # Seed RNGs for deterministic tests
