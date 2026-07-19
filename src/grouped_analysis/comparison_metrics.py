@@ -102,7 +102,19 @@ _SKIP_SUFFIXES = ("_community_id", "_in_lcc")
 def _classify_columns(
     df: pd.DataFrame,
 ) -> tuple[list[str], list[str]]:
-    """Return (continuous_cols, count_cols) from *df*, excluding ID/skip cols."""
+    """
+    Classify numeric metric columns into continuous vs count-like.
+
+    Inputs
+    ------
+    df : pd.DataFrame
+        Metrics table containing residue identifiers and numeric features.
+
+    Output
+    ------
+    tuple[list[str], list[str]]
+        Two lists: continuous metric column names and count metric column names.
+    """
     continuous, counts = [], []
     for col in df.columns:
         if col in _ID_COLS:
@@ -127,11 +139,19 @@ def _classify_columns(
 
 def _find_features_csv(pdb_id: str, metrics_dir: Path) -> Optional[Path]:
     """
-    Locate the *_features.csv for *pdb_id* inside *metrics_dir*.
+    Locate the *_features.csv for a PDB entry in supported layouts.
 
-    Checks in order:
-      1. Flat layout: {metrics_dir}/{PDBID}_features.csv  (biogenesis default)
-      2. Subdirectory layout: {metrics_dir}/{pdbid}/*_features.csv  (older qFit)
+    Inputs
+    ------
+    pdb_id : str
+        PDB identifier to locate.
+    metrics_dir : Path
+        Root directory containing features CSV files.
+
+    Output
+    ------
+    Optional[Path]
+        Matching CSV path if found; otherwise None.
     """
     # Flat layout (biogenesis default)
     flat = metrics_dir / f"{pdb_id}_features.csv"
@@ -155,7 +175,21 @@ def load_all_metrics(
     entries,
     metrics_dir: Path,
 ) -> dict[str, pd.DataFrame]:
-    """Load features CSVs for all entries; skip any that are missing."""
+    """
+    Load metrics CSVs for all entries listed in the config.
+
+    Inputs
+    ------
+    entries : iterable
+        Config entries with `pdb_id` and `label` fields.
+    metrics_dir : Path
+        Directory containing features CSVs.
+
+    Output
+    ------
+    dict[str, pd.DataFrame]
+        Mapping from entry label to its metrics DataFrame.
+    """
     out = {}
     for entry in entries:
         csv_path = _find_features_csv(entry.pdb_id, metrics_dir)
@@ -173,7 +207,19 @@ def load_all_metrics(
 
 
 def _load_structure_array(entry):
-    """Return a biotite AtomArray for *entry* (fetch from RCSB if needed)."""
+    """
+    Load a biotite AtomArray for the entry, fetching from RCSB if needed.
+
+    Inputs
+    ------
+    entry : object
+        Config entry with `pdb_id` and optional `pdb_path`.
+
+    Output
+    ------
+    biotite.structure.AtomArray
+        Structure array for model 1 with extra fields populated.
+    """
 
     extra = ["b_factor", "occupancy"]
     if entry.pdb_path is not None:
@@ -195,7 +241,24 @@ def _load_structure_array(entry):
 
 
 def _residues_near_position(arr, chain: str, resi: int, cutoff: float) -> set[int]:
-    """Return residue numbers (res_id) within *cutoff* Å of residue *resi*."""
+    """
+    Compute protein residues within a cutoff around a target residue.
+
+    Inputs
+    ------
+    arr : biotite.structure.AtomArray
+    chain : str
+        Chain identifier containing the target residue.
+    resi : int
+        Residue number of the target position.
+    cutoff : float
+        Distance cutoff in Angstroms.
+
+    Output
+    ------
+    set[int]
+        Residue numbers within the cutoff distance.
+    """
 
     aa_mask = struc.filter_amino_acids(arr)
     chain_mask = arr.chain_id == chain
@@ -216,7 +279,25 @@ def _residues_near_position(arr, chain: str, resi: int, cutoff: float) -> set[in
 
 
 def _residues_near_ligand(arr, ligand_name: str, chain: str, cutoff: float) -> set[int]:
-    """Return protein residue numbers within *cutoff* Å of ligand *ligand_name*."""
+    """
+    Compute protein residues within a cutoff around ligand atoms.
+
+    Inputs
+    ------
+    arr : biotite.structure.AtomArray
+        Structure array to search.
+    ligand_name : str
+        Ligand residue name.
+    chain : str
+        Chain identifier containing the ligand.
+    cutoff : float
+        Distance cutoff in Angstroms.
+
+    Output
+    ------
+    set[int]
+        Residue numbers within the cutoff distance.
+    """
     lig_mask = arr.hetero & (np.char.strip(arr.res_name) == ligand_name)
     if not lig_mask.any():
         print(f"  WARNING: ligand '{ligand_name}' not found in structure.")
@@ -288,14 +369,24 @@ def analyze_global(
     cmp_label: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Compute per-metric global statistics.
+    Compute per-metric global statistics for one comparison pair.
 
-    Returns
-    -------
-    stats_df:
-        One row per continuous metric with descriptive stats + Mann-Whitney.
-    count_df:
-        One row per count metric with per-structure totals and Δ.
+    Inputs
+    ------
+    ref_df : pd.DataFrame
+        Reference metrics table.
+    cmp_df : pd.DataFrame
+        Comparison metrics table.
+    ref_label : str
+        Label for the reference structure.
+    cmp_label : str
+        Label for the comparison structure.
+
+    Output
+    ------
+    tuple[pd.DataFrame, pd.DataFrame]
+        stats_df with descriptive stats and Mann-Whitney results, and
+        count_df with per-structure totals and deltas for count metrics.
     """
     merged = _merge_pair(ref_df, cmp_df)
     continuous_cols, count_cols = _classify_columns(ref_df)
@@ -436,11 +527,23 @@ def analyze_local(
     proximity_resi: set[int],
 ) -> pd.DataFrame:
     """
-    Build a flat residue × metric difference table.
-
+    Build a residue-by-metric delta table for a comparison pair.
     Every residue and every numeric metric is included.  A boolean
     ``in_proximity`` column flags residues inside the proximity zone.
     Rows are sorted by ``abs_delta`` (largest changes first).
+
+    Inputs
+    ------
+    ref_df : pd.DataFrame
+        Reference metrics table.
+    cmp_df : pd.DataFrame
+        Comparison metrics table.
+    ref_label : str
+        Label for the reference structure.
+    cmp_label : str
+        Label for the comparison structure.
+    proximity_resi : set[int]
+        Residue numbers considered near mutations/ligands.
     """
     merged = _merge_pair(ref_df, cmp_df)
     if merged.empty:
