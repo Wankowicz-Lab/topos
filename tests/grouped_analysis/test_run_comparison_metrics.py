@@ -11,7 +11,6 @@ from src.grouped_analysis.run_comparison_metrics import (
     analyze_local,
 )
 
-
 def test_flat_uppercase_found(tmp_path):
     f = tmp_path / "AAAA_features.csv"
     f.touch()
