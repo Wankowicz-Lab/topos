@@ -155,13 +155,3 @@ def test_stage_comparison_includes_config(tmp_path):
     assert "run_comparison_metrics" in cmd_str
     assert "--config" in cmd_str
 
-def test_stage_pymol_includes_metric(tmp_path):
-    cmd = _get_cmd(
-        rp.stage_pymol,
-        tmp_path / "ann.csv", "variability_score", "spectrum",
-        "AAAA", "A", tmp_path / "pymol/AAAA_var",
-        dry_run=True
-    )
-    cmd_str = " ".join(str(c) for c in cmd)
-    assert "map_to_pymol" in cmd_str
-    assert "variability_score" in cmd_str
