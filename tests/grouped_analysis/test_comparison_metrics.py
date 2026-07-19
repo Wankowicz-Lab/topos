@@ -3,7 +3,7 @@ Tests for comparison metrics
 """
 import pandas as pd
 import pytest
-from src.grouped_analysis.run_comparison_metrics import (
+from src.grouped_analysis.comparison_metrics import (
     _classify_columns,
     _find_features_csv,
     analyze_local,
