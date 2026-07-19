@@ -1,4 +1,4 @@
-# biogenesis Examples
+# Topos Examples
 
 This directory contains ready-to-run examples demonstrating the two main biogenesis
 use cases.  Run all scripts from the **repository root** directory.
@@ -93,6 +93,69 @@ aaindex_path = "data/aaindex_parsed_small.csv"
 kidera_path  = "data/kidera_factors.csv"
 output_dir   = ""
 output_prefix = ""
+```
+---
+
+---
+
+## Example 3 — Grouped Analysis
+
+**Directory**: `examples/grouped_analysis/`
+
+**Protein**: E. coli adenylate kinase (PDBs: 1AKE, 1ANK, 3HPQ, 4AKE, 4JLB, 8RJ8)
+
+**Input**: Topos CSVs and local PDBs
+
+For each PDB, we expect to see the following (only showing 1AKE): 
+| File | Description |
+|------|-------------|
+| `1AKE_features.csv` | 294 residues × 68 structural metrics |
+| `1AKE_metadata.csv` | Residue-level structural annotation |
+| `1AKE_run_log.txt` | Human-readable summary of the run |
+| `1AKE.cif` | mmCIF/PDBx file |
+
+
+**What it shows**:
+- Loading Topos metrics files
+- Renumber Topos metric files based on sequence alignment so all outputs have the residue/chain for comparison.
+- Running figures and descriptive statistics on distribution of structures
+- Outputs figures and CSVs to compare and/or use multiple structures to analyze outputs
+
+```bash
+python examples/grouped_analysis/run_grouped_example.py
+```
+
+**Outputs** (written to `examples/grouped_analysis/output/`):
+
+| Folder | Description |
+|------|-------------|
+| `renumbered` | features, bonds, metadata renumbered |
+| `rmsd` | CSV of alpha carbon RMSD between PDBs |
+| `residue profiles` | Joint CSV with mean/median of metrics across all PDBs and corresponding figures |
+| `variability` | CSV and corresponding figures with largest variability of metrics between PDBs |
+| `comparisons` | CSV and corresponding figures on differences between PDBs if toml file indicates comparisons |
+
+
+
+**Config**: `ADK_grouped_config.toml`
+
+```toml
+# Required fields:
+#   label   — unique name used in [[pairs]] and output file names
+#   pdb_id  — RCSB PDB ID (downloaded automatically) OR use pdb_path
+#
+# Optional fields:
+#   pdb_path — path to a local .pdb or .cif file (overrides pdb_id download)
+#   group    — group label for multi-structure grouping (e.g. "open", "closed")
+#   state    — "apo" or "bound" (default: "apo")
+#   genotype — "wt" or "mutant" (default: "wt")
+#   chain    — chain ID(s) to analyze (default: inherits global chain above)
+#   ligand   — HET residue for proximity detection: {name = "AP5", chain = "A"}
+#   mutations — list of point mutations (used for proximity detection):
+#               [[structures.mutations]]
+#               resi   = 64     # residue number in reference numbering
+#               wt_aa  = "S"    # single-letter WT amino acid
+#               mut_aa = "D"    # single-letter mutant amino acid
 ```
 ---
 
