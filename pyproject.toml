@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-cov", "coveralls", "ruff", "mypy"]
+test = ["pytest", "pytest-cov", "coveralls", "mypy"]
 
 [project.scripts]
 biogenesis = "pipeline.runner:main"
