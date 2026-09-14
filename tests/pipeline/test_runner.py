@@ -109,24 +109,203 @@ def test_runner_initialization_overrides_membrane(tmp_path):
     assert 'pdbtm_region_detailed' in membrane_runner.context.residue_table.columns.tolist()
 
 
-def test_runner_membrane_protein_not_in_pdbtm(tmp_path):
-    """Test that pipeline handles PDB not in PDBTM gracefully."""
-    # Create a synthetic mmcif file for a non-membrane protein
+def test_runner_membrane_protein_not_in_pdbtm_estimate_disabled(tmp_path, monkeypatch):
+    """Missing PDBTM entry with estimate disabled falls back to soluble SS."""
     residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
-    
-    # Use a fake PDB ID that will never be in PDBTM
-    pdb_id = 'FAKE'
-    
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(runner.pdbtm.PdbtmEntryNotFound("missing")),
+    )
+
+    cfg_path = tmp_path / "config.toml"
+    with cfg_path.open("wb") as f:
+        tomli_w.dump(
+            {
+                "pdb_id": "FAKE",
+                "pdb_path": str(mmcif_path),
+                "name": "test_membrane_protein",
+                "membrane_protein": True,
+                "estimate_membrane_protein_parameters": False,
+                "output_dir": str(tmp_path),
+            },
+            f,
+        )
+
+    with pytest.warns(UserWarning, match="estimate_membrane_protein_parameters=False"):
+        r = runner.Runner(config_path=cfg_path)
+
+    assert r.context.config.membrane_protein is False
+    assert "ss_domains" in r.context.residue_table.columns
+
+
+def test_runner_membrane_protein_pdbtm_error_still_raises(tmp_path, monkeypatch):
+    """Unexpected PDBTM failures hard-fail (not estimate path)."""
+    residues = ['ALA', 'VAL', 'GLY', 'SER', 'THR']
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(RuntimeError("500 Server Error")),
+    )
+
     with pytest.raises(RuntimeError, match="Failed to fetch PDBTM annotation"):
         runner.Runner(
-            pdb_id=pdb_id,
-            name='test_membrane_protein',
+            pdb_id="FAKE",
+            name="test_membrane_protein",
             pdb_path=mmcif_path,
             membrane_protein=True,
             output_dir=tmp_path,
         )
+
+
+def test_runner_membrane_estimate_on_missing_pdbtm(tmp_path, monkeypatch):
+    """Missing PDBTM entry with estimate enabled applies mocked regions/transform."""
+    residues = ["ALA"] * 24
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(runner.pdbtm.PdbtmEntryNotFound("missing")),
+    )
+
+    regions = pd.DataFrame(
+        {
+            "chain": ["A", "A", "A"],
+            "type": ["transmembrane_helix"] * 3,
+            "seq_beg": [1, 9, 17],
+            "seq_end": [8, 16, 24],
+            "pdb_beg": [1, 9, 17],
+            "pdb_end": [8, 16, 24],
+        }
+    )
+    tmatrix = np.eye(4)
+
+    monkeypatch.setattr(
+        runner,
+        "estimate_membrane_parameters",
+        lambda _ctx: (regions, tmatrix),
+    )
+
+    with pytest.warns(UserWarning, match="estimating membrane parameters"):
+        r = runner.Runner(
+            pdb_id="FAKE",
+            name="test_membrane_estimate",
+            pdb_path=mmcif_path,
+            membrane_protein=True,
+            output_dir=tmp_path,
+        )
+
+    assert r.context.config.membrane_protein is True
+    assert "pdbtm_region" in r.context.residue_table.columns
+    assert (r.context.residue_table["pdbtm_region"] == "transmembrane_helix").sum() == 24
+
+
+def test_runner_af_membrane_estimate_without_pdbtm(tmp_path, monkeypatch):
+    """No pdb_id uses estimate path (AlphaFold-style) without calling PDBTM."""
+    residues = ["ALA"] * 24
+    mmcif_path = tmp_path / "af_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="AFDB", chains={"A": residues})
+
+    called = {"pdbtm": False}
+
+    def boom(_pdb_id):
+        called["pdbtm"] = True
+        raise AssertionError("PDBTM should not be called without pdb_id")
+
+    monkeypatch.setattr(runner.pdbtm, "fetch_pdbtm_annotation", boom)
+
+    regions = pd.DataFrame(
+        {
+            "chain": ["A", "A", "A"],
+            "type": ["transmembrane_helix"] * 3,
+            "seq_beg": [1, 9, 17],
+            "seq_end": [8, 16, 24],
+            "pdb_beg": [1, 9, 17],
+            "pdb_end": [8, 16, 24],
+        }
+    )
+    monkeypatch.setattr(
+        runner,
+        "estimate_membrane_parameters",
+        lambda _ctx: (regions, np.eye(4)),
+    )
+
+    cfg_path = tmp_path / "config.toml"
+    with cfg_path.open("wb") as f:
+        tomli_w.dump(
+            {
+                "pdb_path": str(mmcif_path),
+                "uniprot_id": "P00000",
+                "name": "af_membrane",
+                "membrane_protein": True,
+                "estimate_membrane_protein_parameters": True,
+                "output_dir": str(tmp_path),
+            },
+            f,
+        )
+
+    with pytest.warns(UserWarning, match="estimating membrane parameters"):
+        r = runner.Runner(config_path=cfg_path)
+
+    assert called["pdbtm"] is False
+    assert r.context.config.membrane_protein is True
+    assert "pdbtm_region" in r.context.residue_table.columns
+
+
+def test_runner_excludes_membrane_metrics_when_not_membrane(tmp_path, monkeypatch):
+    """run() drops membrane-tagged metrics when membrane_protein ended False."""
+    residues = ["ALA", "VAL", "GLY", "SER", "THR"]
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(runner.pdbtm.PdbtmEntryNotFound("missing")),
+    )
+
+    cfg_path = tmp_path / "config.toml"
+    with cfg_path.open("wb") as f:
+        tomli_w.dump(
+            {
+                "pdb_id": "FAKE",
+                "pdb_path": str(mmcif_path),
+                "name": "sol",
+                "membrane_protein": True,
+                "estimate_membrane_protein_parameters": False,
+                "output_dir": str(tmp_path),
+            },
+            f,
+        )
+
+    with pytest.warns(UserWarning, match="estimate_membrane_protein_parameters=False"):
+        r = runner.Runner(config_path=cfg_path)
+
+    assert r.context.config.membrane_protein is False
+    assert "membrane_distance" in set(runner.metrics_with_tag("membrane"))
+
+    captured = {}
+
+    def fake_run_metrics(metrics, mutations=False):
+        captured["metrics"] = list(metrics)
+        raise RuntimeError("stop-after-metric-filter")
+
+    monkeypatch.setattr(r, "run_metrics", fake_run_metrics)
+    with pytest.raises(RuntimeError, match="stop-after-metric-filter"):
+        r.run(metrics=["membrane_distance", "calculate_packing_metrics"])
+
+    assert "membrane_distance" not in captured["metrics"]
+    assert "calculate_packing_metrics" in captured["metrics"]
+    assert "membrane_distance" not in r._metrics_run
+
 
 
 def test_runner_initialization_overrides_mutation_data(tmp_path):

@@ -259,7 +259,7 @@ It records:
 - **Structure information**: PDB ID or file path, source (RCSB vs local), chains present, chains used for structural features, number of residues
 - **Hydrogen handling**: were hydrogens present in the loaded file? Was `remove_hydrogens = true`? What action was taken?
 - **Alternate locations**: were altlocs present? Which `altloc_policy` was applied?
-- **Membrane protein settings**: membrane_protein flag, membrane thickness, PDBTM annotation
+- **Membrane protein settings**: membrane_protein flag, membrane thickness, PDBTM / estimate fallback
 - **Mutation/DMS data**: file path, chain, alignment cutoff, number of mutations loaded, number of positions covered, whether sequence metrics were enabled
 - **Metrics computed**: full list of metrics that ran
 - **Output file paths** and row/column counts
@@ -274,6 +274,7 @@ It records:
 | `pdb_path` | `str` | — | Path to local PDB or mmCIF file. Takes precedence over `pdb_id` |
 | `membrane_protein` | `bool` | `false` | Set `true` for membrane proteins. Fetches PDBTM annotation to orient the structure in the membrane reference frame and enables membrane-specific metrics (`distance_from_membrane_edge`, membrane-aware secondary structure) |
 | `membrane_thickness` | `float` | `15` | Half-thickness of the membrane in Ångströms, used to compute distances from the membrane centre |
+| `estimate_membrane_protein_parameters` | `bool` | `true` | When PDBTM has no entry (or for AlphaFold structures without a PDB ID), estimate TM helices with TMbed and orient the membrane frame from helix axes. Set `false` to skip membrane features and exclude membrane-tagged metrics instead. Requires the optional `tmbed` CLI (`pip install git+https://github.com/BernhoferM/TMbed.git`; first run may need `tmbed download` for ProtT5). |
 | `remove_hydrogens` | `bool` | `true` | Remove hydrogen atoms after loading. The run log records whether hydrogens were present in the file |
 | `altloc_policy` | `"highest"` / `"all"` | `"highest"` | How to handle alternate conformers. `"highest"` keeps the highest-occupancy conformer; `"all"` retains all conformers |
 | `structural_feature_chains` | `list[str]` | `[]` (all) | Restrict structural metric calculation to specific chains. If empty or omitted, all chains are used |

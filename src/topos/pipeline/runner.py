@@ -17,6 +17,9 @@ import topos.metrics.bonds  # noqa: F401
 import topos.metrics.sequence  # noqa: F401
 import topos.metrics.structure  # noqa: F401
 from topos.databases import pdbtm
+from topos.membrane.estimate import estimate_membrane_parameters
+from topos.membrane.geometry import InsufficientTransmembraneHelices
+from topos.membrane.tmbed import TmbedNotAvailable
 from topos.metrics.graph_metrics import calculate_graph_metrics
 from topos.metrics.registry import _REGISTRY, metrics_with_tag
 from topos.pipeline.context import Config, Context
@@ -190,25 +193,7 @@ class Runner:
         ss_df = get_secondary_structure_annotations(self.context)
 
         if self.context.config.membrane_protein:
-            if self.context.config.pdb_id is None and self.context.config.uniprot_id is not None:
-                warnings.warn(
-                    "Skipping PDBTM annotation for AlphaFold-derived structure because "
-                    "PDBTM requires a PDB ID. Membrane features will not be generated; "
-                    "continuing with soluble secondary-structure assignment.",
-                    UserWarning,
-                )
-                self.context.config.membrane_protein = False
-                self.context.residue_table = define_soluble_secondary_structure(self.context.residue_table, ss_df)
-            else:
-                try:
-                    logger.info("Fetching PDBTM annotation")
-                    pdbtm_df, tmatrix = pdbtm.fetch_pdbtm_annotation(self.context.config.pdb_id)
-                    self.context.residue_table = pdbtm.add_pdbtm_regions(residue_table=self.context.residue_table, pdbtm_regions=pdbtm_df)
-                    self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
-                    self.context.aa = self.context.array[struc.filter_amino_acids(self.context.array)]
-                    self.context.residue_table = define_membrane_secondary_structure(self.context.residue_table, ss_df)
-                except RuntimeError as e:
-                    raise RuntimeError(f"Failed to fetch PDBTM annotation for {self.context.config.pdb_id}: {e}. Rerun with membrane_protein=False to calculate soluble secondary structure.")
+            self._annotate_membrane_or_estimate(ss_df)
         else:
             self.context.residue_table = define_soluble_secondary_structure(self.context.residue_table, ss_df)
 
@@ -318,6 +303,74 @@ class Runner:
 
         self._resolve_effective_output_dir()
         self._log_configuration_snapshot()
+
+    def _apply_membrane_annotation(self, regions_df, tmatrix, ss_df) -> None:
+        """Attach TM regions, transform coords into the membrane frame, define membrane SS."""
+        self.context.residue_table = pdbtm.add_pdbtm_regions(
+            residue_table=self.context.residue_table,
+            pdbtm_regions=regions_df,
+        )
+        self.context.array.coord = pdbtm.transform_coordinates(self.context.array.coord, tmatrix)
+        self.context.aa = self.context.array[struc.filter_amino_acids(self.context.array)]
+        self.context.residue_table = define_membrane_secondary_structure(
+            self.context.residue_table, ss_df
+        )
+
+    def _skip_membrane_features(self, ss_df, reason: str) -> None:
+        """Fall back to soluble SS and disable membrane-tagged metrics in run()."""
+        warnings.warn(reason, UserWarning)
+        self.context.config.membrane_protein = False
+        self.context.residue_table = define_soluble_secondary_structure(
+            self.context.residue_table, ss_df
+        )
+
+    def _estimate_membrane_annotation(self, ss_df) -> None:
+        """TMbed + helix-axis fallback when PDBTM is unavailable."""
+        if not self.context.config.estimate_membrane_protein_parameters:
+            self._skip_membrane_features(
+                ss_df,
+                "PDBTM annotation unavailable and estimate_membrane_protein_parameters=False; "
+                "continuing with soluble secondary-structure assignment. Membrane-tagged "
+                "metrics will be excluded in run().",
+            )
+            return
+
+        warnings.warn(
+            "PDBTM annotation unavailable; estimating membrane parameters via TMbed "
+            "and helix-axis geometry.",
+            UserWarning,
+        )
+        try:
+            regions_df, tmatrix = estimate_membrane_parameters(self.context)
+            self._apply_membrane_annotation(regions_df, tmatrix, ss_df)
+        except (TmbedNotAvailable, InsufficientTransmembraneHelices, RuntimeError, ValueError) as e:
+            self._skip_membrane_features(
+                ss_df,
+                f"Membrane parameter estimation failed ({e}); continuing with soluble "
+                "secondary-structure assignment. Membrane-tagged metrics will be excluded "
+                "in run().",
+            )
+
+    def _annotate_membrane_or_estimate(self, ss_df) -> None:
+        """PDBTM when available; otherwise optional TMbed/geometry estimate."""
+        pdb_id = self.context.config.pdb_id
+        if pdb_id is not None:
+            try:
+                logger.info("Fetching PDBTM annotation")
+                regions_df, tmatrix = pdbtm.fetch_pdbtm_annotation(pdb_id)
+                self.context.extras["membrane_source"] = "pdbtm"
+                self._apply_membrane_annotation(regions_df, tmatrix, ss_df)
+                return
+            except pdbtm.PdbtmEntryNotFound:
+                pass
+            except RuntimeError as e:
+                raise RuntimeError(
+                    f"Failed to fetch PDBTM annotation for {pdb_id}: {e}. "
+                    "Rerun with membrane_protein=False to calculate soluble secondary "
+                    "structure, or fix the PDBTM connectivity issue."
+                ) from e
+
+        self._estimate_membrane_annotation(ss_df)
 
     def _merge_config(self, base: Config, overrides: Dict[str, Any]) -> Config:
         """Merge configuration overrides with base configuration.
@@ -578,6 +631,17 @@ class Runner:
                     "Skipping DSSP-tagged metrics (ss_backend=%s): %s",
                     self.context.extras.get("ss_backend"),
                     ", ".join(removed_dssp),
+                )
+        if not self.context.config.membrane_protein:
+            membrane_tagged = set(metrics_with_tag("membrane"))
+            before = set(metrics)
+            metrics = [m for m in metrics if m not in membrane_tagged]
+            removed_membrane = sorted(before - set(metrics))
+            if removed_membrane:
+                logger.info(
+                    "Skipping membrane-tagged metrics (membrane_protein=%s): %s",
+                    self.context.config.membrane_protein,
+                    ", ".join(removed_membrane),
                 )
 
         # Track which metrics were run for log output
