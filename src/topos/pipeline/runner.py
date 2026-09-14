@@ -342,6 +342,7 @@ class Runner:
         )
         try:
             regions_df, tmatrix = estimate_membrane_parameters(self.context)
+            self.context.extras["membrane_source"] = "tmbed_estimate"
             self._apply_membrane_annotation(regions_df, tmatrix, ss_df)
         except (TmbedNotAvailable, InsufficientTransmembraneHelices, RuntimeError, ValueError) as e:
             self._skip_membrane_features(

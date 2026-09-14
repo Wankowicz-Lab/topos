@@ -2,7 +2,12 @@
 
 import pytest
 
-from topos.membrane.tmbed import labels_to_regions, parse_tmbed_format1
+from topos.membrane.tmbed import (
+    TmbedNotAvailable,
+    labels_to_regions,
+    parse_tmbed_format1,
+    predict_tmbed_labels,
+)
 
 
 def test_parse_tmbed_format1():
@@ -34,3 +39,9 @@ def test_labels_to_regions_collapses_h_runs():
 def test_labels_to_regions_length_mismatch_raises():
     with pytest.raises(ValueError, match="does not match residue count"):
         labels_to_regions("HHH", "A", [1, 2])
+
+
+def test_predict_tmbed_labels_raises_when_cli_missing(monkeypatch):
+    monkeypatch.setattr("topos.membrane.tmbed.shutil.which", lambda _name: None)
+    with pytest.raises(TmbedNotAvailable, match="tmbed"):
+        predict_tmbed_labels({"A": "ACDEF"})

@@ -204,6 +204,7 @@ def test_runner_membrane_estimate_on_missing_pdbtm(tmp_path, monkeypatch):
         )
 
     assert r.context.config.membrane_protein is True
+    assert r.context.extras.get("membrane_source") == "tmbed_estimate"
     assert "pdbtm_region" in r.context.residue_table.columns
     assert (r.context.residue_table["pdbtm_region"] == "transmembrane_helix").sum() == 24
 
@@ -257,6 +258,7 @@ def test_runner_af_membrane_estimate_without_pdbtm(tmp_path, monkeypatch):
 
     assert called["pdbtm"] is False
     assert r.context.config.membrane_protein is True
+    assert r.context.extras.get("membrane_source") == "tmbed_estimate"
     assert "pdbtm_region" in r.context.residue_table.columns
 
 
@@ -306,6 +308,165 @@ def test_runner_excludes_membrane_metrics_when_not_membrane(tmp_path, monkeypatc
     assert "calculate_packing_metrics" in captured["metrics"]
     assert "membrane_distance" not in r._metrics_run
 
+
+def test_runner_estimate_soft_fail_too_few_helices(tmp_path, monkeypatch):
+    """Estimate failure soft-falls back to soluble SS."""
+    from topos.membrane.geometry import InsufficientTransmembraneHelices
+
+    residues = ["ALA"] * 8
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(runner.pdbtm.PdbtmEntryNotFound("missing")),
+    )
+    monkeypatch.setattr(
+        runner,
+        "estimate_membrane_parameters",
+        lambda _ctx: (_ for _ in ()).throw(
+            InsufficientTransmembraneHelices("Need ≥3 transmembrane helices")
+        ),
+    )
+
+    with pytest.warns(UserWarning, match="Membrane parameter estimation failed"):
+        r = runner.Runner(
+            pdb_id="FAKE",
+            name="too_few_tm",
+            pdb_path=mmcif_path,
+            membrane_protein=True,
+            output_dir=tmp_path,
+        )
+
+    assert r.context.config.membrane_protein is False
+    assert "pdbtm_region" not in r.context.residue_table.columns
+    assert "ss_domains" in r.context.residue_table.columns
+    assert r.context.extras.get("membrane_source") is None
+
+
+def test_runner_estimate_soft_fail_tmbed_missing(tmp_path, monkeypatch):
+    """Missing TMbed CLI soft-falls back to soluble SS."""
+    from topos.membrane.tmbed import TmbedNotAvailable
+
+    residues = ["ALA"] * 8
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(runner.pdbtm.PdbtmEntryNotFound("missing")),
+    )
+    monkeypatch.setattr(
+        runner,
+        "estimate_membrane_parameters",
+        lambda _ctx: (_ for _ in ()).throw(TmbedNotAvailable("tmbed not found")),
+    )
+
+    with pytest.warns(UserWarning, match="Membrane parameter estimation failed"):
+        r = runner.Runner(
+            pdb_id="FAKE",
+            name="no_tmbed",
+            pdb_path=mmcif_path,
+            membrane_protein=True,
+            output_dir=tmp_path,
+        )
+
+    assert r.context.config.membrane_protein is False
+    assert "pdbtm_region" not in r.context.residue_table.columns
+
+
+def test_runner_pdbtm_hit_skips_estimate(tmp_path, monkeypatch):
+    """Successful PDBTM annotation does not call the estimate path."""
+    residues = ["ALA"] * 10
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    regions = pd.DataFrame(
+        {
+            "chain": ["A"],
+            "type": ["transmembrane_helix"],
+            "seq_beg": [1],
+            "seq_end": [10],
+            "pdb_beg": [1],
+            "pdb_end": [10],
+        }
+    )
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (regions, np.eye(4)),
+    )
+
+    called = {"estimate": False}
+
+    def boom(_ctx):
+        called["estimate"] = True
+        raise AssertionError("estimate should not run on PDBTM hit")
+
+    monkeypatch.setattr(runner, "estimate_membrane_parameters", boom)
+
+    r = runner.Runner(
+        pdb_id="8SMV",
+        name="pdbtm_hit",
+        pdb_path=mmcif_path,
+        membrane_protein=True,
+        output_dir=tmp_path,
+    )
+
+    assert called["estimate"] is False
+    assert r.context.config.membrane_protein is True
+    assert r.context.extras.get("membrane_source") == "pdbtm"
+    assert "pdbtm_region" in r.context.residue_table.columns
+    assert (r.context.residue_table["pdbtm_region"] == "transmembrane_helix").sum() == 10
+
+
+def test_runner_estimate_uses_orchestrator_with_canned_tmbed(tmp_path, monkeypatch):
+    """Runner estimate path calls real orchestrator with canned TMbed regions."""
+    residues = ["ALA"] * 24
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_ for _ in ()).throw(runner.pdbtm.PdbtmEntryNotFound("missing")),
+    )
+
+    canned = pd.DataFrame(
+        {
+            "chain": ["A", "A", "A"],
+            "type": ["transmembrane_helix"] * 3,
+            "seq_beg": [1, 9, 17],
+            "seq_end": [8, 16, 24],
+            "pdb_beg": [1, 9, 17],
+            "pdb_end": [8, 16, 24],
+        }
+    )
+    monkeypatch.setattr(
+        "topos.membrane.estimate.predict_tm_regions",
+        lambda residue_table, chains=None, use_gpu=False: canned,
+    )
+    # Avoid depending on toy linear coords for usable helix axes.
+    monkeypatch.setattr(
+        "topos.membrane.estimate.estimate_membrane_tmatrix",
+        lambda _aa, _regions: np.eye(4),
+    )
+
+    with pytest.warns(UserWarning, match="estimating membrane parameters"):
+        r = runner.Runner(
+            pdb_id="FAKE",
+            name="canned_tmbed",
+            pdb_path=mmcif_path,
+            membrane_protein=True,
+            output_dir=tmp_path,
+        )
+
+    assert r.context.config.membrane_protein is True
+    assert r.context.extras.get("membrane_source") == "tmbed_estimate"
+    assert "pdbtm_region" in r.context.residue_table.columns
+    assert (r.context.residue_table["pdbtm_region"] == "transmembrane_helix").sum() == 24
 
 
 def test_runner_initialization_overrides_mutation_data(tmp_path):
