@@ -345,8 +345,8 @@ def test_runner_estimate_soft_fail_too_few_helices(tmp_path, monkeypatch):
     assert r.context.extras.get("membrane_source") is None
 
 
-def test_runner_estimate_soft_fail_tmbed_missing(tmp_path, monkeypatch):
-    """Missing TMbed CLI soft-falls back to soluble SS."""
+def test_runner_estimate_errors_when_tmbed_missing(tmp_path, monkeypatch):
+    """Missing TMbed with estimate=True hard-fails with install/flag guidance."""
     from topos.membrane.tmbed import TmbedNotAvailable
 
     residues = ["ALA"] * 8
@@ -364,17 +364,14 @@ def test_runner_estimate_soft_fail_tmbed_missing(tmp_path, monkeypatch):
         lambda _ctx: (_ for _ in ()).throw(TmbedNotAvailable("tmbed not found")),
     )
 
-    with pytest.warns(UserWarning, match="Membrane parameter estimation failed"):
-        r = runner.Runner(
+    with pytest.raises(RuntimeError, match="estimate_membrane_protein_parameters=False"):
+        runner.Runner(
             pdb_id="FAKE",
             name="no_tmbed",
             pdb_path=mmcif_path,
             membrane_protein=True,
             output_dir=tmp_path,
         )
-
-    assert r.context.config.membrane_protein is False
-    assert "pdbtm_region" not in r.context.residue_table.columns
 
 
 def test_runner_pdbtm_hit_skips_estimate(tmp_path, monkeypatch):

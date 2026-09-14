@@ -101,7 +101,7 @@ which tmbed
 tmbed --help
 ```
 
-If TMbed is missing when estimation is requested, the pipeline warns and continues with soluble secondary-structure assignment (membrane-tagged metrics are skipped). Set `estimate_membrane_protein_parameters = false` to skip estimation without attempting to call TMbed.
+If TMbed is missing when estimation is requested (`estimate_membrane_protein_parameters = true`), the pipeline **errors** and tells you to either install TMbed or set `estimate_membrane_protein_parameters = false` to continue without membrane features.
 
 ---
 
@@ -297,7 +297,7 @@ It records:
 | `pdb_path` | `str` | — | Path to local PDB or mmCIF file. Takes precedence over `pdb_id` |
 | `membrane_protein` | `bool` | `false` | Set `true` for membrane proteins. Fetches PDBTM annotation to orient the structure in the membrane reference frame and enables membrane-specific metrics (`distance_from_membrane_edge`, membrane-aware secondary structure) |
 | `membrane_thickness` | `float` | `15` | Half-thickness of the membrane in Ångströms, used to compute distances from the membrane centre |
-| `estimate_membrane_protein_parameters` | `bool` | `true` | When PDBTM is unavailable (missing entry or no PDB ID), estimate TM helices with TMbed and orient the membrane frame from helix axes. Set `false` to skip membrane features instead. See [Optional: TMbed](#optional-tmbed-for-membrane-parameter-estimation). |
+| `estimate_membrane_protein_parameters` | `bool` | `true` | When PDBTM is unavailable (missing entry or no PDB ID), estimate TM helices with TMbed and orient the membrane frame from helix axes. Requires TMbed when `true`; set `false` to skip membrane features instead. See [Optional: TMbed](#optional-tmbed-for-membrane-parameter-estimation). |
 | `remove_hydrogens` | `bool` | `true` | Remove hydrogen atoms after loading. The run log records whether hydrogens were present in the file |
 | `altloc_policy` | `"highest"` / `"all"` | `"highest"` | How to handle alternate conformers. `"highest"` keeps the highest-occupancy conformer; `"all"` retains all conformers |
 | `structural_feature_chains` | `list[str]` | `[]` (all) | Restrict structural metric calculation to specific chains. If empty or omitted, all chains are used |

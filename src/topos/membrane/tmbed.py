@@ -128,9 +128,9 @@ def _resolve_tmbed_executable() -> str:
     if path is None:
         raise TmbedNotAvailable(
             "TMbed is required to estimate membrane parameters but was not found. "
-            "Install it (e.g. `pip install git+https://github.com/BernhoferM/TMbed.git`) "
-            "and ensure the `tmbed` CLI is on PATH. First run may download ProtT5 models "
-            "via `tmbed download`."
+            "Install it (e.g. `pip install torch` then "
+            "`pip install git+https://github.com/BernhoferM/TMbed.git`), ensure the "
+            "`tmbed` CLI is on PATH, and run `tmbed download` once for ProtT5 models."
         )
     return path
 

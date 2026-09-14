@@ -344,7 +344,13 @@ class Runner:
             regions_df, tmatrix = estimate_membrane_parameters(self.context)
             self.context.extras["membrane_source"] = "tmbed_estimate"
             self._apply_membrane_annotation(regions_df, tmatrix, ss_df)
-        except (TmbedNotAvailable, InsufficientTransmembraneHelices, RuntimeError, ValueError) as e:
+        except TmbedNotAvailable as e:
+            raise RuntimeError(
+                f"{e} Set estimate_membrane_protein_parameters=False to continue without "
+                "membrane features, or install TMbed and ensure the `tmbed` CLI is on PATH "
+                "(see README: Optional TMbed for membrane-parameter estimation)."
+            ) from e
+        except (InsufficientTransmembraneHelices, RuntimeError, ValueError) as e:
             self._skip_membrane_features(
                 ss_df,
                 f"Membrane parameter estimation failed ({e}); continuing with soluble "
