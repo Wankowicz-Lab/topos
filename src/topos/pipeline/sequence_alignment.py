@@ -31,7 +31,7 @@ _LABEL_MUTATION = "mutation sequence"
 _LABEL_CONSTRUCT = "construct sequence"
 _MUTATION_INPUT_README_SECTION = "README.md#mutation-input-requirements"
 VALID_MUTATION_TYPES = frozenset({"missense", "synonymous", "stop", "deletion", "insertion"})
-_ANNOTATION_COLS = ("ss_domains", "ss_category", "ss_group", "pdbtm_region", "pdbtm_region_detailed")
+_ANNOTATION_COLS = ("ss_domains", "ss_category", "ss_group", "pdbtm_region", "pdbtm_region_detailed", "membrane_side")
 
 
 def _assign_coverage_status(merged: pd.DataFrame) -> pd.Series:
