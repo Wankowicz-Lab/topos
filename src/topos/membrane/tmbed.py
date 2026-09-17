@@ -17,7 +17,21 @@ logger = logging.getLogger(__name__)
 
 # Format-1 label alphabet from TMbed (H/B strands, i/o sides, signal, coil).
 _TMBED_LABEL_CHARS = frozenset("HhBbSs.io")
-_TM_HELIX_CHARS = frozenset("Hh")
+
+
+def _label_char_to_region_type(char: str) -> str:
+    """Map one TMbed format-1 label character to a PDBTM-compatible region type."""
+    if char in "Hh":
+        return "transmembrane_helix"
+    if char in "Bb":
+        return "transmembrane_beta_strand"
+    if char == "i":
+        return "inside"
+    if char == "o":
+        return "outside"
+    if char in ".Ss":
+        return "unknown"
+    raise ValueError(f"Unexpected TMbed label character: {char!r}")
 
 
 class TmbedNotAvailable(RuntimeError):
@@ -44,16 +58,22 @@ def extract_chain_sequences(
     for chain_id, group in rt.groupby("chain", sort=True):
         ordered = group.sort_values("resi")
         resis = ordered["resi"].astype(int).tolist()
-        letters = [convert_amino_acid_3to1(str(r)) for r in ordered["resn"].tolist()]
+        # force_convert keeps one char per residue (e.g. MSE → X) so TMbed
+        # FASTA stays aligned with resis / returned labels.
+        letters = [
+            convert_amino_acid_3to1(str(r), force_convert=True)
+            for r in ordered["resn"].tolist()
+        ]
         out[str(chain_id)] = ("".join(letters), resis)
     return out
 
 
 def labels_to_regions(labels: str, chain: str, resis: Sequence[int]) -> pd.DataFrame:
     """
-    Collapse contiguous H/h runs into transmembrane_helix region rows.
+    Collapse contiguous TMbed label runs into region rows (TM, sides, unknown).
 
     Label and residue lists must be the same length (1:1 with the extracted sequence).
+    H/h → transmembrane_helix, i/o → inside/outside, ./S/s → unknown, B/b → beta strand.
     """
     if len(labels) != len(resis):
         raise ValueError(
@@ -65,24 +85,21 @@ def labels_to_regions(labels: str, chain: str, resis: Sequence[int]) -> pd.DataF
     i = 0
     n = len(labels)
     while i < n:
-        if labels[i] in _TM_HELIX_CHARS:
-            j = i + 1
-            # Treat H and h as the same TM-helix class for span collapsing.
-            while j < n and labels[j] in _TM_HELIX_CHARS:
-                j += 1
-            rows.append(
-                {
-                    "chain": chain,
-                    "type": "transmembrane_helix",
-                    "seq_beg": i + 1,
-                    "seq_end": j,
-                    "pdb_beg": int(resis[i]),
-                    "pdb_end": int(resis[j - 1]),
-                }
-            )
-            i = j
-        else:
-            i += 1
+        region_type = _label_char_to_region_type(labels[i])
+        j = i + 1
+        while j < n and _label_char_to_region_type(labels[j]) == region_type:
+            j += 1
+        rows.append(
+            {
+                "chain": chain,
+                "type": region_type,
+                "seq_beg": i + 1,
+                "seq_end": j,
+                "pdb_beg": int(resis[i]),
+                "pdb_end": int(resis[j - 1]),
+            }
+        )
+        i = j
 
     return pd.DataFrame(
         rows, columns=["chain", "type", "seq_beg", "seq_end", "pdb_beg", "pdb_end"]
@@ -194,7 +211,7 @@ def predict_tm_regions(
     *,
     use_gpu: bool = False,
 ) -> pd.DataFrame:
-    """Extract sequences, run TMbed, and return transmembrane_helix region rows."""
+    """Extract sequences, run TMbed, and return region rows for all label runs."""
     chain_seqs = extract_chain_sequences(residue_table, chains=chains)
     labels_by_id = predict_tmbed_labels(
         {cid: seq for cid, (seq, _) in chain_seqs.items()},

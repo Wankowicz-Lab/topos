@@ -34,8 +34,9 @@ PDBTM_REGION_MAPPING = {
 # PDBTM region types treated as membrane-embedded for secondary structure labeling.
 MEMBRANE_EMBEDDED_REGIONS = frozenset({"transmembrane_helix"})
 
-# PDBTM region labels mapped to coil-like ss_domains coarse buckets (side loops, unknown).
-COIL_PDBTM_REGIONS = frozenset({"side1", "side2", "unknown"})
+# PDBTM / TMbed region labels mapped to coil-like ss_domains coarse buckets.
+# inside/outside come from TMbed absolute side labels on the estimate path.
+COIL_PDBTM_REGIONS = frozenset({"side1", "side2", "unknown", "inside", "outside"})
 
 # ss_domains prefixes for other plausible PDBTM region labels (e.g. interfacial_helix_1).
 PDBTM_OTHER_SS_DOMAIN_PREFIXES = tuple(
