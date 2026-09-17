@@ -2,7 +2,7 @@
 
 Computes per-residue structural and sequence metrics from a PDB/mmCIF structure, optionally joined to deep mutational scanning (DMS) data as one row per mutation.
 
-Canonical schemas and column lists: [README.md](../../../README.md). Worked examples and fixtures: `examples/`, `tests/`. Do not restate those dictionaries here.
+Canonical schemas and column lists: [README.md](../../README.md). Worked examples and fixtures: `examples/`, `tests/`. Do not restate those dictionaries here.
 
 ## Objects
 
