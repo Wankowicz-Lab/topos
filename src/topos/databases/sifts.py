@@ -34,7 +34,19 @@ def fetch_sifts_uniprot_mappings(pdb_id: str) -> Dict[str, Any]:
         response.raise_for_status()
     except requests.RequestException as e:
         raise UniprotLookupError(f"SIFTS request failed for PDB {pdb_id}: {e}") from e
-    return response.json()
+
+    # Decode/validate at this I/O boundary so callers can soft-fail on bad bodies.
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise UniprotLookupError(
+            f"SIFTS returned invalid JSON for PDB {pdb_id}: {e}"
+        ) from e
+    if not isinstance(payload, dict):
+        raise UniprotLookupError(
+            f"SIFTS returned non-object JSON for PDB {pdb_id}: {type(payload).__name__}"
+        )
+    return payload
 
 
 def _root_for_pdb(sifts_json: Mapping[str, Any], pdb_id: str) -> Mapping[str, Any]:

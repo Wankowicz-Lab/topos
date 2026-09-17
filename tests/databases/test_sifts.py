@@ -104,3 +104,34 @@ def test_resolve_uniprot_http_error_raises(monkeypatch):
 def test_resolve_uniprot_missing_pdb_and_config_raises():
     with pytest.raises(UniprotLookupError, match="No uniprot_id in config"):
         resolve_uniprot_accession(pdb_id=None, config_uniprot_id=None)
+
+
+def test_fetch_sifts_invalid_json_raises(monkeypatch):
+    """Successful HTTP with non-JSON body becomes UniprotLookupError."""
+    from topos.databases import sifts
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            raise ValueError("Expecting value")
+
+    monkeypatch.setattr(sifts.requests, "get", lambda *a, **k: FakeResponse())
+    with pytest.raises(sifts.UniprotLookupError, match="invalid JSON"):
+        sifts.fetch_sifts_uniprot_mappings("1U19")
+
+
+def test_fetch_sifts_non_object_json_raises(monkeypatch):
+    from topos.databases import sifts
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return ["not", "a", "dict"]
+
+    monkeypatch.setattr(sifts.requests, "get", lambda *a, **k: FakeResponse())
+    with pytest.raises(sifts.UniprotLookupError, match="non-object JSON"):
+        sifts.fetch_sifts_uniprot_mappings("1U19")
