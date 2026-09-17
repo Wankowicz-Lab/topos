@@ -17,9 +17,15 @@ import topos.metrics.bonds  # noqa: F401
 import topos.metrics.sequence  # noqa: F401
 import topos.metrics.structure  # noqa: F401
 from topos.databases import pdbtm
+from topos.databases.sifts import UNIPROT_CONFIG_HINT, UniprotLookupError, resolve_uniprot_accession
 from topos.membrane.estimate import estimate_membrane_parameters
 from topos.membrane.geometry import InsufficientTransmembraneHelices
+from topos.membrane.sides import (
+    membrane_side_from_side_definition,
+    membrane_side_from_tmbed_regions,
+)
 from topos.membrane.tmbed import TmbedNotAvailable
+from topos.membrane.topdb import TopdbSideDefinitionNotFound, fetch_side_definition
 from topos.metrics.graph_metrics import calculate_graph_metrics
 from topos.metrics.registry import _REGISTRY, metrics_with_tag
 from topos.pipeline.context import Config, Context
@@ -316,6 +322,81 @@ class Runner:
             self.context.residue_table, ss_df
         )
 
+    def _resolve_uniprot_for_membrane_sides(self) -> str | None:
+        """Config uniprot_id or SIFTS; warn with fix hint on failure."""
+        chains = self.context.config.structural_feature_chains or None
+        try:
+            accession, source = resolve_uniprot_accession(
+                pdb_id=self.context.config.pdb_id,
+                config_uniprot_id=self.context.config.uniprot_id,
+                chains=chains,
+            )
+            self.context.extras["uniprot_id_resolved"] = accession
+            self.context.extras["uniprot_id_source"] = source
+            return accession
+        except UniprotLookupError as e:
+            warnings.warn(
+                f"Could not resolve UniProt accession for absolute membrane_side labeling: "
+                f"{e.reason}. Absolute membrane_side labels via TOPDB were skipped; "
+                f"geometric PDBTM side1/side2 annotation is still applied. "
+                f"{UNIPROT_CONFIG_HINT}",
+                UserWarning,
+            )
+            self.context.extras["uniprot_id_resolved"] = None
+            self.context.extras["uniprot_id_source"] = None
+            return None
+
+    def _assign_membrane_side_from_topdb(self) -> None:
+        """Stamp absolute Inside/Outside from TOPDB SideDefinition when possible."""
+        residue_table = self.context.residue_table.copy()
+        residue_table["membrane_side"] = pd.NA
+
+        accession = self._resolve_uniprot_for_membrane_sides()
+        pdb_id = self.context.config.pdb_id
+        if accession is None or pdb_id is None:
+            # Still mark membrane-embedded residues without absolute loop sides.
+            tm_mask = residue_table["pdbtm_region"].isin(
+                {"transmembrane_helix", "transmembrane_beta_strand", "transmembrane_coil"}
+            )
+            residue_table.loc[tm_mask, "membrane_side"] = "transmembrane"
+            self.context.residue_table = residue_table
+            self.context.extras["side_definition"] = None
+            self.context.extras["side_definition_note"] = None
+            return
+
+        try:
+            side_def = fetch_side_definition(accession, pdb_id)
+        except TopdbSideDefinitionNotFound as e:
+            warnings.warn(
+                f"TOPDB SideDefinition unavailable for UniProt {accession} / PDB {pdb_id}: "
+                f"{e}. Absolute membrane_side labels were skipped; geometric PDBTM "
+                f"side1/side2 annotation is still applied. {UNIPROT_CONFIG_HINT}",
+                UserWarning,
+            )
+            tm_mask = residue_table["pdbtm_region"].isin(
+                {"transmembrane_helix", "transmembrane_beta_strand", "transmembrane_coil"}
+            )
+            residue_table.loc[tm_mask, "membrane_side"] = "transmembrane"
+            self.context.residue_table = residue_table
+            self.context.extras["side_definition"] = None
+            self.context.extras["side_definition_note"] = None
+            return
+
+        residue_table["membrane_side"] = membrane_side_from_side_definition(
+            residue_table, side_def.side1
+        )
+        self.context.residue_table = residue_table
+        self.context.extras["side_definition"] = side_def.side1
+        self.context.extras["side_definition_note"] = side_def.note
+
+    def _assign_membrane_side_from_tmbed(self) -> None:
+        """Stamp absolute sides from TMbed inside/outside region labels."""
+        residue_table = self.context.residue_table.copy()
+        residue_table["membrane_side"] = membrane_side_from_tmbed_regions(residue_table)
+        self.context.residue_table = residue_table
+        self.context.extras["side_definition"] = None
+        self.context.extras["side_definition_note"] = None
+
     def _skip_membrane_features(self, ss_df, reason: str) -> None:
         """Fall back to soluble SS and disable membrane-tagged metrics in run()."""
         warnings.warn(reason, UserWarning)
@@ -344,6 +425,7 @@ class Runner:
             regions_df, tmatrix = estimate_membrane_parameters(self.context)
             self.context.extras["membrane_source"] = "tmbed_estimate"
             self._apply_membrane_annotation(regions_df, tmatrix, ss_df)
+            self._assign_membrane_side_from_tmbed()
         except TmbedNotAvailable as e:
             raise RuntimeError(
                 f"{e} Set estimate_membrane_protein_parameters=False to continue without "
@@ -367,6 +449,7 @@ class Runner:
                 regions_df, tmatrix = pdbtm.fetch_pdbtm_annotation(pdb_id)
                 self.context.extras["membrane_source"] = "pdbtm"
                 self._apply_membrane_annotation(regions_df, tmatrix, ss_df)
+                self._assign_membrane_side_from_topdb()
                 return
             except pdbtm.PdbtmEntryNotFound:
                 pass
@@ -841,6 +924,11 @@ class Runner:
             "construct_source": self.context.extras.get("construct_source"),
             "construct_coverage": self.context.extras.get("construct_coverage"),
             "coordinate_coverage": self.context.extras.get("coordinate_coverage"),
+            "membrane_source": self.context.extras.get("membrane_source"),
+            "side_definition": self.context.extras.get("side_definition"),
+            "side_definition_note": self.context.extras.get("side_definition_note"),
+            "uniprot_id_resolved": self.context.extras.get("uniprot_id_resolved"),
+            "uniprot_id_source": self.context.extras.get("uniprot_id_source"),
             "metrics_run": getattr(self, '_metrics_run', []),
             "feature_rows": len(self.features) if hasattr(self, 'features') else 0,
             "feature_columns": len(self.features.columns) if hasattr(self, 'features') else 0,
