@@ -1382,6 +1382,9 @@ def test_runner_save_results(tmp_path):
     residue_table = _make_residue_table()
     residue_table['ss_domains'] = 'TMD_1'
     residue_table['ss_group'] = 'TM1'
+    residue_table['pdbtm_region'] = 'transmembrane_helix'
+    residue_table['pdbtm_region_detailed'] = 'transmembrane_helix_1'
+    residue_table['membrane_side'] = 'transmembrane'
 
     # Create runner
     pdb_id = '8smv'
@@ -1439,6 +1442,9 @@ def test_runner_save_results(tmp_path):
     assert set(saved_metadata['resi_mut']) == set(residue_table['resi_mut'])
     assert set(saved_metadata['ss_domains']) == set(residue_table['ss_domains'])
     assert set(saved_metadata['ss_group']) == set(residue_table['ss_group'])
+    assert set(saved_metadata['pdbtm_region']) == set(residue_table['pdbtm_region'])
+    assert set(saved_metadata['pdbtm_region_detailed']) == set(residue_table['pdbtm_region_detailed'])
+    assert set(saved_metadata['membrane_side']) == set(residue_table['membrane_side'])
     saved_bonds = pd.read_csv(bonds_path)
     assert len(saved_bonds) == 1
     assert saved_bonds.iloc[0]['bond_type'] == 'hbond'

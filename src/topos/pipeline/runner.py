@@ -891,7 +891,8 @@ class Runner:
 
         # Save metadata from residue table
         metadata_cols = (['chain', 'resi_struct', 'resn_struct', 'resi_mut', 'resn_mut', 'struct_info', 'mut_info',
-                          'modeled', 'coverage_status', 'ss_domains', 'ss_category', 'ss_group'] +
+                          'modeled', 'coverage_status', 'ss_domains', 'ss_category', 'ss_group',
+                          'pdbtm_region', 'pdbtm_region_detailed', 'membrane_side'] +
                          (['resm'] if self.context.config.mutation_data_path is not None else []))
         metadata_cols = [c for c in metadata_cols if c in self.context.residue_table.columns]
 
