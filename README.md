@@ -103,7 +103,7 @@ tmbed --help
 
 If TMbed is missing when estimation is requested (`estimate_membrane_protein_parameters = true`), the pipeline **errors** and tells you to either install TMbed or set `estimate_membrane_protein_parameters = false` to continue without membrane features.
 
-When PDBTM **is** available, geometric `side1`/`side2` regions are annotated as usual. Absolute Inside/Outside labels (`membrane_side`) come from [TOPDB](https://topdb.unitmp.org) SideDefinition. Provide `uniprot_id` in config when possible; otherwise topos resolves it via PDBe SIFTS from `pdb_id`. If that lookup fails, a warning explains why and how to set `uniprot_id` explicitly—geometric PDBTM annotation still proceeds.
+When PDBTM **is** available, geometric `side1`/`side2` regions are annotated as usual. Absolute Inside/Outside labels (`membrane_side`) come from [TOPDB](https://topdb.unitmp.org) SideDefinition. Provide `uniprot_id` in config when possible; otherwise topos resolves it via PDBe SIFTS from `pdb_id` **only if** `structural_feature_chains` is set (so the accession is scoped to the membrane chain). If that lookup fails, a warning explains why and how to set `uniprot_id` or `structural_feature_chains`—geometric PDBTM annotation still proceeds.
 
 ---
 
@@ -297,13 +297,13 @@ It records:
 |-----------|------|---------|-------------|
 | `pdb_id` | `str` | — | PDB identifier; structure downloaded from RCSB |
 | `pdb_path` | `str` | — | Path to local PDB or mmCIF file. Takes precedence over `pdb_id` |
-| `uniprot_id` | `str` | — | UniProt accession. Used to download AlphaFold models when no PDB is given, and to look up TOPDB SideDefinition for absolute Inside/Outside labels when `membrane_protein = true`. If omitted with only a `pdb_id`, topos tries PDBe SIFTS; on failure it warns and skips absolute side labels |
+| `uniprot_id` | `str` | — | UniProt accession. Used to download AlphaFold models when no PDB is given, and to look up TOPDB SideDefinition for absolute Inside/Outside labels when `membrane_protein = true`. If omitted with only a `pdb_id`, SIFTS inference requires `structural_feature_chains`; on failure it warns and skips absolute side labels |
 | `membrane_protein` | `bool` | `false` | Set `true` for membrane proteins. Fetches PDBTM annotation to orient the structure in the membrane reference frame and enables membrane-specific metrics (`distance_from_membrane_edge`, membrane-aware secondary structure) |
 | `membrane_thickness` | `float` | `15` | Half-thickness of the membrane in Ångströms, used to compute distances from the membrane centre |
 | `estimate_membrane_protein_parameters` | `bool` | `true` | When PDBTM is unavailable (missing entry or no PDB ID), estimate TM helices with TMbed and orient the membrane frame from helix axes. Requires TMbed when `true`; set `false` to skip membrane features instead. See [Optional: TMbed](#optional-tmbed-for-membrane-parameter-estimation). |
 | `remove_hydrogens` | `bool` | `true` | Remove hydrogen atoms after loading. The run log records whether hydrogens were present in the file |
 | `altloc_policy` | `"highest"` / `"all"` | `"highest"` | How to handle alternate conformers. `"highest"` keeps the highest-occupancy conformer; `"all"` retains all conformers |
-| `structural_feature_chains` | `list[str]` | `[]` (all) | Restrict structural metric calculation to specific chains. If empty or omitted, all chains are used |
+| `structural_feature_chains` | `list[str]` | `[]` (all) | Restrict structural metric calculation to specific chains. If empty or omitted, all chains are used. Required (non-empty) to infer UniProt via SIFTS when `uniprot_id` is omitted for absolute membrane-side labeling |
 
 ### Mutagenesis data parameters
 

@@ -70,13 +70,24 @@ def test_resolve_uniprot_via_sifts(monkeypatch):
     assert source == "sifts"
 
 
+def test_resolve_uniprot_sifts_requires_structural_feature_chains(monkeypatch):
+    monkeypatch.setattr(
+        "topos.databases.sifts.fetch_sifts_uniprot_mappings",
+        lambda _pdb: (_ for _ in ()).throw(AssertionError("SIFTS should not be called")),
+    )
+    with pytest.raises(UniprotLookupError, match="structural_feature_chains"):
+        resolve_uniprot_accession(pdb_id="1U19", chains=None)
+    with pytest.raises(UniprotLookupError, match="structural_feature_chains"):
+        resolve_uniprot_accession(pdb_id="1U19", chains=[])
+
+
 def test_resolve_uniprot_no_mapping_raises(monkeypatch):
     monkeypatch.setattr(
         "topos.databases.sifts.fetch_sifts_uniprot_mappings",
         lambda _pdb: {"1u19": {"UniProt": {}}},
     )
     with pytest.raises(UniprotLookupError, match="no UniProt mapping"):
-        resolve_uniprot_accession(pdb_id="1U19")
+        resolve_uniprot_accession(pdb_id="1U19", chains=["A"])
 
 
 def test_resolve_uniprot_http_error_raises(monkeypatch):
@@ -85,8 +96,9 @@ def test_resolve_uniprot_http_error_raises(monkeypatch):
 
     monkeypatch.setattr("topos.databases.sifts.fetch_sifts_uniprot_mappings", boom)
     with pytest.raises(UniprotLookupError, match="SIFTS request failed"):
-        resolve_uniprot_accession(pdb_id="1U19")
+        resolve_uniprot_accession(pdb_id="1U19", chains=["A"])
     assert "uniprot_id" in UNIPROT_CONFIG_HINT
+    assert "structural_feature_chains" in UNIPROT_CONFIG_HINT
 
 
 def test_resolve_uniprot_missing_pdb_and_config_raises():

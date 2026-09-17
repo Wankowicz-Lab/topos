@@ -13,7 +13,8 @@ SIFTS_URL = "https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/{pdb}"
 
 UNIPROT_CONFIG_HINT = (
     'Set uniprot_id in your config to provide the accession explicitly '
-    '(e.g. uniprot_id = "P02699").'
+    '(e.g. uniprot_id = "P02699"), or set structural_feature_chains so UniProt '
+    'can be inferred via SIFTS from pdb_id.'
 )
 
 
@@ -103,6 +104,10 @@ def resolve_uniprot_accession(
     """
     Resolve UniProt accession from config or SIFTS.
 
+    SIFTS inference requires non-empty ``chains`` (typically
+    ``structural_feature_chains``) so the accession is scoped to the
+    membrane chain(s) of interest.
+
     Returns
     -------
     tuple
@@ -116,7 +121,18 @@ def resolve_uniprot_accession(
             "No uniprot_id in config and no pdb_id available for SIFTS lookup"
         )
 
+    if not chains:
+        raise UniprotLookupError(
+            "No uniprot_id in config and structural_feature_chains is unset; "
+            "SIFTS UniProt inference requires structural_feature_chains"
+        )
+
     sifts_json = fetch_sifts_uniprot_mappings(pdb_id)
     accession, _segments = pick_uniprot_for_chains(sifts_json, pdb_id, chains=chains)
-    logger.info("Resolved UniProt %s for PDB %s via SIFTS", accession, pdb_id)
+    logger.info(
+        "Resolved UniProt %s for PDB %s via SIFTS (chains=%s)",
+        accession,
+        pdb_id,
+        list(chains),
+    )
     return accession, "sifts"
