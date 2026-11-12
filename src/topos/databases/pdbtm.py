@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 
 API_BASE = "https://pdbtm.unitmp.org/api/v1/entry"
 
+
+class PdbtmEntryNotFound(LookupError):
+    """Raised when PDBTM has no usable membrane entry for a PDB ID."""
+
+
 PDBTM_REGION_MAPPING = {
     "H": "transmembrane_helix",
     "B": "transmembrane_beta_strand",
@@ -29,8 +34,9 @@ PDBTM_REGION_MAPPING = {
 # PDBTM region types treated as membrane-embedded for secondary structure labeling.
 MEMBRANE_EMBEDDED_REGIONS = frozenset({"transmembrane_helix"})
 
-# PDBTM region labels mapped to coil-like ss_domains coarse buckets (side loops, unknown).
-COIL_PDBTM_REGIONS = frozenset({"side1", "side2", "unknown"})
+# PDBTM / TMbed region labels mapped to coil-like ss_domains coarse buckets.
+# inside/outside come from TMbed absolute side labels on the estimate path.
+COIL_PDBTM_REGIONS = frozenset({"side1", "side2", "unknown", "inside", "outside"})
 
 # ss_domains prefixes for other plausible PDBTM region labels (e.g. interfacial_helix_1).
 PDBTM_OTHER_SS_DOMAIN_PREFIXES = tuple(
@@ -48,6 +54,12 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     """
     parser = etree.XMLParser(ns_clean=True, recover=True)
     root = etree.fromstring(xml_bytes, parser=parser)
+
+    # TMP="no" (or missing membrane block) means PDBTM has no membrane annotation.
+    tmp_attr = (root.get("TMP") or "").strip().lower()
+    if tmp_attr == "no":
+        raise PdbtmEntryNotFound("PDBTM entry is marked TMP=no (not a transmembrane protein)")
+
     regions = []
 
     # Loop through <CHAIN> elements
@@ -97,7 +109,7 @@ def _parse_pdbtm_xml(xml_bytes: bytes) -> Tuple[np.ndarray, List[dict]]:
     # find MEMBRANE node
     membrane_node = root.xpath("//*[local-name() = 'MEMBRANE']")
     if not membrane_node:
-        raise RuntimeError("No <MEMBRANE> element found in XML")
+        raise PdbtmEntryNotFound("No <MEMBRANE> element found in PDBTM XML")
 
     # use the first MEMBRANE block
     mem = membrane_node[0]
@@ -172,15 +184,30 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     logger.info("Initiating PDBTM API request")
     try:
         r = requests.get(xml_url, timeout=timeout, headers=headers)
-        r.raise_for_status()
     except requests.RequestException as e:
-        raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}")
+        raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}") from e
+
+    if r.status_code == 404:
+        raise PdbtmEntryNotFound(f"PDBTM has no entry for {pdb_id}")
+
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}") from e
 
     xml_bytes = r.content
-    mat, regions = _parse_pdbtm_xml(xml_bytes)
+    if not xml_bytes.strip():
+        raise PdbtmEntryNotFound(f"Empty PDBTM response for {pdb_id}")
+
+    try:
+        mat, regions = _parse_pdbtm_xml(xml_bytes)
+    except PdbtmEntryNotFound:
+        raise
+    except etree.XMLSyntaxError as e:
+        raise RuntimeError(f"Malformed PDBTM XML for {pdb_id}: {e}") from e
 
     if not regions:
-        raise RuntimeError(f"No regions found in XML for {pdb_id}")
+        raise PdbtmEntryNotFound(f"No regions found in PDBTM XML for {pdb_id}")
 
     regions_df = pd.DataFrame(regions, columns=['chain', 'type', 'seq_beg', 'seq_end', 'pdb_beg', 'pdb_end'])
     regions_df.type = regions_df.type.apply(describe_pdbtm_region)

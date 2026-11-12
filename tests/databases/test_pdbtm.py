@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+import requests
 
 from topos.databases import pdbtm
 from tests.test_utils import _make_residue_table
@@ -40,6 +41,51 @@ def test_fetch_pdbtm_annotation():
     )
 
     assert mat.shape == (4, 4)  # Transformation matrix should be 4x4
+
+
+def test_fetch_pdbtm_annotation_raises_not_found_on_404(monkeypatch):
+    class FakeResponse:
+        status_code = 404
+        content = b""
+
+        def raise_for_status(self):
+            raise requests.HTTPError("404")
+
+    monkeypatch.setattr(pdbtm.requests, "get", lambda *a, **k: FakeResponse())
+    with pytest.raises(pdbtm.PdbtmEntryNotFound, match="no entry"):
+        pdbtm.fetch_pdbtm_annotation("zzzz")
+
+
+def test_fetch_pdbtm_annotation_raises_not_found_on_tmp_no(monkeypatch):
+    xml = b'''<?xml version="1.0"?>
+    <pdbtm ID="1crn" TMP="no">
+      <COPYRIGHT>x</COPYRIGHT>
+    </pdbtm>
+    '''
+
+    class FakeResponse:
+        status_code = 200
+        content = xml
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(pdbtm.requests, "get", lambda *a, **k: FakeResponse())
+    with pytest.raises(pdbtm.PdbtmEntryNotFound, match="TMP=no"):
+        pdbtm.fetch_pdbtm_annotation("1crn")
+
+
+def test_fetch_pdbtm_annotation_raises_runtime_on_5xx(monkeypatch):
+    class FakeResponse:
+        status_code = 500
+        content = b"<html>Server Error</html>"
+
+        def raise_for_status(self):
+            raise requests.HTTPError("500 Server Error")
+
+    monkeypatch.setattr(pdbtm.requests, "get", lambda *a, **k: FakeResponse())
+    with pytest.raises(RuntimeError, match="Failed to fetch PDBTM"):
+        pdbtm.fetch_pdbtm_annotation("fake")
 
 
 def test_transform_coordinates():
