@@ -187,7 +187,8 @@ def fetch_pdbtm_annotation(pdb_id: str, timeout: int = 15) -> Tuple[pd.DataFrame
     except requests.RequestException as e:
         raise RuntimeError(f"Failed to fetch PDBTM entry for {pdb_id}: {e}") from e
 
-    if r.status_code == 404:
+    # This API returns 500 and an HTML error page for an ID that is not in PDBTM.
+    if r.status_code in (404, 500):
         raise PdbtmEntryNotFound(f"PDBTM has no entry for {pdb_id}")
 
     try:

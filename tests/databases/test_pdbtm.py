@@ -75,13 +75,27 @@ def test_fetch_pdbtm_annotation_raises_not_found_on_tmp_no(monkeypatch):
         pdbtm.fetch_pdbtm_annotation("1crn")
 
 
-def test_fetch_pdbtm_annotation_raises_runtime_on_5xx(monkeypatch):
+def test_fetch_pdbtm_annotation_raises_not_found_on_500(monkeypatch):
+    """PDBTM uses HTTP 500 for an ID that is not in the database."""
     class FakeResponse:
         status_code = 500
         content = b"<html>Server Error</html>"
 
         def raise_for_status(self):
             raise requests.HTTPError("500 Server Error")
+
+    monkeypatch.setattr(pdbtm.requests, "get", lambda *a, **k: FakeResponse())
+    with pytest.raises(pdbtm.PdbtmEntryNotFound, match="no entry"):
+        pdbtm.fetch_pdbtm_annotation("fake")
+
+
+def test_fetch_pdbtm_annotation_raises_runtime_on_other_5xx(monkeypatch):
+    class FakeResponse:
+        status_code = 503
+        content = b"<html>Service Unavailable</html>"
+
+        def raise_for_status(self):
+            raise requests.HTTPError("503 Service Unavailable")
 
     monkeypatch.setattr(pdbtm.requests, "get", lambda *a, **k: FakeResponse())
     with pytest.raises(RuntimeError, match="Failed to fetch PDBTM"):
