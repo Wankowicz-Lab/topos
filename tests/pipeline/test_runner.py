@@ -489,6 +489,137 @@ def test_runner_warns_when_uniprot_lookup_fails(tmp_path, monkeypatch):
     ].isna().all()
 
 
+def _pdbtm_side_regions():
+    return pd.DataFrame(
+        {
+            "chain": ["A", "A", "A"],
+            "type": ["side2", "transmembrane_helix", "side1"],
+            "seq_beg": [1, 4, 8],
+            "seq_end": [3, 7, 10],
+            "pdb_beg": [1, 4, 8],
+            "pdb_end": [3, 7, 10],
+        }
+    )
+
+
+def test_runner_topdb_miss_fills_membrane_side_from_tmbed(tmp_path, monkeypatch):
+    """A missing TOPDB SideDefinition fills membrane_side from TMbed and keeps PDBTM regions."""
+    residues = ["ALA"] * 10
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_pdbtm_side_regions(), np.eye(4)),
+    )
+
+    called = {"estimate": False}
+
+    def boom(_ctx):
+        called["estimate"] = True
+        raise AssertionError("full membrane estimate should not run on a PDBTM hit")
+
+    monkeypatch.setattr(runner, "estimate_membrane_parameters", boom)
+    monkeypatch.setattr(
+        runner,
+        "fetch_side_definition",
+        lambda _acc, _pdb: (_ for _ in ()).throw(
+            runner.TopdbSideDefinitionNotFound("TOPDB request failed: 404")
+        ),
+    )
+    seen = {}
+
+    def fake_predict(residue_table, chains=None, use_gpu=False):
+        seen["chains"] = chains
+        labels = _pdbtm_side_regions()
+        labels["type"] = ["outside", "transmembrane_helix", "inside"]
+        return labels
+
+    monkeypatch.setattr(runner, "predict_tm_regions", fake_predict)
+
+    cfg_path = tmp_path / "topdb_miss.toml"
+    with cfg_path.open("wb") as f:
+        tomli_w.dump(
+            {
+                "pdb_id": "9BI6",
+                "pdb_path": str(mmcif_path),
+                "name": "topdb_miss",
+                "membrane_protein": True,
+                "uniprot_id": "Q15743",
+                "structural_feature_chains": ["A"],
+                "output_dir": str(tmp_path),
+            },
+            f,
+        )
+
+    with pytest.warns(UserWarning, match="filled from TMbed"):
+        r = runner.Runner(config_path=cfg_path)
+
+    table = r.context.residue_table
+    assert called["estimate"] is False
+    assert seen["chains"] == ["A"]
+    assert r.context.extras.get("membrane_source") == "pdbtm"
+    assert r.context.extras.get("membrane_side_source") == "tmbed"
+    assert r.context.extras.get("side_definition") is None
+    assert list(table.loc[table["resi_struct"] == 1, "pdbtm_region"]) == ["side2"]
+    assert list(table.loc[table["resi_struct"] == 1, "membrane_side"]) == ["Outside"]
+    assert list(table.loc[table["resi_struct"] == 8, "pdbtm_region"]) == ["side1"]
+    assert list(table.loc[table["resi_struct"] == 8, "membrane_side"]) == ["Inside"]
+    assert list(table.loc[table["resi_struct"] == 4, "membrane_side"]) == ["transmembrane"]
+
+
+def test_runner_topdb_miss_keeps_geometric_sides_when_tmbed_missing(tmp_path, monkeypatch):
+    """TOPDB and TMbed both missing leaves loop membrane_side empty."""
+    residues = ["ALA"] * 10
+    mmcif_path = tmp_path / "test_structure.cif"
+    _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
+
+    monkeypatch.setattr(
+        runner.pdbtm,
+        "fetch_pdbtm_annotation",
+        lambda _pdb_id: (_pdbtm_side_regions(), np.eye(4)),
+    )
+    monkeypatch.setattr(
+        runner,
+        "fetch_side_definition",
+        lambda _acc, _pdb: (_ for _ in ()).throw(
+            runner.TopdbSideDefinitionNotFound("TOPDB request failed: 404")
+        ),
+    )
+    monkeypatch.setattr(
+        runner,
+        "predict_tm_regions",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            runner.TmbedNotAvailable("tmbed not found")
+        ),
+    )
+
+    cfg_path = tmp_path / "topdb_miss_no_tmbed.toml"
+    with cfg_path.open("wb") as f:
+        tomli_w.dump(
+            {
+                "pdb_id": "7DW9",
+                "pdb_path": str(mmcif_path),
+                "name": "topdb_miss_no_tmbed",
+                "membrane_protein": True,
+                "uniprot_id": "P30518",
+                "output_dir": str(tmp_path),
+            },
+            f,
+        )
+
+    with pytest.warns(UserWarning, match="Absolute membrane_side labels were skipped"):
+        r = runner.Runner(config_path=cfg_path)
+
+    table = r.context.residue_table
+    assert r.context.extras.get("membrane_source") == "pdbtm"
+    assert r.context.extras.get("membrane_side_source") is None
+    assert (table["membrane_side"] == "transmembrane").sum() == 4
+    assert table.loc[table["pdbtm_region"] == "side1", "membrane_side"].isna().all()
+    assert table.loc[table["pdbtm_region"] == "side2", "membrane_side"].isna().all()
+
+
 def test_runner_estimate_assigns_membrane_side_from_tmbed_regions(tmp_path, monkeypatch):
     """Estimate path fills loop regions and absolute membrane_side from TMbed labels."""
     residues = ["ALA"] * 24

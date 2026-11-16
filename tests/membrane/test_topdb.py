@@ -6,6 +6,7 @@ import pytest
 from topos.membrane.sides import (
     membrane_side_from_side_definition,
     membrane_side_from_tmbed_regions,
+    membrane_side_from_tmbed_spans,
 )
 from topos.membrane.topdb import (
     SideDefinition,
@@ -84,6 +85,36 @@ def test_membrane_side_from_tmbed_regions():
         "transmembrane",
         "Outside",
         "unknown",
+    ]
+
+
+def test_membrane_side_from_tmbed_spans_overlays_author_residue_ranges():
+    """Spans label membrane_side and leave residues outside the spans on the base value."""
+    rt = pd.DataFrame(
+        {
+            "chain": ["A", "A", "A", "A", "B"],
+            "resi": [1, 2, 3, 4, 1],
+            "pdbtm_region": ["side2", "side2", "transmembrane_helix", "side1", "side1"],
+        }
+    )
+    regions = pd.DataFrame(
+        {
+            "chain": ["A", "A"],
+            "type": ["outside", "inside"],
+            "pdb_beg": [1, 4],
+            "pdb_end": [2, 4],
+        }
+    )
+    base = pd.Series([pd.NA, pd.NA, "transmembrane", pd.NA, pd.NA])
+    sides = membrane_side_from_tmbed_spans(rt, regions, base)
+    assert list(sides.iloc[:4]) == ["Outside", "Outside", "transmembrane", "Inside"]
+    assert pd.isna(sides.iloc[4])
+    assert list(rt["pdbtm_region"]) == [
+        "side2",
+        "side2",
+        "transmembrane_helix",
+        "side1",
+        "side1",
     ]
 
 
