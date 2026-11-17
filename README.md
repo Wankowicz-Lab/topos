@@ -105,7 +105,7 @@ If TMbed is missing when estimation is requested (`estimate_membrane_protein_par
 
 When PDBTM **is** available, geometric `side1`/`side2` regions are annotated as usual. Absolute Inside/Outside labels (`membrane_side`) come from [TOPDB](https://topdb.unitmp.org) SideDefinition. Provide `uniprot_id` in config when possible; otherwise topos resolves it via PDBe SIFTS from `pdb_id` **only if** `structural_feature_chains` is set (so the accession is scoped to the membrane chain). If that lookup fails, a warning explains why and how to set `uniprot_id` or `structural_feature_chains`—geometric PDBTM annotation still proceeds.
 
-If TOPDB has no SideDefinition for that PDB entry and `estimate_membrane_protein_parameters` is true, topos fills `membrane_side` from TMbed inside/outside labels. PDBTM `side1` and `side2` stay in `pdbtm_region`. If TMbed is missing or the prediction fails, absolute labels are skipped and the geometric annotation still proceeds.
+If TOPDB has no SideDefinition for that PDB entry and `estimate_membrane_protein_parameters` is true, topos uses TMbed inside/outside spans to set `membrane_side` on residues PDBTM already labeled `side1` or `side2`. TMbed does not add transmembrane labels, and it does not change residues PDBTM already marked as embedded. `pdbtm_region` is unchanged. If TMbed is missing or the prediction fails, absolute labels are skipped and the geometric annotation still proceeds.
 
 ---
 

@@ -364,8 +364,9 @@ class Runner:
             if self._fill_membrane_side_from_tmbed(residue_table):
                 warnings.warn(
                     f"TOPDB SideDefinition unavailable for UniProt {accession} / PDB {pdb_id}: "
-                    f"{e}. membrane_side was filled from TMbed inside/outside labels. "
-                    "Geometric PDBTM side1/side2 values in pdbtm_region are unchanged.",
+                    f"{e}. membrane_side on PDBTM side1/side2 residues was filled from TMbed "
+                    "inside/outside labels. Transmembrane labels stay the PDBTM embedded "
+                    "residues. pdbtm_region is unchanged.",
                     UserWarning,
                 )
                 return
@@ -402,8 +403,10 @@ class Runner:
         self.context.extras["membrane_side_source"] = None
 
     def _fill_membrane_side_from_tmbed(self, residue_table: pd.DataFrame) -> bool:
-        """Fill membrane_side from TMbed spans. Leave PDBTM region columns unchanged.
+        """Label existing PDBTM sides from TMbed inside/outside spans.
 
+        Embedded residues are marked transmembrane from PDBTM before the overlay.
+        TMbed does not add transmembrane labels or change those residues.
         Returns False when estimation is off or TMbed does not return labels.
         A missing TMbed install does not stop a run that already has PDBTM geometry.
         """
@@ -420,6 +423,7 @@ class Runner:
             )
             return False
 
+        # PDBTM already decided which residues are embedded. TMbed only names side1/side2.
         residue_table.loc[
             self._embedded_residue_mask(residue_table), "membrane_side"
         ] = "transmembrane"

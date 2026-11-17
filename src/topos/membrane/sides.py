@@ -16,6 +16,13 @@ _TMBED_REGION_TO_SIDE = {
     "unknown": "unknown",
 }
 
+# On the PDBTM path, TMbed only names sides that PDBTM already defined.
+_TMBED_INSIDE_OUTSIDE = {
+    "inside": "Inside",
+    "outside": "Outside",
+}
+_GEOMETRIC_SIDES = frozenset({"side1", "side2"})
+
 
 def membrane_side_from_tmbed_regions(residue_table: pd.DataFrame) -> pd.Series:
     """Map estimate-path ``pdbtm_region`` values to absolute ``membrane_side``."""
@@ -29,20 +36,27 @@ def membrane_side_from_tmbed_spans(
     regions: pd.DataFrame,
     base: pd.Series,
 ) -> pd.Series:
-    """Overlay TMbed spans onto ``membrane_side`` by chain and author residue number.
+    """Assign Inside/Outside from TMbed onto residues that already have a side.
 
-    Uses the same region-type map as ``membrane_side_from_tmbed_regions``.
-    Spans are ``pdb_beg`` / ``pdb_end`` inclusive. Residues outside every span
-    keep ``base``. This does not read or write ``pdbtm_region``.
+    Only ``inside`` and ``outside`` spans are applied, and only where
+    ``pdbtm_region`` is ``side1`` or ``side2``. Spans are ``pdb_beg`` /
+    ``pdb_end`` inclusive. A later span wins when two of those ranges overlap.
+    Transmembrane and unknown spans are ignored. Every other residue keeps
+    ``base``, including residues already marked transmembrane. This does not
+    write ``pdbtm_region``.
     """
     sides = base.copy()
     if regions.empty:
         return sides
 
+    defined_side = residue_table["pdbtm_region"].isin(_GEOMETRIC_SIDES)
     for _, region in regions.iterrows():
-        label = _TMBED_REGION_TO_SIDE.get(str(region["type"]), "unknown")
+        label = _TMBED_INSIDE_OUTSIDE.get(str(region["type"]))
+        if label is None:
+            continue
         mask = (
-            (residue_table["chain"] == region["chain"])
+            defined_side
+            & (residue_table["chain"] == region["chain"])
             & (residue_table["resi"] >= int(region["pdb_beg"]))
             & (residue_table["resi"] <= int(region["pdb_end"]))
         )
