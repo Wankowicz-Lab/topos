@@ -23,8 +23,9 @@ from topos.membrane.geometry import InsufficientTransmembraneHelices
 from topos.membrane.sides import (
     membrane_side_from_side_definition,
     membrane_side_from_tmbed_regions,
+    membrane_side_from_tmbed_spans,
 )
-from topos.membrane.tmbed import TmbedNotAvailable
+from topos.membrane.tmbed import TmbedNotAvailable, predict_tm_regions
 from topos.membrane.topdb import TopdbSideDefinitionNotFound, fetch_side_definition
 from topos.metrics.graph_metrics import calculate_graph_metrics
 from topos.metrics.registry import _REGISTRY, metrics_with_tag
@@ -354,32 +355,28 @@ class Runner:
         accession = self._resolve_uniprot_for_membrane_sides()
         pdb_id = self.context.config.pdb_id
         if accession is None or pdb_id is None:
-            # Still mark membrane-embedded residues without absolute loop sides.
-            tm_mask = residue_table["pdbtm_region"].isin(
-                {"transmembrane_helix", "transmembrane_beta_strand", "transmembrane_coil"}
-            )
-            residue_table.loc[tm_mask, "membrane_side"] = "transmembrane"
-            self.context.residue_table = residue_table
-            self.context.extras["side_definition"] = None
-            self.context.extras["side_definition_note"] = None
+            self._store_geometric_sides_only(residue_table)
             return
 
         try:
             side_def = fetch_side_definition(accession, pdb_id)
         except TopdbSideDefinitionNotFound as e:
+            if self._fill_membrane_side_from_tmbed(residue_table):
+                warnings.warn(
+                    f"TOPDB SideDefinition unavailable for UniProt {accession} / PDB {pdb_id}: "
+                    f"{e}. membrane_side on PDBTM side1/side2 residues was filled from TMbed "
+                    "inside/outside labels. Transmembrane labels stay the PDBTM embedded "
+                    "residues. pdbtm_region is unchanged.",
+                    UserWarning,
+                )
+                return
             warnings.warn(
                 f"TOPDB SideDefinition unavailable for UniProt {accession} / PDB {pdb_id}: "
                 f"{e}. Absolute membrane_side labels were skipped; geometric PDBTM "
                 f"side1/side2 annotation is still applied. {UNIPROT_CONFIG_HINT}",
                 UserWarning,
             )
-            tm_mask = residue_table["pdbtm_region"].isin(
-                {"transmembrane_helix", "transmembrane_beta_strand", "transmembrane_coil"}
-            )
-            residue_table.loc[tm_mask, "membrane_side"] = "transmembrane"
-            self.context.residue_table = residue_table
-            self.context.extras["side_definition"] = None
-            self.context.extras["side_definition_note"] = None
+            self._store_geometric_sides_only(residue_table)
             return
 
         residue_table["membrane_side"] = membrane_side_from_side_definition(
@@ -388,6 +385,58 @@ class Runner:
         self.context.residue_table = residue_table
         self.context.extras["side_definition"] = side_def.side1
         self.context.extras["side_definition_note"] = side_def.note
+        self.context.extras["membrane_side_source"] = "topdb"
+
+    def _embedded_residue_mask(self, residue_table: pd.DataFrame) -> pd.Series:
+        return residue_table["pdbtm_region"].isin(
+            {"transmembrane_helix", "transmembrane_beta_strand", "transmembrane_coil"}
+        )
+
+    def _store_geometric_sides_only(self, residue_table: pd.DataFrame) -> None:
+        """Keep PDBTM geometry and label only embedded residues as transmembrane."""
+        residue_table.loc[
+            self._embedded_residue_mask(residue_table), "membrane_side"
+        ] = "transmembrane"
+        self.context.residue_table = residue_table
+        self.context.extras["side_definition"] = None
+        self.context.extras["side_definition_note"] = None
+        self.context.extras["membrane_side_source"] = None
+
+    def _fill_membrane_side_from_tmbed(self, residue_table: pd.DataFrame) -> bool:
+        """Label existing PDBTM sides from TMbed inside/outside spans.
+
+        Embedded residues are marked transmembrane from PDBTM before the overlay.
+        TMbed does not add transmembrane labels or change those residues.
+        Returns False when estimation is off or TMbed does not return labels.
+        A missing TMbed install does not stop a run that already has PDBTM geometry.
+        """
+        if not self.context.config.estimate_membrane_protein_parameters:
+            return False
+
+        chains = self.context.config.structural_feature_chains or None
+        try:
+            regions = predict_tm_regions(residue_table, chains=chains)
+        except (TmbedNotAvailable, RuntimeError, ValueError) as e:
+            warnings.warn(
+                f"TMbed side labels were not applied after a missing TOPDB SideDefinition ({e}).",
+                UserWarning,
+            )
+            return False
+
+        # PDBTM already decided which residues are embedded. TMbed only names side1/side2.
+        residue_table.loc[
+            self._embedded_residue_mask(residue_table), "membrane_side"
+        ] = "transmembrane"
+        residue_table["membrane_side"] = membrane_side_from_tmbed_spans(
+            residue_table,
+            regions,
+            base=residue_table["membrane_side"],
+        )
+        self.context.residue_table = residue_table
+        self.context.extras["side_definition"] = None
+        self.context.extras["side_definition_note"] = None
+        self.context.extras["membrane_side_source"] = "tmbed"
+        return True
 
     def _assign_membrane_side_from_tmbed(self) -> None:
         """Stamp absolute sides from TMbed inside/outside region labels."""
@@ -396,6 +445,7 @@ class Runner:
         self.context.residue_table = residue_table
         self.context.extras["side_definition"] = None
         self.context.extras["side_definition_note"] = None
+        self.context.extras["membrane_side_source"] = "tmbed"
 
     def _skip_membrane_features(self, ss_df, reason: str) -> None:
         """Fall back to soluble SS and disable membrane-tagged metrics in run()."""
@@ -926,6 +976,7 @@ class Runner:
             "construct_coverage": self.context.extras.get("construct_coverage"),
             "coordinate_coverage": self.context.extras.get("coordinate_coverage"),
             "membrane_source": self.context.extras.get("membrane_source"),
+            "membrane_side_source": self.context.extras.get("membrane_side_source"),
             "side_definition": self.context.extras.get("side_definition"),
             "side_definition_note": self.context.extras.get("side_definition_note"),
             "uniprot_id_resolved": self.context.extras.get("uniprot_id_resolved"),
