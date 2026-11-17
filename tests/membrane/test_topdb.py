@@ -88,32 +88,43 @@ def test_membrane_side_from_tmbed_regions():
     ]
 
 
-def test_membrane_side_from_tmbed_spans_overlays_author_residue_ranges():
-    """Spans label membrane_side and leave residues outside the spans on the base value."""
+def test_membrane_side_from_tmbed_spans_labels_only_existing_sides():
+    """Inside/outside spans label side1/side2 and leave every other residue on base."""
     rt = pd.DataFrame(
         {
-            "chain": ["A", "A", "A", "A", "B"],
-            "resi": [1, 2, 3, 4, 1],
-            "pdbtm_region": ["side2", "side2", "transmembrane_helix", "side1", "side1"],
+            "chain": ["A", "A", "A", "A", "A", "B"],
+            "resi": [1, 2, 3, 4, 5, 1],
+            "pdbtm_region": [
+                "side2",
+                "side2",
+                "transmembrane_helix",
+                "side1",
+                "unknown",
+                "side1",
+            ],
         }
     )
+    # The helix span covers side residues, and the inside span covers the helix
+    # and an unlabeled residue. Neither of those writes a new membrane_side.
     regions = pd.DataFrame(
         {
-            "chain": ["A", "A"],
-            "type": ["outside", "inside"],
-            "pdb_beg": [1, 4],
-            "pdb_end": [2, 4],
+            "chain": ["A", "A", "A", "A"],
+            "type": ["outside", "transmembrane_helix", "inside", "inside"],
+            "pdb_beg": [1, 1, 3, 5],
+            "pdb_end": [2, 4, 4, 5],
         }
     )
-    base = pd.Series([pd.NA, pd.NA, "transmembrane", pd.NA, pd.NA])
+    base = pd.Series([pd.NA, pd.NA, "transmembrane", pd.NA, pd.NA, pd.NA])
     sides = membrane_side_from_tmbed_spans(rt, regions, base)
     assert list(sides.iloc[:4]) == ["Outside", "Outside", "transmembrane", "Inside"]
     assert pd.isna(sides.iloc[4])
+    assert pd.isna(sides.iloc[5])
     assert list(rt["pdbtm_region"]) == [
         "side2",
         "side2",
         "transmembrane_helix",
         "side1",
+        "unknown",
         "side1",
     ]
 

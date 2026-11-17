@@ -503,7 +503,7 @@ def _pdbtm_side_regions():
 
 
 def test_runner_topdb_miss_fills_membrane_side_from_tmbed(tmp_path, monkeypatch):
-    """A missing TOPDB SideDefinition fills membrane_side from TMbed and keeps PDBTM regions."""
+    """A TOPDB miss labels existing PDBTM sides from TMbed and keeps PDBTM regions."""
     residues = ["ALA"] * 10
     mmcif_path = tmp_path / "test_structure.cif"
     _write_mmcif_file(file_path=mmcif_path, pdb_id="TEST", chains={"A": residues})
@@ -532,9 +532,17 @@ def test_runner_topdb_miss_fills_membrane_side_from_tmbed(tmp_path, monkeypatch)
 
     def fake_predict(residue_table, chains=None, use_gpu=False):
         seen["chains"] = chains
-        labels = _pdbtm_side_regions()
-        labels["type"] = ["outside", "transmembrane_helix", "inside"]
-        return labels
+        # Helix span covers the side2 residues; outside span runs into the helix.
+        return pd.DataFrame(
+            {
+                "chain": ["A", "A", "A"],
+                "type": ["transmembrane_helix", "outside", "inside"],
+                "seq_beg": [1, 2, 8],
+                "seq_end": [3, 6, 10],
+                "pdb_beg": [1, 2, 8],
+                "pdb_end": [3, 6, 10],
+            }
+        )
 
     monkeypatch.setattr(runner, "predict_tm_regions", fake_predict)
 
@@ -563,7 +571,8 @@ def test_runner_topdb_miss_fills_membrane_side_from_tmbed(tmp_path, monkeypatch)
     assert r.context.extras.get("membrane_side_source") == "tmbed"
     assert r.context.extras.get("side_definition") is None
     assert list(table.loc[table["resi_struct"] == 1, "pdbtm_region"]) == ["side2"]
-    assert list(table.loc[table["resi_struct"] == 1, "membrane_side"]) == ["Outside"]
+    assert table.loc[table["resi_struct"] == 1, "membrane_side"].isna().all()
+    assert list(table.loc[table["resi_struct"] == 2, "membrane_side"]) == ["Outside"]
     assert list(table.loc[table["resi_struct"] == 8, "pdbtm_region"]) == ["side1"]
     assert list(table.loc[table["resi_struct"] == 8, "membrane_side"]) == ["Inside"]
     assert list(table.loc[table["resi_struct"] == 4, "membrane_side"]) == ["transmembrane"]
